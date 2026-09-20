@@ -50,17 +50,27 @@ const SHARED = /^(harness_live|s35_live_login|live_creds)\.mjs$/;
  * that a person left behind. `two_device_live` is the clearest case -- it
  * refuses outright with "khong co session connected va cung khong co offer"
  * when nothing is attached, which is an environment fact, not a red build.
- * The `probe*` files are one-off investigation scripts kept for provenance,
- * not gates; they take arguments and are never part of a sweep.
  */
-const LIVE = /^(live_|s35_p91_|w5_partG_|probe\d+|two_device_live|typing_order_live)/;
+const LIVE = /^(live_|s35_p91_|w5_partG_|two_device_live|typing_order_live)/;
+/*
+ * The `probe*` files are one-off investigation scripts kept for provenance,
+ * not gates: they take arguments, they exit 0 whatever they find, and several
+ * of them open a REAL SSH session. They are gitignored, so a clone has none of
+ * them; on the machine where they were written they stay out of every sweep,
+ * live or not.
+ *
+ * This used to be spelled `probe\d+` inside LIVE, which matched `probe7_*` and
+ * missed `probe_reload_jump` -- a probe named that way was swept as a HEADLESS
+ * gate and opened sessions against the live deployment on an ordinary run.
+ */
+const PROBE = /^probe/;
 // Not a gate on its own: it EMITS a computed-style baseline (--emit) and
 // compares a later run against it (--against FILE). With neither flag it has
 // nothing to compare and exits non-zero by design, so a sweep that included it
 // would report a red build on every run. Name it explicitly to run it.
 const NEEDS_ARGS = /^t_css1_computed_parity\.mjs$/;
 const all = fs.readdirSync(DIR)
-    .filter(f => f.endsWith('.mjs') && !SHARED.test(f))
+    .filter(f => f.endsWith('.mjs') && !SHARED.test(f) && !PROBE.test(f))
     .filter(f => filters.length > 0 || !NEEDS_ARGS.test(f))
     .filter(f => filters.length === 0 || filters.some(x => f.includes(x)))
     .sort();
