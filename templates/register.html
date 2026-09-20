@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<!--
+  Register — v5 design language.
+
+  RESTYLE ONLY. Every backend and client contract is preserved verbatim:
+    - CSRF hidden input, flash loop with categories, POST to url_for('register')
+    - field names `username`, `password`, `confirm_password`
+    - the username `pattern="[a-zA-Z0-9_]{3,32}"` + title, and password
+      `minlength="8"` — these are constraint-validation, not decoration
+    - form id `registerForm` and its submit guard, which blocks submission and
+      focuses the confirm field when the passwords differ
+    - #passwordMatchIndicator and the .match / .no-match class names its script
+      sets, and the #usernameHint id
+    - .password-toggle + data-target, the auth.js hook
+
+  Sprite icons replace the emoji marks [INF-3]; the check/cross characters in
+  the match indicator become sprite icons carrying semantic theme colours.
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="app-root" content="{{ url_prefix }}">
+    <title>Register - SSHDeck</title>
+    <!-- H6: /favicon.ico used to 404. The SVG is the primary icon (crisp at any
+         size, same asset as the in-app brand logo); the .ico is the legacy
+         fallback and is ALSO served from the site root by a Flask route, because
+         browsers request /favicon.ico without reading this markup. -->
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icons/favicon.svg') }}?v=3">
+    <link rel="alternate icon" type="image/x-icon" href="{{ url_for('static', filename='icons/favicon.ico') }}?v=3">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}?v=3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=69">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/deck-tokens.css') }}?v=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth-v5.css') }}?v=2">
+</head>
+<body class="a5" data-theme="{{ theme|default('glass') }}">
+
+    {% include '_brand_symbol.html' %}
+
+    <main class="a5-main">
+        <div class="a5-card">
+            <!-- The brand band: the delivered mark, the wordmark, and (where the
+                 page has one) the language control -- the same header shape the
+                 app shell uses. The mark is an inline symbol so it takes the
+                 theme's ink; see templates/_brand_symbol.html. -->
+            <div class="a5-brand">
+                <span class="a5-logo" aria-hidden="true">
+                    <svg><use href="#icon-brand"></use></svg>
+                </span>
+                <div class="a5-brand-text">
+                    <h1 class="a5-title" data-i18n="auth.register">Create Account</h1>
+                    <p class="a5-subtitle" data-i18n="auth.registerPrompt">Join us and start your journey</p>
+                </div>
+                <div class="a5-lang-wrap">
+                    <button type="button" class="a5-lang" id="langBtn"
+                            aria-haspopup="true" aria-expanded="false" aria-controls="langDropdown">
+                        <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-languages"></use></svg>
+                        <span id="currentLangName">English</span>
+                        <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-chevron-down"></use></svg>
+                    </button>
+                    <div class="a5-lang-menu" id="langDropdown" role="menu"></div>
+                </div>
+            </div>
+
+            <div class="a5-body">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="a5-alert a5-alert-{{ category }}" role="alert">
+                            <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-{% if category == 'success' %}circle-check{% elif category == 'error' %}circle-alert{% else %}info{% endif %}"></use></svg>
+                            <span>{{ message }}</span>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <form method="POST" action="{{ url_for('register') }}" id="registerForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+                <div class="a5-field">
+                    <label class="a5-label" for="username" data-i18n="auth.username">Username</label>
+                    <div class="a5-input-wrap">
+                        <span class="a5-input-icon" aria-hidden="true">
+                            <svg><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-contact-round"></use></svg>
+                        </span>
+                        <!-- [INF-4] 44px, not mockup 234's 32px chrome density.
+                             pattern/title are constraint validation: preserved. -->
+                        <input type="text" id="username" name="username" class="a5-input"
+                               data-i18n-placeholder="auth.username" placeholder="Username"
+                               autocomplete="username" required autofocus
+                               pattern="[a-zA-Z0-9_]{3,32}"
+                               title="3-32 characters, letters, numbers, and underscore only">
+                    </div>
+                    <div class="a5-hint" id="usernameHint"></div>
+                </div>
+
+                <div class="a5-field">
+                    <label class="a5-label" for="password" data-i18n="auth.password">Password</label>
+                    <div class="a5-input-wrap">
+                        <span class="a5-input-icon" aria-hidden="true">
+                            <svg><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-lock"></use></svg>
+                        </span>
+                        <input type="password" id="password" name="password" class="a5-input"
+                               data-i18n-placeholder="auth.password" placeholder="Password"
+                               autocomplete="new-password" required minlength="8">
+                        <button type="button" class="a5-toggle password-toggle" data-target="password"
+                                aria-label="Toggle password visibility"
+                                data-i18n-aria-label="auth.togglePasswordVisibility">
+                            <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-eye"></use></svg>
+                        </button>
+                    </div>
+                    <div class="a5-hint" data-i18n="auth.passwordHint">Minimum 8 characters</div>
+                </div>
+
+                <div class="a5-field">
+                    <label class="a5-label" for="confirm_password" data-i18n="auth.confirmPassword">Confirm Password</label>
+                    <div class="a5-input-wrap">
+                        <span class="a5-input-icon" aria-hidden="true">
+                            <svg><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-lock"></use></svg>
+                        </span>
+                        <input type="password" id="confirm_password" name="confirm_password" class="a5-input"
+                               data-i18n-placeholder="auth.confirmPassword" placeholder="Confirm Password"
+                               autocomplete="new-password" required>
+                        <button type="button" class="a5-toggle password-toggle" data-target="confirm_password"
+                                aria-label="Toggle password visibility"
+                                data-i18n-aria-label="auth.togglePasswordVisibility">
+                            <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-eye"></use></svg>
+                        </button>
+                    </div>
+                    <!-- Same id and same .match/.no-match classes the script
+                         below sets. Only the styling changed. -->
+                    <div class="a5-hint password-match-indicator" id="passwordMatchIndicator" aria-live="polite"></div>
+                </div>
+
+                <button type="submit" class="a5-submit" id="submitBtn">
+                    <span data-i18n="auth.createAccount">Create Account</span>
+                    <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-arrow-right"></use></svg>
+                </button>
+            </form>
+
+            <div class="a5-footer">
+                <span data-i18n="auth.haveAccount">Already have an account?</span>
+                <a href="{{ url_for('login') }}" data-i18n="auth.loginHere">Sign in here</a>
+            </div>
+            {% include '_notice_footer.html' %}
+            </div>
+        </div>
+    </main>
+
+    <!-- The reader's strings. English is the fallback every key falls back to,
+         so it is always here; the reader's own language is the ONE extra file
+         the server adds, chosen from the `lang` cookie (app/__init__.py,
+         reader_language) so nothing flashes in English first. Written as one
+         literal line per language rather than a computed path: the browser
+         gates render this template with a plain substitution that cannot
+         evaluate Jinja expressions, and a computed src would reach them as an
+         empty one. -->
+    <script src="{{ url_for('static', filename='js/i18n/en.js') }}?v=1"></script>
+{% if lang == 'vi' %}    <script src="{{ url_for('static', filename='js/i18n/vi.js') }}?v=1"></script>
+{% elif lang == 'de' %}    <script src="{{ url_for('static', filename='js/i18n/de.js') }}?v=1"></script>
+{% elif lang == 'fr' %}    <script src="{{ url_for('static', filename='js/i18n/fr.js') }}?v=1"></script>
+{% elif lang == 'es' %}    <script src="{{ url_for('static', filename='js/i18n/es.js') }}?v=1"></script>
+{% elif lang == 'zh' %}    <script src="{{ url_for('static', filename='js/i18n/zh.js') }}?v=1"></script>
+{% endif %}    <script src="{{ url_for('static', filename='js/i18n.js') }}?v=50" data-i18n-version="1"></script>
+    <script src="{{ url_for('static', filename='js/auth.js') }}?v=2"></script>
+    <script src="{{ url_for('static', filename='js/auth-lang.js') }}"></script>
+    <script>
+        /*
+         * Password-match indicator and the submit guard.
+         *
+         * Behaviour is UNCHANGED from the pre-v5 page: empty confirm clears the
+         * indicator and permits submit; a match shows the match message; a
+         * mismatch shows the mismatch message and blocks submit with focus
+         * moved to the confirm field.
+         *
+         * What changed: the bare check/cross characters became sprite icons and
+         * the colour comes from .hint-success / .hint-error theme tokens, so it
+         * reads correctly in all 10 themes. textContent is used for the message
+         * so a translation string can never become markup.
+         */
+        (function () {
+            const SPRITE = "{{ url_for('static', filename='icons/icons.svg') }}?v=2";
+
+            function setIndicator(indicator, symbol, message, stateClass) {
+                indicator.textContent = '';
+                indicator.className = 'a5-hint password-match-indicator'
+                    + (stateClass ? ' ' + stateClass : '');
+                if (!symbol) {
+                    return;
+                }
+                const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                svg.setAttribute('class', 'a5-icon');
+                svg.setAttribute('aria-hidden', 'true');
+                const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+                use.setAttribute('href', SPRITE + '#' + symbol);
+                svg.appendChild(use);
+                indicator.appendChild(svg);
+                indicator.appendChild(document.createTextNode(' ' + message));
+            }
+
+            function checkPasswordMatch() {
+                const password = document.getElementById('password').value;
+                const confirmPassword = document.getElementById('confirm_password').value;
+                const indicator = document.getElementById('passwordMatchIndicator');
+
+                if (confirmPassword.length === 0) {
+                    setIndicator(indicator, null, '', '');
+                    return true;
+                }
+                if (password === confirmPassword) {
+                    setIndicator(indicator, 'icon-circle-check',
+                        (window.i18n && i18n.t('auth.passwordsMatch')) || 'Passwords match',
+                        'hint-success match');
+                    return true;
+                }
+                setIndicator(indicator, 'icon-circle-alert',
+                    (window.i18n && i18n.t('auth.passwordsNoMatch')) || 'Passwords do not match',
+                    'hint-error no-match');
+                return false;
+            }
+
+            document.getElementById('registerForm').addEventListener('submit', (e) => {
+                if (!checkPasswordMatch()) {
+                    e.preventDefault();
+                    document.getElementById('confirm_password').focus();
+                }
+            });
+
+            document.addEventListener('DOMContentLoaded', () => {
+                document.getElementById('password')
+                    .addEventListener('input', checkPasswordMatch);
+                document.getElementById('confirm_password')
+                    .addEventListener('input', checkPasswordMatch);
+            });
+        })();
+    </script>
+</body>
+</html>

@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<!--
+  SSHDeck auth pages — v5 design language. STATIC PREVIEW, NOT SHIPPED.
+
+  Nothing in this directory is loaded by the Flask app. templates/login.html,
+  register.html, change_password.html and admin.html are UNTOUCHED.
+
+  Review at 7 viewports x 10 themes with docs/auth-preview/index.html.
+
+  Icons come from the SHIPPED sprite (static/icons/icons.svg), whose symbol ids
+  are Lucide names — the same set and the same mechanism the shell uses
+  (templates/index.html:36 etc.). No Lucide runtime is added, and no new asset
+  is introduced. The emoji glyphs the current auth pages use (login.html:28,48,
+  58,61,72; register.html:28,48,60,63,71,74,80; change_password.html:20,40,51,
+  63,73) are replaced by sprite symbols that already exist.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SSHDeck auth v5 — preview page bodies</title>
+</head>
+<body>
+
+<!-- ===================================================================== -->
+<!-- LOGIN                                                                  -->
+<!-- ===================================================================== -->
+<template id="page-login">
+  <div class="a5-utility">
+    <button type="button" class="a5-lang">
+      <svg aria-hidden="true"><use href="../../static/icons/icons.svg#icon-languages"></use></svg>
+      <span>English</span>
+      <svg aria-hidden="true"><use href="../../static/icons/icons.svg#icon-chevron-down"></use></svg>
+    </button>
+  </div>
+
+  <main class="a5-main">
+    <div class="a5-card">
+      <div class="a5-brand">
+        <!-- Mockup line 36 pairs the square-terminal mark with the wordmark.
+             Same symbol, same pairing. -->
+        <span class="a5-logo" aria-hidden="true">
+          <svg><use href="../../static/icons/icons.svg#icon-square-terminal"></use></svg>
+        </span>
+        <div class="a5-brand-text">
+          <h1 class="a5-title">SSHDeck</h1>
+          <p class="a5-subtitle">Sign in to your account</p>
+        </div>
+      </div>
+
+      <div class="a5-alert a5-alert-error" role="alert">
+        <svg aria-hidden="true"><use href="../../static/icons/icons.svg#icon-circle-alert"></use></svg>
+        <span>Invalid username or password.</span>
+      </div>
+
+      <form>
+        <div class="a5-field">
+          <label class="a5-label" for="p-login-user">Username</label>
+          <div class="a5-input-wrap">
+            <span class="a5-input-icon" aria-hidden="true">
+              <svg><use href="../../static/icons/icons.svg#icon-contact-round"></use></svg>
+            </span>
+            <input class="a5-input" id="p-login-user" type="text" placeholder="Username" autocomplete="username">
+          </div>
+          <div class="a5-hint"></div>
+        </div>
+
+        <div class="a5-field">
+          <label class="a5-label" for="p-login-pass">Password</label>
+          <div class="a5-input-wrap">
+            <span class="a5-input-icon" aria-hidden="true">
+              <svg><use href="../../static/icons/icons.svg#icon-lock"></use></svg>
+            </span>
+            <input class="a5-input" id="p-login-pass" type="password" placeholder="Password" autocomplete="current-password">
+            <button class="a5-toggle" type="button" aria-label="Show password">
+              <svg aria-hidden="true"><use href="../../static/icons/icons.svg#icon-eye"></use></svg>
+            </button>
+          </div>
+          <div class="a5-hint"></div>
+        </div>
+
+        <!-- [INF-5] the LABEL is the 44px target, not the 18px painted box. -->
+        <div class="a5-check-row">
+          <label class="a5-check-label" for="p-login-remember">
+            <input type="checkbox" id="p-login-remember">
+            <span>Remember me</span>
+          </label>
+        </div>
+
+        <button class="a5-submit" type="button">
+          <span>Sign In</span>
+          <svg aria-hidden="true"><use href="../../static/icons/icons.svg#icon-arrow-right"></use></svg>
+        </button>
+      </form>
+
+      <div class="a5-footer">
+        <span>Don't have an account? <a href="#">Register here</a></span>
+        <a href="#">Change password</a>
+      </div>
+    </div>
+  </main>
+</template>
+
+<!-- ===================================================================== -->
+<!-- REGISTER                                                               -->
+<!-- ===================================================================== -->
+<template id="page-register">
+  <div class="a5-utility">
+    <button type="button" class="a5-lang">
+      <svg aria-hidden="true"><use href="../../static/icons/icons.svg#icon-languages"></use></svg>
+      <span>English</span>
+      <svg aria-hidden="true"><use href="../../static/icons/icons.svg#icon-chevron-down"></use></svg>
+    </button>
+  </div>
+
+  <main class="a5-main">
+    <div class="a5-card">
+      <div class="a5-brand">
+        <span class="a5-logo" aria-hidden="true">
+          <svg><use href="../../static/icons/icons.svg#icon-square-terminal"></use></svg>
+        </span>
+        <div class="a5-brand-text">
+          <h1 class="a5-title">Create account</h1>
+          <p class="a5-subtitle">Set up your SSHDeck access</p>
+        </div>
+      </div>
+
+      <form>
+        <div class="a5-field">
+          <label class="a5-label" for="p-reg-user">Username</label>
+          <div class="a5-input-wrap">
+            <span class="a5-input-icon" aria-hidden="true">
+              <svg><use href="../../static/icons/icons.svg#icon-contact-round"></use></svg>
+            </span>
+            <input class="a5-input" id="p-reg-user" type="text" placeholder="Username" autocomplete="username">
+          </div>
+          <div class="a5-hint">3–32 characters, letters and numbers.</div>
+        </div>
+
+        <div class="a5-field">
+          <label class="a5-label" for="p-reg-pass">Password</label>
+          <div class="a5-input-wrap">
+            <span class="a5-input-icon" aria-hidden="true">
+              <svg><use href="../../static/icons/icons.svg#icon-lock"></use></svg>
+            </span>
+            <input class="a5-input" id="p-reg-pass" type="password" placeholder="Password" autocomplete="new-password">
+            <button class="a5-toggle" type="button" aria-label="Show password">
+              <svg aria-hidden="true"><use href="../../static/icons/icons.svg#icon-eye"></use></svg>
+            </button>
+          </div>
+          <div class="a5-hint"></div>
+        </div>
+
+        <div class="a5-field">
+          <label class="a5-label" for="p-reg-confirm">Confirm password</label>
+          <div class="a5-input-wrap">
+            <span class="a5-input-icon" aria-hidden="true">
+              <svg><use href="../../static/icons/icons.svg#icon-lock"></use></svg>
+            </span>
+            <input class="a5-input" id="p-reg-confirm" type="password" placeholder="Confirm password" autocomplete="new-password">
+            <button class="a5-toggle" type="button" aria-label="Show password">
+              <svg aria-hidden="true"><use href="../../static/icons/icons.svg#icon-eye"></use></svg>
+            </button>
+          </div>
+          <!-- The current pages render match/mismatch with a bare check and
+               cross character (register.html:139,143). Sprite + semantic
+               token instead, so it reads correctly in all 10 themes. -->
+          <div class="a5-hint a5-hint-success">Passwords match</div>
+        </div>
+
+        <button class="a5-submit" type="button">
+          <span>Create account</span>
+          <svg aria-hidden="true"><use href="../../static/icons/icons.svg#icon-arrow-right"></use></svg>
+        </button>
+      </form>
+
+      <div class="a5-footer">
+        <span>Already have an account? <a href="#">Sign in</a></span>
+      </div>
+    </div>
+  </main>
+</template>
+
+<!-- ===================================================================== -->
+<!-- CHANGE PASSWORD                                                        -->
+<!-- ===================================================================== -->
+<template id="page-change_password">
+  <div class="a5-utility">
+    <button type="button" class="a5-lang">
+      <svg aria-hidden="true"><use href="../../static/icons/icons.svg#icon-languages"></use></svg>
+      <span>English</span>
+      <svg aria-hidden="true"><use href="../../static/icons/icons.svg#icon-chevron-down"></use></svg>
+    </button>
+  </div>
+
+  <main class="a5-main">
+    <div class="a5-card">
+      <div class="a5-brand">
+        <!-- key-round rather than the terminal mark: this page is about the
+             credential, not the product. Both symbols already ship. -->
+        <span class="a5-logo" aria-hidden="true">
+          <svg><use href="../../static/icons/icons.svg#icon-key-round"></use></svg>
+        </span>
+        <div class="a5-brand-text">
+          <h1 class="a5-title">Change password</h1>
+          <p class="a5-subtitle">Update your credentials</p>
+        </div>
+      </div>
+
+      <form>
+        <div class="a5-field">
+          <label class="a5-label" for="p-cp-cur">Current password</label>
+          <div class="a5-input-wrap">
+            <span class="a5-input-icon" aria-hidden="true">
+              <svg><use href="../../static/icons/icons.svg#icon-lock"></use></svg>
+            </span>
+            <input class="a5-input" id="p-cp-cur" type="password" placeholder="Current password" autocomplete="current-password">
+            <button class="a5-toggle" type="button" aria-label="Show password">
+              <svg aria-hidden="true"><use href="../../static/icons/icons.svg#icon-eye"></use></svg>
+            </button>
+          </div>
+          <div class="a5-hint"></div>
+        </div>
+
+        <div class="a5-field">
+          <label class="a5-label" for="p-cp-new">New password</label>
+          <div class="a5-input-wrap">
+            <span class="a5-input-icon" aria-hidden="true">
+              <svg><use href="../../static/icons/icons.svg#icon-key-round"></use></svg>
+            </span>
+            <input class="a5-input" id="p-cp-new" type="password" placeholder="New password" autocomplete="new-password">
+            <button class="a5-toggle" type="button" aria-label="Show password">
+              <svg aria-hidden="true"><use href="../../static/icons/icons.svg#icon-eye"></use></svg>
+            </button>
+          </div>
+          <div class="a5-hint"></div>
+        </div>
+
+        <div class="a5-field">
+          <label class="a5-label" for="p-cp-confirm">Confirm new password</label>
+          <div class="a5-input-wrap">
+            <span class="a5-input-icon" aria-hidden="true">
+              <svg><use href="../../static/icons/icons.svg#icon-key-round"></use></svg>
+            </span>
+            <input class="a5-input" id="p-cp-confirm" type="password" placeholder="Confirm new password" autocomplete="new-password">
+            <button class="a5-toggle" type="button" aria-label="Show password">
+              <svg aria-hidden="true"><use href="../../static/icons/icons.svg#icon-eye"></use></svg>
+            </button>
+          </div>
+          <div class="a5-hint a5-hint-error">Passwords do not match</div>
+        </div>
+
+        <button class="a5-submit" type="button">
+          <span>Update password</span>
+          <svg aria-hidden="true"><use href="../../static/icons/icons.svg#icon-refresh-cw"></use></svg>
+        </button>
+      </form>
+
+      <div class="a5-footer">
+        <a href="#">Back to sign in</a>
+      </div>
+    </div>
+  </main>
+</template>
+
+<!-- ===================================================================== -->
+<!-- ADMIN  — [INF-6] wide page, not a card                                 -->
+<!-- ===================================================================== -->
+<template id="page-admin">
+  <!-- Mockup line 22/23: a 44px global row, brand left, controls right. -->
+  <div class="a5-topbar">
+    <div class="a5-topbar-brand">
+      <span class="a5-topbar-logo" aria-hidden="true">
+        <svg><use href="../../static/icons/icons.svg#icon-settings"></use></svg>
+      </span>
+      <h1 class="a5-topbar-title">User administration</h1>
+    </div>
+    <div class="a5-topbar-actions">
+      <a class="a5-btn" href="#">
+        <svg aria-hidden="true"><use href="../../static/icons/icons.svg#icon-arrow-left"></use></svg>
+        <span>Back to terminal</span>
+      </a>
+    </div>
+  </div>
+
+  <main class="a5-main a5-wide" style="display:block">
+    <div class="a5-alert a5-alert-info" role="status">
+      <svg aria-hidden="true"><use href="../../static/icons/icons.svg#icon-info"></use></svg>
+      <span>Registration is currently open. Disable it once your accounts exist.</span>
+    </div>
+
+    <div class="a5-table-wrap">
+      <table class="a5-table">
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Role</th>
+            <th>Created</th>
+            <th>Last seen</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>ha</td>
+            <td><span class="a5-badge">Admin</span></td>
+            <td>2026-07-14</td>
+            <td>2026-08-06</td>
+            <td>
+              <a class="a5-btn" href="#">
+                <svg aria-hidden="true"><use href="../../static/icons/icons.svg#icon-key-round"></use></svg>
+                <span>Reset</span>
+              </a>
+            </td>
+          </tr>
+          <tr>
+            <td>alice</td>
+            <td><span class="a5-badge a5-badge-muted">User</span></td>
+            <td>2026-07-28</td>
+            <td>2026-08-05</td>
+            <td>
+              <a class="a5-btn" href="#">
+                <svg aria-hidden="true"><use href="../../static/icons/icons.svg#icon-key-round"></use></svg>
+                <span>Reset</span>
+              </a>
+              <a class="a5-btn a5-btn-danger" href="#">
+                <svg aria-hidden="true"><use href="../../static/icons/icons.svg#icon-trash-2"></use></svg>
+                <span>Delete</span>
+              </a>
+            </td>
+          </tr>
+          <tr>
+            <td>reviewer-tmp</td>
+            <td><span class="a5-badge a5-badge-muted">User</span></td>
+            <td>2026-08-06</td>
+            <td>2026-08-06</td>
+            <td>
+              <a class="a5-btn" href="#">
+                <svg aria-hidden="true"><use href="../../static/icons/icons.svg#icon-key-round"></use></svg>
+                <span>Reset</span>
+              </a>
+              <a class="a5-btn a5-btn-danger" href="#">
+                <svg aria-hidden="true"><use href="../../static/icons/icons.svg#icon-trash-2"></use></svg>
+                <span>Delete</span>
+              </a>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+</template>
+
+</body>
+</html>

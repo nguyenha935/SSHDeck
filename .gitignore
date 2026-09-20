@@ -1,0 +1,101 @@
+# Virtual environment
+venv/
+env/
+ENV/
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Test tooling
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Secrets & keys (defense-in-depth; primary copies live under data/, already
+# ignored — these catch stray copies that land outside DATA_DIR)
+secret_key
+known_hosts
+*.pem
+*.key
+*.bak
+*.backup
+*.orig
+*.tmp
+
+# Flask
+instance/
+.webassets-cache
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+data/
+
+node_modules/
+
+# AI assistant files
+CLAUDE.md
+.claude/
+plans/
+
+# Knowledge graph
+graphify-out/
+.codex/hooks.json
+
+# Disposable Paramiko/OpenSSH integration-test secrets
+tests/integration/paramiko5/runtime/
+
+# ---------------------------------------------------------------------------
+# Internal to this deployment, kept on disk and out of the published tree.
+#
+# These run against one specific server -- its domain, its tailnet, its
+# credentials file -- or record this project's own history in detail that
+# belongs to the people who wrote it, not to the distribution. They stay here
+# so the work continues; they are not part of what SSHDeck ships.
+# ---------------------------------------------------------------------------
+docs/DECISIONS.md
+docs/RUNBOOK.md
+scripts/deploy.sh
+scripts/rollback.sh
+
+# One-off investigation scripts. They always exit 0, they are not gates, and
+# each answers a question that was asked once.
+tests/browser/probe*
+tests/browser/defect1_*probe*
+tests/browser/defect2_*probe*
+tests/browser/*_mutation_proof.sh
+
+# What a live run needs: a base URL, an account, a host to connect to. The
+# gates themselves are published; these values are not. See
+# tests/live.env.example.
+tests/live.env

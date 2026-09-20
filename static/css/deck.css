@@ -1,0 +1,2404 @@
+/* ============================================================================
+   deck.css -- SSHDeck v5 shell.
+
+   Loaded AFTER style.css and is the SOLE OWNER of the app shell: window frame,
+   header, toolbar row, session strip, dropdowns/menus/sheets, composer dock,
+   statusbar, inspector panels, keypad and pane labels. As each region lands
+   here the superseded rules are DELETED from style.css -- never commented out
+   (AGENTS.md forbids dead code).
+
+   Authority: the approved v5 mockup and amendment under docs/spec.
+   Every rule below cites the mockup line it implements. Where the mockup is
+   silent the deviation is marked [INF-n] and was declared for approval; it is
+   never invented silently.
+
+   HARD CONSTRAINTS carried in from the amendment and the build order:
+     - ZERO hardcoded hex. Every colour flows through the --tw-* bridge below,
+       which resolves onto the existing per-theme tokens. All 10 themes must
+       keep working (amendment line 109 forbids out-of-scope token edits).
+     - Backend/logic untouched: socket/stream, session lifecycle, SFTP, i18n,
+       and above all the mobile touch code -- IME/Vietnamese telex,
+       paste-waits-for-Send, keypad, copy/scroll mode. Class names and DOM
+       order may change; behaviour may not regress.
+     - The composer is TOUCH-ONLY. Desktop shows no text input
+       (amendment line 64, visibility matrix lines 71-78).
+   ========================================================================= */
+
+/* ---------------------------------------------------------------------------
+   THE TOKEN BRIDGE MOVED (2026-09-18) to static/css/deck-tokens.css, which
+   every page now loads before its own sheet. The bridge was never
+   shell-specific -- it is how a page reads the ten themes -- and the auth and
+   admin pages needed it to stop looking like a different product. This file
+   stays what it was: the app shell, loaded by index.html alone.
+   -------------------------------------------------------------------------- */
+
+/* ---------------------------------------------------------------------------
+   L1 -- WINDOW SHELL. Mockup line 220 (.tw5-window).
+
+   The mockup's own rule carries width:100% and aspect-ratio:16/9 because it is
+   a *preview tile* sitting inside a documentation page: the aspect-ratio is
+   what gives the tile its height on that page. The real app fills the browser
+   viewport instead, so aspect-ratio is deliberately NOT carried over -- it
+   would letterbox the product. [INF-11] Declared, not silent: everything else
+   in the rule (flex column, overflow hidden, 1px border, 12px radius, the
+   shell background and the 0 18px 42px shadow) is reproduced exactly.
+
+   The shell takes over the flex-column role body used to play. body keeps its
+   own height/overflow rules (they handle the mobile keyboard via --app-height,
+   which is touch behaviour and must not regress), and the shell simply fills
+   it.
+   -------------------------------------------------------------------------- */
+.deck-window {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    /* Even 6px gutter on all four sides.
+
+       History, because two owner rulings apply and the second corrects the
+       first. The original 12px/6px/24px/8px came from shadow-clearance floors;
+       the owner rejected it on sight (2026-08-09) because the asymmetry read as
+       a mistake and the 24px bottom as an ugly void under the terminal. An EVEN
+       gutter is the requirement and stays the requirement.
+
+       That ruling was then implemented as 4px, and on 2026-08-10 the owner
+       reported the result as a regression -- "the outer product frame
+       border/background separation has disappeared" -- with the scope of the
+       original request restated explicitly: "The earlier instruction was only to
+       reduce excessive outer browser gutter slightly, never to remove the
+       product border, radius, background separation, desktop shell, or
+       responsive switch."
+
+       So the compact even gutter is kept and set to the owner's stated target of
+       6px per desktop side. This is not a return to the rejected 24px: it is 6px
+       on all four sides, half the original top inset and a quarter of the
+       original bottom. What it buys is that the 1px border has ground on both
+       sides of it -- 6px of --deck-canvas outside, the shell fill inside -- so
+       the frame is legible instead of a hairline crushed against the viewport
+       edge. 12px total horizontal (6 left + 6 right) keeps width and margin
+       consistent.
+
+       The 0 18px 42px shadow is intentionally NOT given its full clearance here;
+       an even gutter and a downward-offset shadow cannot both be satisfied, the
+       owner ruled for the even gutter, and the shadow still reads against the
+       canvas within 6px. Frame visibility is therefore carried by border and
+       radius structurally, which is what the contract measures. */
+    width: calc(100% - 12px);
+    margin: 6px;
+    overflow: hidden;
+    border: 1px solid var(--tw-border);
+    border-radius: 12px;
+    background: var(--tw-shell);
+    box-shadow: 0 18px 42px color-mix(in srgb, var(--tw-shell) 48%, transparent);
+}
+
+/* Touch is edge-to-edge by capability, not width. The former 767px and
+   short-landscape guards missed coarse tablets and iPads, leaving a desktop
+   border, radius and shadow on the touch shell. This canonical query matches
+   the touch-shell owner in style.css and resets frame geometry atomically.
+
+   Edge-to-edge is deliberate on touch and is NOT a frame regression: a phone
+   cannot spend 12px of its 359px width on decoration, and the safe-area insets
+   are the real frame there. Because the gutter collapses to 0, no --deck-canvas
+   is visible on touch, so body is painted with the shell fill instead -- an
+   unpainted strip could otherwise appear behind the safe-area padding and under
+   rubber-band overscroll, where the canvas colour would read as a stray band.
+   Nothing here reduces usable terminal/composer space: margin, border and
+   radius all go to 0 and width returns to a full 100%. */
+@media (pointer: coarse) and (hover: none), (max-width: 767px) {
+    .deck-window {
+        width: 100%;
+        margin: 0;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   L2 -- HEADER / TOOLBAR SEPARATOR. Mockup line 225:
+     .tw5-workspace-row { height:40px; padding-block:3px;
+                          border-top:1px solid var(--tw-border); }
+
+   The owner reported "the divider line between the header and the toolbar row
+   below it is gone", and the measurement confirms it: at desktop the header is
+   48px + 40px with ONE hairline, and that hairline sits on the OUTSIDE bottom
+   edge of .session-tabs-row (measured borderBottom 1px, y=49..89). Between the
+   two tiers there is nothing -- .header-content and .session-tabs-row both
+   measured borderTop 0px at every tier.
+
+   The mockup draws BOTH: an outer border-bottom on the header (line 224) and a
+   border-top between the tiers (line 225). The app already has the outer one,
+   so only the inter-tier rule is added, and it is added as border-TOP on the
+   second tier exactly as the mockup does -- not as border-bottom on the first,
+   because on touch .header-content is display:contents and generates no box to
+   hang a border on (measured: h=0, disp=contents at iPad and phone).
+
+   Scoped to >=768px. On touch the tiers are already separated: measured
+   #headerBrand and #touchActionRow each carry their own borderBottom 1px at
+   phone390, and the amendment's two-row touch header (lines 30-31) is a
+   different structure that must not gain a third rule.
+
+   The 48+40=88px total is preserved because .session-tabs-row is border-box
+   (style.css:903-904 documents this): the 1px folds into the 40px instead of
+   adding a 41st pixel. Verified by measurement after the change.
+   -------------------------------------------------------------------------- */
+@media (min-width: 768px) {
+    .session-tabs-row {
+        border-top: 1px solid var(--tw-border);
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   L2b -- WORKSPACE ROW BOX. Mockup line 224 gives the shared row rule
+     display:flex; align-items:center; justify-content:space-between;
+     gap:8px; padding:5px 8px;
+   and line 225 overrides the block padding for this row specifically:
+     height:40px; box-sizing:border-box; padding-block:3px;
+   so the resolved padding the mockup paints is 3px 8px.
+
+   Measured before writing, all four tiers: the app already had display:flex,
+   align-items:center, gap:8px and box-sizing:border-box, but
+   justify-content:normal and padding:0px. Those two were the last three REAL
+   residual rows in the L rescan (justify-content, padding, padding-block --
+   the latter two are the same declaration reported under both longhand and
+   the shorthand the mockup writes).
+
+   Scoped to >=768px, matching the border-top above and for the same measured
+   reason: at phone the row is display:contents (measured h=0, disp=contents),
+   so it generates no box. padding and justify-content on a display:contents
+   box are inert -- but `padding` is not, if the touch tier ever restores the
+   box, and the amendment's two-row touch header (lines 30-31) owns its own
+   spacing. Declaring it only where a box actually exists keeps the touch
+   header's geometry untouched.
+
+   Height is NOT restated here: the app already resolves 40px at desktop and
+   44px at iPad, and the 44px iPad row is the amendment's requirement
+   (line 30-31), not a deviation from the mockup -- the mockup only documents
+   the desktop tier. box-sizing:border-box (already present, style.css:903)
+   is what lets the 3px block padding and the 1px border-top fold into the
+   40px instead of growing the header past 48+40=88.
+   -------------------------------------------------------------------------- */
+@media (min-width: 768px) {
+    .session-tabs-row {
+        justify-content: space-between;
+        padding: 3px 8px;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   L2c -- DESKTOP CONTENT INSET: exactly ONE inline inset owner per row.
+
+   Root cause (measured, all three desktop tiers): three boxes each paid the
+   same inline inset -- .header 12px, .session-tabs-row 8px, #sessionTabs 8px --
+   so content sat 28px inside the shell border and the first chip landed at
+   x=35. Mockup line 227 gives the inset to the ROW (`padding:5px 8px`); the
+   header itself has none and the strip has none (line 241).
+
+   So the row is the single owner: .header drops to 0, each row keeps 8px, and
+   #sessionTabs adds zero. .tab-row-actions needs no rule -- the row's own
+   padding is what holds it 8px off the right edge. The hairline stays
+   full-width because it is a border on the row's border box, which the header's
+   0 padding now lets span the shell edge to edge.
+   -------------------------------------------------------------------------- */
+/* Fine pointer, not raw width: a phone in LANDSCAPE is 844px wide, so a bare
+   `min-width: 768px` reached the touch shell's 40px band and its 8px header
+   padding squeezed #mobileMoreBtn to a 40x40 paint under the 44px floor
+   (measured; mobile_shell_layout caught it). Only the two-tier desktop header
+   has the stacked-inset defect, so the query matches that shell. */
+@media (pointer: fine) and (hover: hover) and (min-width: 768px) {
+    .header {
+        padding-inline: 0;
+    }
+
+    .header-content,
+    .session-tabs-row {
+        padding-inline: 8px;
+    }
+
+    .session-tabs-row > #sessionTabs {
+        padding-inline: 0;
+    }
+
+    /* Same rule, right edge: .tab-row-actions carried its own 6px right padding
+       (style.css:1219), which stacked on the row's 8px and put the last action
+       14px off the border. Its LEFT padding and border-left are the divider
+       between strip and actions, not an inset, so both stay. */
+    .session-tabs-row > .tab-row-actions {
+        padding-right: 0;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   L3a -- PANE GRID TEMPLATES.
+
+   The mockup declares eight layout CHOICES (lines 102-110) but only draws their
+   miniature previews; the real grid templates are the app's own. Two pairs of
+   choices share a pane count, so the variant class the engine emits
+   (SessionManager.gridClassName) is what separates them:
+
+     split-2          2 columns          (mockup "2 dọc",  preview .tw5-two-cols)
+     split-2-rows     2 rows             (mockup "2 ngang", preview .tw5-two-rows)
+     split-4          2x2                (mockup "4 pane", preview .tw5-four)
+     split-4-main     1 tall + 3 stacked (mockup "4 + chính", preview .tw5-four-main)
+
+   The variant classes are additive, so .split-2 still matches its base rule and
+   only the template is overridden.
+
+   split-3 and split-5 are new counts with no rule in style.css at all. Their
+   shapes mirror the mockup previews exactly (lines 287-289): three panes are
+   one full-height column beside two stacked, and five are one full-height
+   column beside four stacked. Both put the tall pane FIRST, matching
+   `.tw5-three i:first-child{grid-row:1/3}` and `.tw5-five i:first-child{grid-row:1/5}`
+   -- the preview is a scale model of the real grid, so if these disagreed the
+   user would pick a shape and get a different one.
+   -------------------------------------------------------------------------- */
+.terminal-grid.split-3 {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+}
+
+.terminal-grid.split-3 .terminal-pane:first-child {
+    grid-row: 1 / 3;
+}
+
+.terminal-grid.split-5 {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: repeat(4, 1fr);
+}
+
+.terminal-grid.split-5 .terminal-pane:first-child {
+    grid-row: 1 / 5;
+}
+
+.terminal-grid.split-2-rows {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+}
+
+.terminal-grid.split-4-main {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: repeat(3, 1fr);
+}
+
+.terminal-grid.split-4-main .terminal-pane:first-child {
+    grid-row: 1 / 4;
+}
+
+/* ---------------------------------------------------------------------------
+   L8 -- PANE LABEL. Mockup lines 255-256 and 315.
+
+   Absolutely positioned inside the pane, so it costs the terminal grid no
+   space -- .terminal-pane is already position:relative (style.css) and
+   overflow:hidden, which also keeps the label clipped to its own pane.
+
+   Shown only when the workspace is SPLIT (mockup line 315 lists split-2/3/4/6
+   and pointedly not the single-pane state): with one pane there is nothing to
+   disambiguate, and a "1" badge floating over a full-window terminal is noise.
+   The rule is written as "not split-1" rather than by listing every split
+   class, so the two new counts and the two variants are covered without a
+   sixth and seventh selector to keep in sync.
+   -------------------------------------------------------------------------- */
+.terminal-grid .pane-label {
+    display: none;
+    position: absolute;
+    top: 6px;
+    right: 7px;
+    z-index: 2;
+    align-items: center;
+    gap: 4px;
+    max-width: calc(100% - 14px);
+    min-width: 0;
+    font-size: 11px;
+    color: var(--tw-muted);
+    pointer-events: none;
+}
+
+.terminal-grid:not(.split-1) .pane-label {
+    display: flex;
+}
+
+/* Owner ruling (item 7, SUPERSEDES mockup lines 255-256): the
+   name ellipsizes instead of running wide across the terminal content. The
+   cap is generous enough to identify a session on a tablet split and tight
+   enough that a long host name never widens the label past the pane. */
+.terminal-grid .pane-label .pane-name {
+    max-width: 160px;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.terminal-grid .pane-label .pane-number-badge {
+    display: grid;
+    place-items: center;
+    /* Owner ruling (item 7): the 19px filled slab read heavy and
+       covered terminal text on a phone split. 14px with a 10px glyph keeps
+       the number legible at every split tier without owning the corner. */
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    font-size: 10px;
+    line-height: 1;
+    color: var(--tw-accent-text);
+    background: var(--tw-accent);
+}
+
+/* ---------------------------------------------------------------------------
+   L7 -- THE ONE SHARED DROPDOWN STANDARD. Mockup line 264 declares a single
+   rule for every popover surface in the shell:
+     position:absolute; z-index:30; border:1px solid var(--tw-border);
+     border-radius:10px; background:var(--tw-surface);
+     box-shadow:0 16px 36px color-mix(in srgb,var(--tw-shell) 70%,transparent);
+
+   The app had these values spelled out per surface, which is how they drifted:
+   #layoutMenu used --bg-modal and var(--shadow-lg) while the account menu used
+   different ones again. Declaring the standard ONCE and listing the surfaces
+   that adopt it is the point of L7 -- a new dropdown inherits the standard by
+   joining the selector list rather than by copying five declarations.
+   -------------------------------------------------------------------------- */
+/* L6 geometry. Spec line 369:
+     .tw5-context-tools .tw5-layout-trigger { width:40px; flex-basis:40px; }
+   The trigger is wider than the plain 32px tool button because it carries the
+   chevron beside the glyph, but it is a PINNED 40px, not `width:auto` -- the
+   auto box measured 42px and made the contextual cluster 2px wider than the
+   mockup at every desktop width. The superseded auto rule is deleted from
+   style.css (T2). Touch tiers keep their own 44px hit target, which the
+   amendment requires and the mockup's touch rule (line 371, 42px) does not
+   contradict for an app that must satisfy a real finger. */
+.tab-row-actions #layoutMenuBtn {
+    width: 40px;
+    flex: 0 0 40px;
+    padding: 0;
+}
+
+.tab-row-actions .touch-layout-menu,
+#touchActionRow .touch-layout-menu,
+#mobileSettingsHost .touch-layout-menu {
+    position: absolute;
+    z-index: 30;
+    border: 1px solid var(--tw-border);
+    border-radius: 10px;
+    background: var(--tw-surface);
+    box-shadow: 0 16px 36px color-mix(in srgb, var(--tw-shell) 70%, transparent);
+    /* W14 item 2: bounded so the last row is reachable on a short viewport.
+       Same contract as the More sheet: a finite max-height, internal scroll,
+       and contained overscroll. The anchoring rules below (desktop right,
+       touch phone/tablet) keep their positions; the bound only clips the
+       overflow and hands it to a scrollbar, never changes where the menu
+       opens. */
+    max-height: min(
+        75dvh,
+        calc(100dvh - var(--shell-bar, 48px) - var(--shell-safe-bottom, 0px) - var(--sp-16, 16px))
+    );
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+/* THE MISALIGNED-DROPDOWN BUG (L7, second half).
+
+   The mockup anchors its layout menu to the RIGHT edge (line 266:
+   `right:8px`), and it must, because the trigger sits in the right-hand
+   contextual cluster of a space-between row. The app anchored it `left:0`
+   (style.css:1469-1473, now deleted), so a 390px-wide menu hanging off a
+   trigger ~120px from the right edge overflowed the viewport and the last
+   grid column was clipped -- worse at every narrower desktop width.
+
+   Anchoring right also makes the width formula from the mockup work: the
+   `calc(100% - 16px)` clamp is measured against the offset parent, so the menu
+   can never exceed the shell minus the 8px inset on each side.
+
+   The offset parent is .touch-layout-control (position:relative,
+   style.css:1403), which is a ~40px button wrapper -- so `right:8px` against
+   IT would not reproduce the mockup, whose menu is positioned against the
+   header. The percentage in `min(390px, calc(100% - 16px))` would resolve
+   against 40px and collapse the menu. Anchoring to the right EDGE of the
+   trigger and clamping to the viewport instead gives the mockup's painted
+   result with the app's own DOM: same right-aligned menu, same maximum width,
+   no overflow. [INF-14] -- declared, since the mockup's containing block and
+   the app's differ.
+   -------------------------------------------------------------------------- */
+.tab-row-actions .touch-layout-menu {
+    top: calc(100% + 1px);
+    left: auto;
+    right: 0;
+    /* Spec line 266: `width:min(390px,calc(100% - 16px))`. `max-content` sized
+       the menu to its longest label instead (measured 350px at 1440), which made
+       every preview column 81px where the mockup renders 91.5px. The percentage
+       in the mockup resolves against the header; here the offset parent is the
+       ~40px trigger wrapper, so the viewport is the correct stand-in for the
+       clamp -- same painted width, same column arithmetic. [INF-14]
+
+       The 390px is a CONTENT width in the mockup's arithmetic (its 4 columns
+       measure 91.5px each: (390 - 12 padding - 12 gap) / 4). With the app's
+       global box-sizing:border-box (style.css:903) the 1px border on each side
+       eats into that, giving 91px, so the border is added back explicitly. */
+    width: min(calc(390px + 2px), calc(100vw - 16px));
+    min-width: 0;
+    padding: 0;
+}
+
+/* The touch tier's copy of the same anchoring. The menu is the SAME node --
+   touch-action-row.js relocates #touchLayoutControl into #touchActionRow (and
+   into the More sheet in phone landscape), so it leaves the .tab-row-actions
+   selector above and needs the standard restated for its new parents.
+
+   The upward-opening override for the More sheet (style.css, phone landscape:
+   the sheet already opens upward from the dock, so a downward submenu would
+   leave the viewport) is deliberately NOT repeated here -- it stays where the
+   sheet's own geometry is defined, and it wins by being declared later in the
+   cascade within its media query. */
+#touchActionRow .touch-layout-menu,
+#mobileSettingsHost .touch-layout-menu {
+    /* R4: the mockup's 1px gap is measured from the TRIGGER's bottom edge
+       (mockup 265-268 `top: calc(100% + 1px)`), but `100%` resolves against this
+       menu's containing block -- the PADDING box of .touch-layout-control, which
+       carries a 1px border top and bottom. Measured at iPad portrait: control
+       rect 0..44, padding box 42px, so `calc(100% + 1px)` computed to top:43px
+       and the menu's top landed at exactly 44 -- flush against the trigger, a
+       0px gap, with the 1px silently eaten by the wrapper's own border.
+
+       Adding the bottom border width restores the relationship the mockup
+       expresses. Written against the border explicitly rather than as a magic
+       44px so it stays correct if the wrapper's border ever changes. */
+    top: calc(100% + 1px + 1px);
+    left: auto;
+    right: 0;
+    /* Spec line 268: `width:min(360px,calc(100% - 12px))`. Same reasoning as the
+       desktop copy above -- a real width, not max-content, plus the 2px border
+       the app's border-box sizing would otherwise take out of the content. */
+    width: min(calc(360px + 2px), calc(100vw - 12px));
+    padding: 0;
+}
+
+/* Right-anchoring alone is not enough on a phone. Measured at 390px: the
+   trigger sits ~133px from the left edge, so a right-anchored menu ~198px wide
+   started at x=-65 -- off the LEFT edge of the screen, with the first column of
+   choices unreachable. max-width could not fix this: the menu was already
+   narrower than the viewport, it was simply positioned past its start.
+
+   On the narrow tier the menu is left-anchored to its trigger instead, so it
+   opens rightward into the space that actually exists, and max-width keeps it
+   inside the right edge. `position: fixed` was rejected here: the anchoring
+   uses `top: calc(100% + 1px)`, and a fixed box resolves percentages against
+   the viewport rather than the trigger, which would drop the menu a full screen
+   height down. Scoped with the same pair of queries the shell frame uses, so
+   the tablet and desktop anchoring above is untouched. [INF-17] */
+@media (max-width: 767px) {
+    /* Left-anchored from a trigger that is itself inset from the left edge, so a
+       fixed width cannot work: measured at 390px the trigger starts at x=91, and
+       a 360px menu ran to x=451 -- 61px past the right edge. Right-anchoring was
+       worse (x=-65, first column unreachable).
+
+       Anchoring BOTH edges to the touch row makes the used width fall out of the
+       layout instead of being guessed. The offset parent moves from the ~44px
+       trigger wrapper up to the row, which is what the mockup positions against
+       anyway (spec line 226 lists .tw5-touch-session-wrap as the relative box, not
+       the button). `top:calc(100% + 1px)` then measures from the ROW's bottom --
+       the same edge the menu should hang from, and the same result the desktop
+       tier gets from its own wrapper. [INF-17] */
+    /*
+     * The phone action row shrink-wraps its six controls (measured phone390:
+     * x=24..324, width 300) so it cannot be the containing block for a 362px
+     * menu: right:6px against that box paints x=-44..318. The header is the
+     * viewport-wide positioned ancestor (x=0..390), so make only the action row
+     * transparent to absolute positioning at this tier. The menu then resolves
+     * right:6px against the header and paints x=22..384; its explicit top below
+     * keeps it at the action-row boundary rather than the header's 88px bottom.
+     * #mobileSettingsHost remains its own containing block when this same control
+     * lives in the More sheet.
+     */
+    #touchActionRow {
+        position: static;
+    }
+    #mobileSettingsHost {
+        position: relative;
+    }
+    #touchActionRow .touch-layout-control,
+    #mobileSettingsHost .touch-layout-control {
+        position: static;
+    }
+    #touchActionRow .touch-layout-menu,
+    #mobileSettingsHost .touch-layout-menu {
+        left: auto;
+        right: 6px;
+        /* The rendered mockup measures 362px outer at phone390: 360px content
+           + its 1px border each side. The app is border-box globally, so 362px
+           is the exact outer width. The row's right edge is the stable viewport
+           edge; left-anchoring at 6px used the row's x=82 offset and painted
+           88..450 against a 390px viewport. */
+        width: min(362px, calc(100vw - 12px));
+        min-width: 0;
+        max-width: none;
+    }
+
+    /* The app's approved phone shell keeps the two-row touch header at the
+       BOTTOM, immediately above the composer dock (measured 390x844:
+       action row y=708..752, session row y=752..796, dock y=796..844).
+       The mockup's `top:calc(100% + 1px)` assumes its header is at the top;
+       copied literally here it put this 216px menu at y=752..968, 124px beyond
+       the viewport and across both rows below the trigger.
+
+       Preserve the governing requirement rather than the page-specific axis:
+       amendment line 92 says the dropdown sits IMMEDIATELY at the Layout
+       trigger, and line 107 says it must not clip. Opening upward from this
+       bottom trigger is the only direction satisfying both. This mirrors the
+       already-approved treatment of the global menu documented in
+       style.css:7983. [INF-18] */
+    #touchActionRow .touch-layout-menu {
+        /* Containing block is now the full header, whose 100% would be 88px.
+           The trigger/action row ends at 44px, so pin that real boundary + the
+           mockup's 1px gap directly. */
+        top: calc(var(--shell-touch-actions, 44px) + 1px);
+        bottom: auto;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   L3 -- DROPDOWN HEADING AND CHOICE GRID. Mockup lines 277-284.
+   -------------------------------------------------------------------------- */
+
+.layout-menu-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 9px;
+    border-bottom: 1px solid var(--tw-border);
+}
+
+.layout-menu-heading > div {
+    display: grid;
+    gap: 2px;
+}
+
+.layout-menu-heading small {
+    color: var(--tw-muted);
+    white-space: nowrap;
+}
+
+.layout-count-badge {
+    padding: 3px 6px;
+    border-radius: 6px;
+    color: var(--tw-accent);
+    background: var(--tw-accent-soft);
+    white-space: nowrap;
+}
+
+.layout-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    padding: 6px;
+}
+
+.layout-grid > .touch-layout-option {
+    display: grid;
+    gap: 4px;
+    justify-items: stretch;
+    padding: 6px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--tw-text);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.layout-grid > .touch-layout-option:hover,
+.layout-grid > .touch-layout-option:focus-visible {
+    border-color: var(--tw-accent);
+    background: var(--tw-accent-soft);
+}
+
+/* The mockup has no selected-state rule (its menu is a static illustration),
+   but the real menu is role=menuitemradio and MUST show which layout is
+   active or the control is unusable with a screen reader alone. Painted with
+   the same accent pair the hover state uses, so it reads as the same family
+   rather than a new colour. [INF-15] */
+.layout-grid > .touch-layout-option[aria-checked="true"] {
+    border-color: var(--tw-accent);
+    background: var(--tw-accent-soft);
+}
+
+/* ---------------------------------------------------------------------------
+   L4 -- REAL MINIATURE PREVIEWS. Mockup lines 285-289.
+
+   These are scale models, not icons: the cell count comes from the layout and
+   the template mirrors the real grid template above, so a user who picks a
+   shape gets that shape. The tall-cell spans match the real grid exactly
+   (.tw5-three i:first-child{grid-row:1/3}, .tw5-five 1/5, .tw5-four-main 1/4).
+   -------------------------------------------------------------------------- */
+.layout-preview {
+    display: grid;
+    height: 38px;
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid var(--tw-border);
+    border-radius: 5px;
+    background: var(--tw-bar);
+}
+
+.layout-preview i {
+    min-width: 0;
+    min-height: 0;
+    border-radius: 2px;
+    background: var(--tw-accent-soft);
+}
+
+.layout-preview-1 { grid-template: 1fr / 1fr; }
+.layout-preview-2 { grid-template: 1fr / repeat(2, 1fr); }
+.layout-preview-2-rows { grid-template: repeat(2, 1fr) / 1fr; }
+.layout-preview-3 { grid-template: repeat(2, 1fr) / repeat(2, 1fr); }
+.layout-preview-3 i:first-child { grid-row: 1 / 3; }
+.layout-preview-4 { grid-template: repeat(2, 1fr) / repeat(2, 1fr); }
+.layout-preview-4-main { grid-template: repeat(3, 1fr) / repeat(2, 1fr); }
+.layout-preview-4-main i:first-child { grid-row: 1 / 4; }
+.layout-preview-5 { grid-template: repeat(4, 1fr) / repeat(2, 1fr); }
+.layout-preview-5 i:first-child { grid-row: 1 / 5; }
+.layout-preview-6 { grid-template: repeat(2, 1fr) / repeat(3, 1fr); }
+
+/* Mockup line 383: the narrow tier drops the choice grid to two columns. The
+   mockup's own breakpoint is 620px because that is where its documentation
+   page reflows; the app's canonical narrow tier is 767px, and the touch menu
+   only ever shows up to 5 choices, so two columns is the right shape for the
+   whole touch range rather than for an inherited doc-page width. [INF-16] */
+@media (max-width: 767px) {
+    .layout-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+/* Phone LANDSCAPE is 926px WIDE, so the width query above does not reach it --
+   measured: it kept the 4-column grid while showing only 3 choices, leaving a
+   ragged empty column. This is the project's canonical short-landscape query,
+   the same one the shell frame uses above, not a new breakpoint. */
+@media (max-height: 480px) and (orientation: landscape) {
+    .layout-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+
+
+/* ===========================================================================
+   BUCKET H -- HEADER
+   ===========================================================================
+
+   H5. The shell font. Spec line 222: `button,input,textarea { font:inherit }`
+   -- the mockup makes every control inherit the product font. The app never did:
+   .btn set a size and a weight but no family, and a <button> does not inherit
+   the document font by default, so every header control rendered in the UA
+   default (measured: Arial) at weight 600. Declaring family AND weight in one
+   place is what keeps them from drifting apart again. Spec line 221 pins
+   `strong { font-weight:500 }`, which is the wordmark's weight too.
+   -------------------------------------------------------------------------- */
+.header .btn,
+.header button,
+.header input,
+.header select,
+.account-dropdown-header button,
+.account-dropdown-header input {
+    font-family: var(--font-sans);
+    font-weight: 400;
+}
+
+/* H4. Logo box. Spec line 232:
+     .tw5-logo { display:grid; place-items:center; width:28px; height:28px;
+                 border-radius:7px; color:var(--tw-accent);
+                 background:var(--tw-accent-soft); }
+   The app painted a bare 18px glyph with no box at all. Same asset
+   (icons.svg#icon-square-terminal) -- only the frame around it is new. */
+/* [INF-B3] The delivered mark is a full-frame rounded square: it carries its
+   own plate and its own corner radius, so the accent-soft tile the old sprite
+   glyph sat on would be a second plate behind it. The box keeps the mockup's
+   28x28; `color` is the ink, and --tw-text gives the black mark on the one
+   light theme and the white mark on the nine dark ones. */
+.brand-logo {
+    display: block;
+    width: 28px;
+    height: 28px;
+    color: var(--tw-text);
+}
+
+.brand-logo .icon {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* H4, wordmark. Spec line 233 leaves .tw5-brand-name at the product font size
+   and relies on `strong { font-weight:500 }` (line 221); the mockup's own
+   computed size at desktop is 16px. The app had 15px/700 with a -0.5px
+   letter-spacing that the mockup does not have -- deleted from style.css. */
+.app-title {
+    font-family: var(--font-sans);
+    font-size: 16px;
+    font-weight: 500;
+    letter-spacing: normal;
+}
+
+/* H7. Avatar. Spec line 240:
+     .tw5-account>span { display:grid; place-items:center; width:26px;
+       height:26px; border-radius:50%; color:var(--tw-accent-text);
+       background:var(--tw-accent); }
+   The size is corrected to the mockup's 26px in the third pass below; this
+   rule owns the shape and the token-sourced colours. The app hardcoded white
+   ink, which breaks on the light themes where the accent fill is pale.
+   --tw-accent-text is per-theme (H8's "no hardcoded white"). */
+.account-avatar {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    color: var(--tw-accent-text);
+    background: var(--tw-accent);
+}
+
+/* H1. Icon BEFORE label. The markup change alone reorders the DOM, but the
+   flex row needs no gap fix: the mockup's control (spec line 234) uses gap:5px
+   between the glyph and its text. */
+.header .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+
+/* H1/H8, second pass -- the geometry the gate-1 scan still measured off-spec
+   after the markup move. Every value below is the mockup's own computed value
+   at the desktop tier; the line number is the rule it comes from.
+
+   Not included, and why: `.header-content` stays `display: contents`. The
+   mockup uses a real flex row there (line 227), but the app deliberately
+   collapses that wrapper so the two header tiers are direct flex children of
+   .header (style.css:878-892) -- changing it would re-introduce the empty 48px
+   row that block was written to remove. The tier is a box either way; only the
+   element that owns it differs. */
+
+/* Spec line 231: .tw5-brand { gap:7px; flex:0 0 auto; }
+   Fine pointer only. On touch the brand shares row one with the six global
+   actions and must YIELD width to them, which style.css:4490 does with
+   `flex: 1 1 0`; deck.css loads later, so an unscoped `flex: 0 0 auto` here
+   overrode it and the brand stopped shrinking -- #sessionTabs was pushed over
+   the composer dock and intercepted every tap on #mobileSendBtn (measured in
+   paste_contract, hybrid_composer_input and mobile_session_switch). The
+   mockup's own touch brand is the same shrinking element (line 118 inside
+   .tw5-touch-global-row), so 0 0 auto is a desktop-only value. */
+@media (pointer: fine) {
+    .header-title-row {
+        gap: 7px;
+        flex: 0 0 auto;
+    }
+}
+
+/* Spec line 230: .tw5-global-nav { gap:5px; } */
+.header-buttons,
+.header-group {
+    gap: 5px;
+}
+
+/* Spec line 234:
+     .tw5-control,.tw5-account { display:inline-flex; align-items:center;
+       justify-content:center; gap:5px; min-height:32px; padding:5px 8px;
+       border:1px solid var(--tw-border); border-radius:7px;
+       background:transparent; white-space:nowrap; }
+   The app had 0 14px padding, a 6px radius and an opaque --tw-bar fill, so the
+   header controls read as solid slabs instead of the mockup's outlined chips.
+   `background: transparent` is a keyword, not a colour, so it adds no hex. */
+.header .btn.btn-secondary,
+.header .account-btn-header {
+    min-height: 32px;
+    padding: 5px 8px;
+    border: 1px solid var(--tw-border);
+    border-radius: 7px;
+    background: transparent;
+    white-space: nowrap;
+}
+
+/* Spec line 236: the hover fill is the shared hover token, not a new colour. */
+.header .btn.btn-secondary:hover,
+.header .account-btn-header:hover {
+    background: var(--tw-hover);
+}
+
+/* Spec line 239: .tw5-account { padding:2px 5px 2px 3px; } -- tighter than a
+   text control because the avatar already carries its own inset.
+
+   Specificity, not source order, is what decides here: the account button
+   carries BOTH .btn-secondary and .account-btn-header, so the shared control
+   rule above matches it at (0,3,0) while `.header .account-btn-header` is only
+   (0,2,0) and lost despite coming later. Measured: padding stayed 5px 8px at
+   all seven tiers. Adding .btn ties the specificity and the later source
+   position then wins, which is the ordering rule in AGENTS.md section 3. */
+.header .btn.account-btn-header {
+    padding: 2px 5px 2px 3px;
+}
+
+/* Spec line 237: .tw5-primary { color:var(--tw-accent-text);
+     border-color:var(--tw-accent); background:var(--tw-accent); }
+   The app painted white ink on the accent, which disappears on obsidian
+   (--accent-primary is #ffffff there, AGENTS.md section 4). --tw-accent-text is
+   per-theme and is the fix that cannot break a palette. */
+.header .btn.btn-primary {
+    color: var(--tw-accent-text);
+    border: 1px solid var(--tw-accent);
+    border-radius: 7px;
+    min-height: 32px;
+    /* Owner ruling (error 4): the mockup chip is 5px 8px (line 234)
+       and secondary controls keep it, but the primary connect button's label
+       read tight against the accent fill. 12px horizontal + explicit 20px
+       line-height give the label air without changing the 32px floor. */
+    padding: 5px 12px;
+    line-height: 20px;
+    background: var(--tw-accent);
+    white-space: nowrap;
+}
+
+/* H8, the account block. Spec line 270:
+     .tw5-menu-account { display:flex; align-items:center; gap:8px; padding:7px;
+       border-bottom:1px solid var(--tw-border); }
+   and line 272: .tw5-menu-account>div { display:grid; } */
+.account-menu-identity {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px;
+    border-bottom: 1px solid var(--tw-border);
+}
+
+.account-menu-identity > div {
+    display: grid;
+    min-width: 0;
+}
+
+/* Spec line 271: .tw5-menu-account>span { width:33px; height:33px; } -- the
+   menu avatar is larger than the 24px chip avatar in the header (H7). */
+.account-menu-identity > .account-avatar {
+    width: 33px;
+    height: 33px;
+}
+
+/* Spec line 273: .tw5-menu-account small { color:var(--tw-muted); } */
+.account-menu-identity small,
+#accountDropdownHeader > .account-item small {
+    color: var(--tw-muted);
+    white-space: nowrap;
+}
+
+/* Spec line 221: strong { font-weight:500 } -- the account name is a <strong>
+   and must not inherit the browser's bold. */
+.account-menu-identity .account-menu-name {
+    font-weight: 500;
+}
+
+/* Spec line 274:
+     .tw5-global-menu>button { display:flex; align-items:center; gap:8px;
+       width:100%; min-height:40px; padding:6px 8px; border:0;
+       border-radius:7px; background:transparent; text-align:left;
+       white-space:nowrap; }
+   The 40px floor is the DESKTOP value and is scoped accordingly below: on a
+   coarse pointer WCAG 2.5.5 needs 44px, and the mockup agrees -- its own touch
+   controls are 42-44px (lines 371, 333), never 40. Applying 40 unscoped shrank
+   all eight relocated menu rows to 280x40 inside the More sheet, which
+   mobile_shell_layout caught at five tiers. Priority axis 1 (AGENTS.md
+   section 5) makes the touch floor win where the two disagree. */
+#accountDropdownHeader > .account-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    text-align: left;
+    white-space: nowrap;
+}
+
+/* The mockup's 40px floor, scoped to the surface it was measured on. */
+@media (pointer: fine) {
+    #accountDropdownHeader > .account-item {
+        min-height: 40px;
+    }
+}
+
+/* Spec line 275: .tw5-global-menu>button small { margin-left:auto; } -- the
+   secondary note (theme name, language) is pushed to the far edge. */
+#accountDropdownHeader > .account-item small {
+    margin-left: auto;
+}
+
+/* Spec line 264:
+     .tw5-global-menu { position:absolute; z-index:30;
+       border:1px solid var(--tw-border); border-radius:10px;
+       background:var(--tw-surface);
+       box-shadow:0 16px 36px color-mix(in srgb,var(--tw-shell) 70%,transparent); }
+   L7's one shared dropdown standard, applied to the account menu. */
+#accountDropdownHeader {
+    z-index: 30;
+    border: 1px solid var(--tw-border);
+    border-radius: 10px;
+    background: var(--tw-surface);
+    box-shadow: 0 16px 36px color-mix(in srgb, var(--tw-shell) 70%, transparent);
+}
+
+/* Spec line 265: .tw5-desktop-global-menu { width:min(310px,...); padding:5px; }
+   +2px because box-sizing is border-box app-wide (style.css:903) while the
+   mockup's 310px is the content width -- the same border compensation L used
+   for the layout menu.
+
+   Scoped to the fine-pointer shell on purpose. On touch header-menus.js:191
+   RELOCATES this same node into #mobileSettingsHost inside the More sheet, and
+   a fixed 310px there overflowed the host: measured as "mobile: hosted account
+   tree uses static in-flow geometry" reporting contained:false, plus 15 rows in
+   mobile_shell_layout. Inside the sheet the node must size to its host, which
+   is what it already did. */
+@media (pointer: fine) {
+    #accountDropdownHeader {
+        width: min(calc(310px + 2px), calc(100vw - 16px));
+        padding: 5px;
+    }
+}
+
+/* The same node, INSIDE the touch host: no card of its own.
+
+   The rule above gives the canonical tree the v5 global-menu card -- 1px border,
+   10px radius, surface fill, float shadow -- which is right when it is a floating
+   dropdown under the desktop account button. On touch it is MOVED into
+   #mobileMoreSheet, and that sheet already paints exactly the same card. Two
+   nested cards is a card-in-a-card: a second border and a second background
+   inset a few pixels inside the first, which reads as a rendering fault rather
+   than a menu.
+
+   style.css already resets this in-host via
+   `.mobile-settings-host > .account-dropdown-header` (0,2,0), but the rule above
+   is an ID (1,0,0) and outranks it no matter the source order, so the reset has
+   to be stated at ID specificity too. Measured before this rule: the hosted tree
+   computed borderTopWidth 1px and background rgb(24,24,27) inside a sheet
+   already painting rgba(17,17,19,0.97).
+
+   Scoped to the host, so the desktop card above is untouched -- the two rules
+   describe the same node in its two homes and cannot both apply at once. */
+#mobileSettingsHost > #accountDropdownHeader {
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    /* The sheet is the scroller and the clamp. A max-height here would create a
+       second nested scroll container, which is what puts a last row out of
+       reach. */
+    max-height: none;
+    overflow: visible;
+    /*
+     * WIDTH, and it is load-bearing on one tier (second
+     * pass).
+     *
+     * The desktop card rule above is scoped to `(pointer: fine)`, on the premise
+     * that a fine pointer means the tree is a floating dropdown. That premise
+     * fails for the WIDTH-FALLBACK touch shell: a mouse desktop resized below
+     * 768px takes the touch shell through the `(max-width: 767px)` branch of
+     * TOUCH_SHELL_QUERY while still matching `(pointer: fine)`. Both rules then
+     * apply to the hosted node, and the ID-specificity desktop rule set
+     * width:312px inside a 312px sheet whose content box is 302px.
+     *
+     * Measured at 700x900 before this declaration: sheet 312, tree 322 (312 + the
+     * host's own padding contribution), treeWithinSheet:false -- every one of the
+     * 13 rows overflowing the sheet's right edge, i.e. clipped. Capability-touch
+     * tiers were unaffected (294px at phone359/390, phone landscape and both iPad
+     * orientations) because they do not match `(pointer: fine)`.
+     *
+     * `width:auto` returns the node to sizing from its host, which is what the
+     * comment above already says it "already did" -- true on coarse pointers only.
+     * Stated here rather than by narrowing the desktop rule's media query: this
+     * host selector is the one place that describes the hosted home, and it must
+     * hold whatever combination of capability and width the shell was entered by.
+     */
+    width: auto;
+}
+
+/* H, third pass. The remaining gate-1 rows that are real app defects rather
+   than architecture differences.
+
+   NOT fixed here, and the reasoning is recorded because it was wrong once:
+   spec line 234 sets `display:inline-flex` on .tw5-control/.tw5-account while
+   the mockup COMPUTES `flex`, because line 227's `.tw5-global-row{display:flex}`
+   blockifies its flex children. In the app #accountBtnHeader stays inline-flex
+   because it sits inside .account-selector, a real box, rather than directly in
+   the tier. Collapsing that wrapper with display:contents was tried and
+   REVERTED: #accountDropdownHeader is absolutely positioned with
+   `top: calc(100% + 8px); right: 0` against .account-selector, so removing the
+   wrapper's box re-anchors the menu to .header and it stops tracking its
+   trigger -- measured as 8 red suites, including
+   "acct-desktop: it is right-anchored to its trigger" and
+   "mobile: hosted account tree uses static in-flow geometry". This is exactly
+   the offset-parent trap AGENTS.md section 3 records. `inline-flex` vs `flex`
+   is an inner-display difference with no geometric effect on a flex item, so
+   the wrapper stays and the row stays as it is.
+
+/* Spec line 240: the avatar in the header chip is 26x26. The earlier H7 pass
+   used 24x24 on the owner's instruction; the mockup's own value is 26 and the
+   owner's "avatar 24x24" predates this measurement, so the spec wins per
+   AGENTS.md section 1 ("the mockup wins over both the agent's and the user's
+   preferences"). The menu avatar stays 33px (line 271). */
+.account-avatar {
+    width: 26px;
+    height: 26px;
+}
+
+/* Spec line 265: the desktop global menu is width:min(310px, ...) and the rows
+   inside are width:100% of the CONTENT box. With padding:5px and border-box the
+   app's rows measured 300px against the mockup's 310px, because the mockup's
+   310px is itself the content width. Adding the 5px padding on each side plus
+   the 1px borders gives the same row width the mockup computes. Fine pointer
+   only, for the same relocation reason recorded above. */
+@media (pointer: fine) {
+    #accountDropdownHeader {
+        width: min(calc(310px + 10px + 2px), calc(100vw - 16px));
+    }
+}
+
+/* Spec line 275: .tw5-global-menu>button small { margin-left:auto;
+     white-space:nowrap; } -- the app's equivalent trailing note is
+   .account-current (there is no <small> in these rows). */
+#accountDropdownHeader > .account-item .account-current {
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+/* ===========================================================================
+   BUCKET S -- session strip, chips and the lifecycle sheet.
+   =========================================================================== */
+
+/* S3 geometry. Spec line 243:
+     .tw5-session { position:relative; display:flex; align-items:center; gap:6px;
+       flex:0 0 auto; min-width:92px; height:30px; min-height:30px;
+       padding:1px 7px; border:1px solid transparent; border-radius:7px;
+       background:transparent; text-align:left; }
+   The 30px height is the DESKTOP figure and is applied on a fine pointer only:
+   a coarse-pointer chip is the primary selection target (S4) and WCAG 2.5.5
+   needs 44px, which is what the existing touch block already gives it. Priority
+   axis 1 (AGENTS.md section 5) decides that disagreement. min-width, radius,
+   padding and gap are surface-independent and apply everywhere.
+
+   box-sizing is border-box globally (style.css:903), so the mockup's 30px
+   content height plus its 1px borders is 32px of border box. */
+#sessionTabs .session-tab {
+    gap: 6px;
+    flex: 0 0 auto;
+    min-width: 92px;
+    padding: 1px 7px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: transparent;
+    text-align: left;
+}
+
+@media (pointer: fine) {
+    #sessionTabs .session-tab {
+        height: 32px;
+        min-height: 32px;
+    }
+}
+
+/* Spec line 247: .tw5-session-active { border-color:var(--tw-accent);
+     background:var(--tw-accent-soft); } */
+/* Drag to arrange (item C,): the armed chip lifts so a held
+   finger knows the drag is on; the dragged chip floats above its siblings. */
+#sessionTabs .session-tab.drag-armed {
+    transform: scale(1.04);
+    /* The lift reads against every theme because it is mixed from the shell
+       colour, like the menu and modal shadows above, not a black literal. */
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--tw-shell) 60%, transparent);
+}
+
+#sessionTabs .session-tab.dragging {
+    opacity: 0.85;
+    /* The lift itself (translate + scale + tilt) is an inline transform set
+       per pointer move by session-manager liftDraggedTab. */
+    z-index: 3;
+    will-change: transform;
+    /* Kept for the MOUSE drag: touch is suppressed before the finger lands
+       (style.css, pointer:coarse), but a mouse drag across a chip would still
+       select its label without this. */
+    user-select: none;
+    cursor: grabbing;
+}
+
+/* A drag you can see: a chip whose slot just moved slides there
+   (drag-shift, FLIP from session-manager slideDisplacedTabs) and the released
+   chip settles into its slot (drag-settle). Both are transitions on transform
+   only, so nothing is laid out twice. */
+#sessionTabs .session-tab.drag-shift,
+#sessionTabs .session-tab.drag-settle {
+    transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #sessionTabs .session-tab.drag-shift,
+    #sessionTabs .session-tab.drag-settle {
+        transition: none;
+    }
+}
+
+#sessionTabs .session-tab.active {
+    border-color: var(--tw-accent);
+    background: var(--tw-accent-soft);
+}
+
+/*
+ * W4 action-target paint on desktop. Distinct from .active (the displayed
+ * terminal): the action target is the chip the Rename/Reconnect/Reset/Close
+ * controls address, and a chip can be either, both, or neither. The touch
+ * shell already paints a ring on the pill (::before) inside the capability
+ * media block in style.css; fine-pointer desktop has no pill, so the ring
+ * lives on the element itself. Using outline (not border) keeps the chip's
+ * box model identical to an unselected chip, so selecting a target never
+ * shifts its neighbours.
+ */
+@media (pointer: fine) {
+    #sessionTabs .session-tab.lifecycle-target {
+        outline: 2px solid var(--tw-accent);
+        outline-offset: -2px;
+    }
+}
+
+/* Spec line 248: .tw5-offline-session { border-color:var(--tw-border); } */
+#sessionTabs .session-tab.disconnected {
+    border-color: var(--tw-border);
+}
+
+/* Spec line 249: .tw5-dot { width:7px; height:7px; flex:0 0 7px;
+     border-radius:50%; background:var(--tw-danger); }
+   Spec line 250: .tw5-online { background:var(--tw-success); }
+   The mockup's default dot is the DOWN state and .tw5-online overrides it, so
+   the app's .connected / .connecting classes map onto the same two tokens. The
+   box-shadow glow the legacy rule painted is dropped: the mockup's dot is a
+   flat 7px circle, and the glow was three hardcoded rgba() values. */
+#sessionTabs .session-tab .status-dot {
+    width: 7px;
+    height: 7px;
+    flex: 0 0 7px;
+    border-radius: 50%;
+    background: var(--tw-danger);
+    box-shadow: none;
+}
+
+#sessionTabs .session-tab .status-dot.connected {
+    background: var(--tw-success);
+}
+
+#sessionTabs .session-tab .status-dot.connecting {
+    background: var(--tw-warning);
+}
+
+/* Spec line 244: .tw5-session>span:nth-child(2) { display:grid; min-width:0; }
+   The chip body is a GRID of two rows, not the column flex the legacy rule
+   used -- that is what lets <strong> and <small> share one 14px line box each
+   (line 245) inside a 30px chip. */
+#sessionTabs .session-tab .tab-label {
+    display: grid;
+    min-width: 0;
+    gap: 0;
+}
+
+/* Spec line 245: .tw5-session strong, .tw5-session small { line-height:14px; }
+   Spec line 246: .tw5-session small { color:var(--tw-muted);
+     white-space:nowrap; } */
+#sessionTabs .session-tab .tab-label > strong,
+#sessionTabs .session-tab .tab-label > small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#sessionTabs .session-tab .tab-label > small {
+    color: var(--tw-muted);
+}
+
+/* CHIP DENSITY (owner ruling, defect 4): chip text must not touch the
+   pill edges.
+
+   Measured cause, and it is not a drift from the mockup -- rendering the mockup
+   itself gives the SAME numbers: two 14px line boxes = a 28px label inside a 30px
+   pill, so 1px of air above and below. The owner rejected that on sight, and
+   owner feedback outranks the mockup constant here, so the label scale comes down
+   instead of the pill growing (the row must stay compact).
+
+   14px + 14px = 28  ->  12px + 11px = 23, i.e. 3.5px of air on each side.
+   Each line-height stays 1px larger than its font-size so descenders (the 'g' in
+   "goclaw") are not clipped by the overflow:hidden above. white-space:nowrap and
+   the ellipsis are unchanged, and min-width:92px still keeps short names whole --
+   measured: no clipping of the connection name at 1440, 834 or 390. */
+#sessionTabs .session-tab .tab-label > strong {
+    font-size: 11px;
+    line-height: 12px;
+}
+
+#sessionTabs .session-tab .tab-label > small {
+    font-size: 10px;
+    line-height: 11px;
+}
+
+/* W13-A4 — the legacy tmux locale warning badge.
+
+   A pane created before the UTF-8 locale fix cannot be retrofitted (tmux
+   `-e` on `new-session -A` is a measured no-op against a running session),
+   and saying so is the chip's job: it is the surface the user sees before
+   typing a first Vietnamese keystroke. session-manager.js owns the state
+   (updateLegacyLocaleWarning toggles `.legacy-locale` on the chip); this is
+   the only paint.
+
+   The badge is the mockup's documented single exception to "a chip has
+   exactly the dot and the two-line label" (createSessionTab carries the
+   matching rationale). It reuses the warning glyph-circle vocabulary the
+   confirm dialog already established below (.session-confirm-icon): the
+   semantic token plus its 14% color-mix soft fill, so every theme --
+   including the three with near-white accents -- derives both colours from
+   its own --tw-warning. Nothing is added to measured-fine (false) or
+   unmeasured (null) sessions: the badge exists in the DOM but stays
+   display:none until the class is present, so a healthy strip is unchanged
+   down to the last pixel.
+
+   The chip is `display:flex; align-items:center; gap:6px`, so the badge is
+   the third flex item and needs no positioning of its own. The touch pill
+   raises every chip child above the ::before paint via the existing
+   `.session-tabs .session-tab > *` rule, so no extra z-index is required on
+   the touch shell either. */
+#sessionTabs .session-tab .chip-locale-warning {
+    display: none;
+    width: 12px;
+    height: 12px;
+    flex: 0 0 12px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 9px;
+    line-height: 1;
+    font-weight: 700;
+    color: var(--tw-warning);
+    background: color-mix(in srgb, var(--tw-warning) 14%, transparent);
+}
+
+#sessionTabs .session-tab.legacy-locale .chip-locale-warning {
+    display: flex;
+}
+
+/* S6. Spec line 227: every row of the shell -- including the workspace row
+     that holds the strip -- carries padding:5px 8px, and line 229 narrows the
+     block axis to 3px for the workspace row specifically:
+       .tw5-workspace-row { height:40px; padding-block:3px; }
+   The strip itself (line 241) has NO padding of its own; the row supplies it.
+   The app's strip is the padded element, so the row's inline 8px lands here.
+
+   The INLINE axis is what S6 is about -- chips sitting flush against the shell
+   border -- and it applies on every surface. The BLOCK axis does not: the touch
+   strip is exactly 44px tall and is its own scroll container, so 3px top and
+   bottom pushed its 44px chips to a 47px scrollHeight and the strip began
+   scrolling vertically (measured at 359x780, 390x844 and 844x390). The mockup's
+   3px belongs to a 40px desktop row holding 32px chips, where there is room for
+   it; it is scoped to that surface accordingly. */
+#sessionTabs {
+    padding-inline: 8px;
+    gap: 3px;
+}
+
+@media (pointer: fine) {
+    #sessionTabs {
+        padding-block: 3px;
+    }
+}
+
+/* S5. Spec line 301:
+     .tw5-state-session-actions .tw5-session-actions { display:grid; top:7px;
+       left:36%; min-width:235px; padding:5px; }
+   and line 264 gives every dropdown the shared surface. Only the box is set
+   here -- the app's own position (fixed above the dock on touch, absolute on
+   desktop) is a shell concern the mockup's single static preview cannot
+   express, and overriding it would re-trap the sheet behind the dock. */
+/* Spec line 264 lays the sheet out as a GRID with a single 235px column, which
+   is what makes all four rows exactly equal width; style.css had it as a
+   column flexbox, so each row was content-sized and the sheet came out 245px
+   with 233px rows. minmax() rather than a bare 235px because the row labels are
+   translated: the mockup's number is the floor, and a longer locale grows the
+   column instead of clipping under white-space:nowrap. */
+.session-actions-sheet {
+    display: grid;
+    grid-template-columns: minmax(235px, max-content);
+    min-width: 235px;
+    padding: 5px;
+    border: 1px solid var(--tw-border);
+    border-radius: 10px;
+    background: var(--tw-surface);
+    box-shadow: 0 16px 36px color-mix(in srgb, var(--tw-shell) 70%, transparent);
+}
+
+/* Spec line 274 covers .tw5-session-actions>button with the same rule as the
+   global-menu rows. The 40px floor is again desktop-only, for the reason
+   recorded on the account rows above. */
+.session-action-item {
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 7px;
+    /* Spec line 274 also declares white-space:nowrap. Without it "Khởi tạo phiên
+       mới" wraps to two lines inside a 235px sheet and the row grows past its
+       own min-height, so the four rows stop being a uniform list. */
+    white-space: nowrap;
+}
+
+@media (pointer: fine) {
+    .session-action-item {
+        min-height: 40px;
+    }
+}
+
+/* Spec line 276: .tw5-session-actions>button:hover { background:var(--tw-hover); } */
+.session-action-item:hover:not(:disabled) {
+    background: var(--tw-hover);
+}
+
+/* Spec line 303: .tw5-danger { color:var(--tw-danger); } */
+.session-action-close {
+    color: var(--tw-danger);
+}
+
+/* S5 heading. Spec line 184 opens the sheet with
+     <div class="tw5-menu-heading"><div><strong>staging</strong>
+       <small>Đã chọn · chạm lại hoặc nhấn giữ</small></div><span class="tw5-dot"></span></div>
+   Spec lines 277-279 give .tw5-menu-heading its geometry. */
+.session-actions-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 9px;
+    border-bottom: 1px solid var(--tw-border);
+}
+
+.session-actions-heading > div {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.session-actions-heading small {
+    color: var(--tw-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.session-actions-heading > .status-dot {
+    width: 7px;
+    height: 7px;
+    flex: 0 0 7px;
+    border-radius: 50%;
+    background: var(--tw-danger);
+    box-shadow: none;
+}
+
+.session-actions-heading > .status-dot.connected {
+    background: var(--tw-success);
+}
+
+/* S5 confirm dialog. Spec line 306:
+     .tw5-state-confirm .tw5-confirm { display:grid; justify-items:center;
+       gap:7px; top:50%; left:50%; width:min(350px,calc(100% - 22px));
+       padding:17px; transform:translate(-50%,-50%); text-align:center; }
+   plus the shared dropdown surface at line 264. This replaces a native
+   confirm(), which cannot be themed, cannot be reached by the browser tests,
+   and on iOS Safari is dismissed by the same tap that opened the sheet. */
+.session-confirm-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 2200;
+    background: color-mix(in srgb, var(--tw-shell) 62%, transparent);
+}
+
+.session-confirm-backdrop[hidden] {
+    display: none;
+}
+
+.session-confirm {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    z-index: 2210;
+    display: grid;
+    justify-items: center;
+    gap: 7px;
+    width: min(350px, calc(100% - 22px));
+    padding: 17px;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    border: 1px solid var(--tw-border);
+    border-radius: 10px;
+    background: var(--tw-surface);
+    box-shadow: 0 16px 36px color-mix(in srgb, var(--tw-shell) 70%, transparent);
+}
+
+/* The CLOSED state, and it is load-bearing rather than defensive.
+ *
+ * `display: grid` above is an AUTHOR declaration and therefore outranks the UA
+ * presentation rule that hides `[hidden]`, so the dialog painted its full card
+ * at initial load in every shell while the markup still carried `hidden inert`
+ * measured 350x183 at 1440x900 and 350x195 at iPad, phone 390 and phone
+ * landscape, opaque, directly over the terminal. `inert` kept it from taking a
+ * hit test, which is exactly why nothing failed: it was a purely visual
+ * occlusion of the workspace.
+ *
+ * Placed AFTER the competing rule per AGENTS.md section 3 (a corrected OVERRIDE
+ * goes after), and it also wins on specificity -- (0,2,0) against (0,1,0) -- so
+ * it does not depend on source order alone and needs no !important. No @media
+ * block later in this file touches `display` on this element.
+ *
+ * Same closed-state guard the sibling surfaces already carry:
+ * .session-confirm-backdrop[hidden] just above, .session-actions-sheet[hidden]
+ * (style.css) and.composer-target[hidden] below. openSessionConfirm clears
+ * the attribute to open, at which point the base rule applies unchanged, so the
+ * dialog's own geometry, focus routing, inert handling and backdrop are
+ * untouched. */
+.session-confirm[hidden] {
+    display: none;
+}
+
+/* Spec line 307: .tw5-confirm-icon { display:grid; place-items:center;
+     width:40px; height:40px; border-radius:50%; color:var(--tw-warning);
+     background:color-mix(in srgb,var(--tw-warning) 14%,transparent); } */
+.session-confirm-icon {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    color: var(--tw-warning);
+    background: color-mix(in srgb, var(--tw-warning) 14%, transparent);
+}
+
+/* Spec line 308: .tw5-confirm p { margin:0; color:var(--tw-muted); } */
+.session-confirm p {
+    margin: 0;
+    color: var(--tw-muted);
+}
+
+/* Spec line 309: .tw5-confirm>div:last-child { display:flex; gap:6px; } */
+.session-confirm > .session-confirm-actions {
+    display: flex;
+    gap: 6px;
+}
+
+/* Spec line 234 gives .tw5-control its box; the confirm's two buttons are
+   .tw5-control (line 186). Coarse pointers get the 44px floor instead of 32. */
+.session-confirm-actions > button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-height: 32px;
+    padding: 5px 8px;
+    border: 1px solid var(--tw-border);
+    border-radius: 7px;
+    background: transparent;
+    color: var(--tw-text);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+@media (pointer: coarse), (max-width: 767px) {
+    .session-confirm-actions > button {
+        min-height: 44px;
+    }
+}
+
+/* Spec line 310: .tw5-danger-control { color:var(--tw-shell);
+     border-color:var(--tw-danger); background:var(--tw-danger); } */
+.session-confirm-actions > .session-confirm-danger {
+    color: var(--tw-shell);
+    border-color: var(--tw-danger);
+    background: var(--tw-danger);
+}
+
+/* [INF-19]: a pending request uses the same selected-chip lifecycle grammar.
+   Its second activation opens Cancel in the shared sheet; no inline X exists. */
+#sessionTabs .session-tab[data-pending-id] {
+    cursor: pointer;
+}
+
+/* ---------------------------------------------------------------------------
+   B2 -- Broadcast target chip on the ONE shared composer dock.
+
+   Spec line 372:
+     .tw5-target-chip { display:none; align-items:center; justify-content:center;
+       gap:4px; min-height:42px; padding:5px 7px; border:1px solid
+       var(--tw-warning); border-radius:7px; color:var(--tw-warning);
+       background:color-mix(in srgb,var(--tw-warning) 12%,transparent);
+       white-space:nowrap; }
+   Spec line 373: .tw5-state-broadcast .tw5-target-chip { display:inline-flex; }
+
+   This REPLACES the old .composer-target, which was a 14px muted caption
+   absolutely positioned inside the textarea's bottom band -- it read as part of
+   the placeholder, not as the blast radius of the next fan-out send, and it
+   evicted the "Dán sẽ chờ Gửi" helper to avoid overlapping it. That whole block
+   in style.css is deleted, so the helper now stays put exactly as mockup line
+   193 shows it beside the chip.
+
+   The mockup's state class is expressed here by the [hidden] attribute the
+   renderer already toggles (app.js renderBroadcastState) rather than by a new
+   body class: same single source of truth, and it keeps the control out of the
+   a11y tree when there is no fan-out target, which display:none alone does not
+   guarantee for a live region.
+
+   min-height stays at the mockup's 42px on every pointer type, and measures 42px
+   border box (box-sizing is global, style.css:903, so the 1px borders come out of
+   the 42, not on top of it). That is below the 44px touch floor priority axis 1
+   normally wins -- but the floor governs TARGETS, and this chip is a live region,
+   not a target ([INF-B2] in index.html): there is nothing to mis-tap. If a target
+   picker is ever specified, the chip becomes a button and a coarse-pointer
+   min-height:44px override belongs here at that point. */
+.composer-target {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-height: 42px;
+    padding: 5px 7px;
+    border: 1px solid var(--tw-warning);
+    border-radius: 7px;
+    color: var(--tw-warning);
+    background: color-mix(in srgb, var(--tw-warning) 12%, transparent);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.composer-target[hidden] {
+    display: none;
+}
+
+/* The sprite's base .icon is 1em; at the chip's 13px that renders the
+   radio-tower thinner than the mockup's 16px lucide glyph. */
+.composer-target .icon {
+    width: 16px;
+    height: 16px;
+}
+
+/* W14 item 6: the picker was specified, so the chip became the button the
+   mockup always drew. [INF-B2] recorded the promise: when it became a
+   button, a coarse-pointer min-height:44px override belongs here. That is
+   this rule -- the 44px touch floor governs targets, and the chip is one now.
+   Desktop keeps the mockup's 42px. */
+@media (pointer: coarse), (hover: none) {
+    .composer-target {
+        min-height: 44px;
+        cursor: pointer;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   W14 item 6 -- the broadcast target picker.
+
+   An anchored checklist opening UPWARD from the composer bar (its bottom
+   edge is the dock's top edge, so there is no room below; same reasoning as
+   every other dock-anchored menu). Bounded with the same contract the More
+   sheet carries (finite max-height, overflow-y:auto, overscroll contain), so
+   its last row is reachable on a short viewport. The bar is position:relative
+   (style.css, the .mobile-input-bar rule), so the absolute box anchors there
+   at every tier. Rows are buttons with aria-checked state; the check glyph is
+   drawn by CSS from the state attribute -- one node per row, theme tokens
+   only, no literals.
+   -------------------------------------------------------------------------- */
+.broadcast-target-menu {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(100% + 6px);
+    z-index: 1300;
+    display: flex;
+    flex-direction: column;
+    max-height: min(
+        60dvh,
+        calc(100dvh - var(--shell-bar, 48px) - var(--shell-safe-bottom, 0px) - var(--sp-16, 16px))
+    );
+    padding: var(--sp-8);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 1px solid var(--tw-border);
+    border-radius: 10px;
+    background: var(--tw-surface);
+    box-shadow: 0 16px 36px color-mix(in srgb, var(--tw-shell) 70%, transparent);
+}
+
+.broadcast-target-menu[hidden] {
+    display: none;
+}
+
+.broadcast-target-menu-heading {
+    flex: 0 0 auto;
+    padding: 2px 9px 7px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--tw-muted);
+    white-space: nowrap;
+}
+
+.broadcast-target-option {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex: 0 0 auto;
+    min-height: 44px;
+    padding: 6px 9px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--tw-text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.broadcast-target-option:hover:not(:disabled) {
+    background: var(--tw-hover);
+}
+
+/* The check glyph, drawn from the state attribute rather than shipped as a
+   character: unchecked is an outlined 16px box; checked fills it with the
+   broadcast accent (the chip's own warning token) and draws the tick with a
+   rotated border pair. */
+.broadcast-target-option::before {
+    content: "";
+    flex: 0 0 16px;
+    width: 16px;
+    height: 16px;
+    border: 1.5px solid var(--tw-border);
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+.broadcast-target-option[aria-checked="true"]::before {
+    background: var(--tw-warning);
+    border-color: var(--tw-warning);
+    box-shadow: inset 0 0 0 3px var(--tw-surface);
+}
+
+.broadcast-target-option-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ---------------------------------------------------------------------------
+   B -- the shared composer dock's own geometry.
+
+   Spec line 332: .tw5-composer-dock { align-items:end; ... }
+   Spec line 335: .tw5-composer textarea { padding:6px 7px 16px;
+                    border-radius:7px; ... }
+   Spec line 336: .tw5-composer small { right:7px; left:7px; ... }
+
+   The HORIZONTAL figures are the mockup's; the VERTICAL ones are not, and
+   deliberately so. The mockup's textarea is 42px tall (6 + 20 line-height + 16
+   band); the app's floor is the 44px touch target priority axis 1 mandates, so
+   the same three-part stack is re-derived against 44 (3 + 20 + 19) and the
+   band's own 14px help line is unchanged. max-height stays 88px = 2 x 44 for the
+   same reason -- the mockup's 86 is 2 x 43. Every horizontal value that carries
+   no touch obligation is the mockup's exactly. */
+/* Spec line 332 gives the dock its own bar plane, hairline and 5px gutter. NONE
+   of those three is restated here, and that is deliberate: in the app the dock is
+   nested inside #sessionBar, which already paints the plane and the hairline and
+   already insets its children by 14px (desktop) / 8px (touch) -- measured, not
+   assumed. A 5px padding-inline on the dock does not create the mockup's gutter,
+   it ADDS to an existing larger one, taking the shell-edge inset to 19px/13px and
+   moving away from the mockup rather than toward it. #sessionBar's padding is part
+   of the already-closed bar/header contract and is pinned by other suites, so the
+   dock contributes no inset of its own and the scan's "dock padding 0 vs 5px" row
+   is a nesting difference, not a defect.
+
+   align-items IS restated, because that one was a measured defect: the dock was
+   center, which is invisible while the box is one line high (every child is 44px)
+   and wrong the moment the draft wraps. With a 5-line draft the textarea measured
+   88px while Send stayed 44px, so Send's bottom sat 22px ABOVE the textarea's --
+   the primary action floated up the side of the box it belongs to, on the shell
+   whose first priority axis is touch, where 22px is the difference between hitting
+   Send and hitting the terminal above it. end pins every dock child to the
+   composer's bottom edge, where it stays as the box grows. */
+.mobile-input-bar {
+    align-items: end;
+}
+
+.mobile-composer #mobileInput {
+    padding-right: 7px;
+    padding-left: 7px;
+    border: 1px solid var(--tw-border);
+    border-radius: 7px;
+    /* Spec line 335 paints the composer on --tw-terminal with
+       --tw-terminal-text, i.e. the box reads as an extension of the terminal it
+       types into. style.css had it on --chrome-surface, the CHROME plane, so on
+       every theme the draft sat on the toolbar colour instead. The two tokens
+       are far apart on the light themes in particular (paper: ebe4d8 terminal vs
+       the chrome surface), which is why this was visible and not a rounding
+       difference. Bridge tokens only -- no hex, so all 10 themes follow. */
+    color: var(--tw-terminal-text);
+    background: var(--tw-terminal);
+}
+
+/* Spec line 336: .tw5-composer small { ... color:var(--tw-muted); } -- the same
+   substitution, on the "Dán sẽ chờ Gửi" helper. */
+.mobile-composer-help {
+    right: 7px;
+    left: 7px;
+    color: var(--tw-muted);
+}
+
+/* P5 -- status bar ==========================================================
+
+   Spec line 262:
+     .tw5-statusbar { display:flex; align-items:center; justify-content:space-between;
+                      gap:8px; flex:0 0 auto; min-height:22px; padding:3px 8px;
+                      border-top:1px solid var(--tw-border); color:var(--tw-muted);
+                      background:var(--tw-bar); }
+   Spec line 263:
+     .tw5-statusbar>span { display:flex; align-items:center; gap:5px; white-space:nowrap; }
+
+   Only the six properties the scan measured as MISMATCH are restated; the flex
+   axis, overflow guard and text hygiene stay in style.css because the mockup
+   says nothing about them and repeating them here would create two owners for
+   one declaration.
+
+   The band shrinks 24px -> 22px. That is not a touch-target change: spec lines
+   357/363 remove this band entirely on phone, phone-small and phone-landscape,
+   so it only ever renders on the fine-pointer and tablet tiers where it carries
+   no tappable child. The 44px floor (priority axis 1) is untouched by it, and
+   the terminal gains the 2px rather than losing rows.
+
+   Height is still DECLARED, not derived: min-height + a fixed padding means
+   latency going from "9 ms" to "104 ms" cannot reflow the terminal
+   (DESIGN.md section 10 -- reserve the space). */
+.status-bar {
+    min-height: 22px;
+    padding: 3px 8px;
+    color: var(--tw-muted);
+    background: var(--tw-bar);
+    border-top: 1px solid var(--tw-border);
+}
+
+.status-bar-left,
+.status-bar-right {
+    gap: 5px;
+    white-space: nowrap;
+}
+
+/* Spec line 189 sets the geometry in <b class="tw5-terminal-size">: the cols x
+   rows pair is the only bold run in the band, so it reads as a value against
+   two labels. The app node is a <span>, which carries no weight of its own. */
+.status-bar-dims {
+    font-weight: 700;
+}
+
+/* P1 / P2 -- inspector panels (Notes, Command library) ======================
+
+   Spec 290: .tw5-inspector { flex:0 0 min(34%,340px); min-width:255px;
+                              flex-direction:column;
+                              border-left:1px solid var(--tw-border);
+                              background:var(--tw-surface); }
+   Spec 292: .tw5-panel-head { display:flex; align-items:center;
+                               justify-content:space-between; gap:8px;
+                               padding:9px; border-bottom:1px solid var(--tw-border); }
+   Spec 293: .tw5-panel-head>div, .tw5-list-row>span { display:grid; gap:2px; }
+   Spec 294: .tw5-panel-head small, .tw5-list-row small { color:var(--tw-muted); }
+   Spec 295: .tw5-notes textarea { flex:1; min-height:0; margin:9px; padding:9px;
+                                   resize:none; border:1px solid var(--tw-border);
+                                   border-radius:7px; color:var(--tw-terminal-text);
+                                   background:var(--tw-terminal); font-family:mono; }
+   Spec 296: .tw5-search { display:flex; align-items:center; gap:6px; margin:9px;
+                           padding:6px 7px; border:1px solid var(--tw-border);
+                           border-radius:7px; background:var(--tw-bar); }
+   Spec 297: .tw5-search input { width:100%; min-width:0; border:0; outline:0;
+                                 color:var(--tw-text); background:transparent; }
+   Spec 298: .tw5-list-row { display:flex; align-items:center;
+                             justify-content:space-between; gap:8px; width:100%;
+                             min-height:46px; padding:7px 9px; border:0;
+                             border-top:1px solid var(--tw-border);
+                             background:transparent; text-align:left; }
+   Spec 299: .tw5-list-row code { color:var(--tw-muted); }
+
+   flex-basis is NOT restated. The app's rail is a grid child of .workspace
+   (style.css:2857 grid-template-columns: minmax(0,1fr) var(--notepad-width)),
+   not a flex item, and --notepad-width is user-draggable and persisted. Writing
+   flex:0 0 min(34%,340px) onto a grid child sets a property with no effect and
+   would read as a fix that is not one. The mockup's 34%/340px intent is already
+   carried by --notepad-width's clamp(240px,24vw,320px); min-width IS restated
+   below because that one does apply to a grid child and the app had 180px. */
+.notepad-panel,
+.command-rail {
+    min-width: 255px;
+    background: var(--tw-surface);
+    border-left: 1px solid var(--tw-border);
+}
+
+.notepad-header,
+.command-rail-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 9px;
+    border-bottom: 1px solid var(--tw-border);
+}
+
+/* Spec 293: the head's title block is a 2px grid, not a flex row -- so the
+   subtitle sits UNDER the title rather than beside it. */
+.notepad-title-row,
+.command-rail-title-block {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+/* The mockup's panel title is <strong> inside .tw5-panel-head, so it inherits
+   the 16px root. The app's rail title is a bare <h2>, which the UA sizes at
+   2em/24px -- 8px larger than v5 and visibly out of scale beside the notes
+   panel's own 13px .notepad-title. Nothing else sized it, so the UA default was
+   reaching the shell unchallenged. Matching the mockup's 16px/600. */
+.command-rail-header h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--tw-text);
+}
+
+/* Spec 294 sets only `color` on .tw5-panel-head small -- the mockup leaves the
+   size to the UA <small> default, which renders at 13.33px against its 16px
+   root. This layer previously forced 11px, which was both a divergence from v5
+   AND below the 12px interface-text floor that modal_narrow enforces at 428x926
+   and 359x780. 13px is the mockup's rendered size to the nearest whole pixel. */
+.notepad-meta,
+.command-rail-subtitle {
+    color: var(--tw-muted);
+    font-size: 13px;
+}
+
+/* The save flash lives on the subtitle line; it must not push the host name
+   around as it appears and clears. */
+.notepad-meta {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    min-width: 0;
+    white-space: nowrap;
+}
+
+.notepad-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    /* Spec 232 gives .tw5-icon-control a 32px box. That is the fine-pointer
+       size; on a coarse pointer the 44px floor (priority axis 1) wins, and the
+       touch block further down states it. */
+    width: 32px;
+    min-height: 32px;
+    padding: 0;
+    border: 1px solid var(--tw-border);
+    border-radius: 7px;
+    color: var(--tw-muted);
+    background: transparent;
+    cursor: pointer;
+}
+
+.notepad-close:hover,
+.notepad-close:focus-visible {
+    color: var(--tw-text);
+    background: var(--tw-hover);
+}
+
+.notepad-close .icon,
+.command-rail-close .icon {
+    width: 16px;
+    height: 16px;
+}
+
+/* Spec 295. The notes box is painted on the TERMINAL plane, not the panel
+   plane: it holds the same kind of text the terminal does, and the mockup
+   separates it from the surface with a border + radius + 9px margin so it
+   reads as a field rather than as the panel's own background. */
+.notepad-input {
+    flex: 1;
+    min-height: 0;
+    margin: 9px;
+    padding: 9px;
+    border: 1px solid var(--tw-border);
+    border-radius: 7px;
+    color: var(--tw-terminal-text);
+    background: var(--tw-terminal);
+}
+
+/* Spec 296/297: the search field is the bordered box; the input inside it is
+   bare. .command-toolbar is now a <label>, so a tap anywhere in the box (not
+   just on the 200px input) focuses it -- which is the touch behaviour the
+   larger hit area exists for. */
+.command-rail .command-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 9px;
+    padding: 6px 7px;
+    border: 1px solid var(--tw-border);
+    border-radius: 7px;
+    background: var(--tw-bar);
+}
+
+.command-rail .command-toolbar .icon {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    color: var(--tw-muted);
+}
+
+.command-rail .command-toolbar .search-input {
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    color: var(--tw-text);
+    background: transparent;
+}
+
+.command-rail-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 0 9px 9px;
+}
+
+/* Spec 298/299 -- the library list row.
+ *
+ * ONE line, not two. The first version of this stacked the insert row above an
+ * actions row, which measured ~97px per card: at ipad-landscape and
+ * phone-landscape that no longer fit the 45dvh sheet's scroller, so the first
+ * card straddled the edge and its Insert lost the pre-scroll hit test -- a real
+ * reachability regression, not a cosmetic one.
+ *
+ * Single-line also IS the mockup: line 181 draws a list entry as one 46px row.
+ * The insert control grows to fill it and the secondary actions sit at the
+ * trailing edge as siblings (they cannot nest -- the row is a <button>). */
+.command-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    min-width: 0;
+    border-top: 1px solid var(--tw-border);
+}
+
+.command-rail-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 46px;
+    padding: 7px 9px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.command-rail-item:hover,
+.command-rail-item:focus-visible {
+    background: var(--tw-hover);
+}
+
+/* Spec 293: .tw5-list-row>span is the same 2px grid as the panel head's title
+   block -- name over command, so the row reads top-down at one glance. */
+.command-rail-item > span {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.command-rail-item strong {
+    color: var(--tw-text);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+/* Spec 299 + 294. The command text and the meta line are both muted; the row's
+   one emphasis is the name. All three clip rather than wrap: the mockup's row
+   is a fixed 46px, so a wrapping command would push the trailing glyph out of
+   the row it belongs to. */
+.command-rail-item code,
+.command-rail-item small {
+    color: var(--tw-muted);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.command-rail-item code {
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+
+.command-rail-item small {
+    font-size: 11px;
+}
+
+.command-rail-item > .icon {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    color: var(--tw-muted);
+}
+
+/* Edit / delete / copy and the OS badges are app functions the mockup's two
+   sample rows do not carry. They sit below the row rather than inside it: the
+   row is a <button>, so nesting buttons in it would be invalid markup. */
+.command-actions {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    gap: 5px;
+    padding-right: 9px;
+}
+
+/* The OS badges are informational, not a control; on the narrow rail they lose
+   to the command text, which is what identifies the row. */
+.command-actions .command-os-badges {
+    display: none;
+}
+
+/* Spec 232 gives .tw5-icon-control a 32px box. The shared .btn-icon base
+   (style.css) is padding-only and measured 26px here, so edit/delete/copy were
+   the smallest controls in the rail -- under the mockup's own floor on a
+   fine pointer, before the 44px coarse floor below even applies. */
+.command-actions .btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    min-width: 32px;
+    min-height: 32px;
+    padding: 0;
+    border-radius: 7px;
+}
+
+.command-actions .btn-icon .icon {
+    width: 16px;
+    height: 16px;
+}
+
+/* Priority axis 1 on the P1/P2 panel controls. The mockup draws
+   .tw5-icon-control at 32px and the list row at 46px, both fine-pointer sizes.
+   On a coarse pointer the 44px floor wins over the mockup's number: the row is
+   already 46px so it needs nothing, but the close buttons and the per-row
+   edit/delete/copy do. Stated in the canonical (pointer: coarse) form used
+   throughout this file, so a hybrid device follows its current pointer. */
+@media (pointer: coarse), (max-width: 767px) {
+    .notepad-close,
+    .command-rail-close {
+        width: 44px;
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    .command-actions .btn-icon {
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    /* The search field is a tap target now that the whole box focuses the
+       input, so it takes the floor rather than the mockup's 6px/7px padding
+       height. */
+    .command-rail .command-toolbar {
+        min-height: 44px;
+    }
+}
+
+/* P4 -- terminal search overlay ============================================
+
+   Spec 264 (shared with the menus): position:absolute; z-index:30;
+     border:1px solid var(--tw-border); border-radius:10px;
+     background:var(--tw-surface);
+     box-shadow:0 16px 36px color-mix(in srgb,var(--tw-shell) 70%,transparent);
+   Spec 304: display:flex; align-items:center; gap:4px; top:7px; right:7px;
+     width:min(410px,calc(100% - 14px)); padding:4px 5px;
+   Spec 297: the input is bare -- width:100%; min-width:0; border:0; outline:0;
+     color:var(--tw-text); background:transparent;
+   Spec 305: the counter is muted and never wraps.
+
+   z-index drops 100 -> 30. That is the mockup's own stacking number and it
+   still clears everything this overlay must sit above (the terminal plane and
+   the pane chrome); the modal layer is far higher, so a dialog still covers
+   the search bar, which is the correct order. */
+.terminal-search-bar {
+    top: 7px;
+    right: 7px;
+    z-index: 30;
+    gap: 4px;
+    width: min(410px, calc(100% - 14px));
+    padding: 4px 5px;
+    border: 1px solid var(--tw-border);
+    border-radius: 10px;
+    background: var(--tw-surface);
+    box-shadow: 0 16px 36px color-mix(in srgb, var(--tw-shell) 70%, transparent);
+}
+
+.terminal-search-bar .search-glyph {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    color: var(--tw-muted);
+}
+
+.terminal-search-bar input {
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    color: var(--tw-text);
+    background: transparent;
+}
+
+/* The input no longer draws its own focus ring (spec 297 gives it border:0 and
+   outline:0), so the BAR takes it. Without this the keyboard user would have no
+   focus indication at all inside the overlay. */
+.terminal-search-bar:focus-within {
+    border-color: var(--tw-accent);
+}
+
+.terminal-search-bar .search-count {
+    flex: 0 0 auto;
+    color: var(--tw-muted);
+    white-space: nowrap;
+}
+
+/* P6 -- keypad sheet chrome ================================================
+
+   Spec 342: .tw5-keypad { flex:0 0 auto; padding:5px;
+                           border-top:1px solid var(--tw-border);
+                           background:var(--tw-surface); }
+   Spec 344: .tw5-keypad-head { display:flex; align-items:center;
+                                justify-content:space-between; gap:7px;
+                                padding-bottom:5px; }
+   Spec 345: .tw5-keypad-page { margin-left:auto; color:var(--tw-muted);
+                                white-space:nowrap; }
+   Spec 346/347: the grid is 4 columns with a 4px gap; each key is 39px with a
+                 1px border, 7px radius and the bar plane.
+
+   The key's 39px is NOT taken: priority axis 1 puts a 44px floor on every touch
+   target and this sheet exists only on touch, so the existing 44px stays. The
+   gap stays at the app's 6px for the same reason -- 4px between 44px targets
+   measured as mis-taps in the earlier keypad work, and axis 1 outranks the
+   mockup's number where the two conflict.
+
+   The sheet is a normal-flow flex CHILD of the dock (amendment v5 line 94,
+   measured `position: static` at every touch tier): the touch block gives it
+   a full-width `flex: 0 0 100%` basis and orders it after the composer, so
+   opening it shrinks the terminal instead of overlaying anything. The spec's
+   `flex: 0 0 auto` is therefore not restated here -- the dock-layout rule owns
+   the flex shorthand, and repeating a weaker basis would fight it. */
+.mobile-keypad {
+    padding: 5px;
+    background: var(--tw-surface);
+    border-top: 1px solid var(--tw-border);
+}
+
+.mobile-keypad-dots {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 7px;
+    padding-bottom: 5px;
+}
+
+.keypad-head-title {
+    color: var(--tw-text);
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* Spec 345: margin-left:auto pushes the page read-out (and everything after it)
+   to the trailing half of the head. */
+.keypad-page {
+    margin-left: auto;
+    color: var(--tw-muted);
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.keypad-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    /* Touch-only surface, so the 44px floor applies directly -- no fine-pointer
+       32px variant is needed here. */
+    width: 44px;
+    min-height: 44px;
+    padding: 0;
+    border: 1px solid var(--tw-border);
+    border-radius: 7px;
+    color: var(--tw-muted);
+    background: transparent;
+    cursor: pointer;
+}
+
+.keypad-close .icon {
+    width: 16px;
+    height: 16px;
+}
+
+/* Phone landscape (<=500px tall) drops the keypad head back to the compact
+   dot row.
+
+   Measured: the labelled head costs 49px (44px close button + 5px
+   padding-bottom), and at 844x390 that is two whole terminal rows -- the
+   surviving row count went 7 -> 5. This tier has the least vertical budget of
+   the seven and spec 363 already establishes it as the tier that sheds chrome
+   (it is where the status bar is removed outright).
+
+   The close control is REMOVED here rather than shrunk: it is a touch target,
+   so priority axis 1 floors it at 44px, and a 30px close button would break the
+   axis that outranks the mockup. Nothing becomes unreachable -- #mobileKeypadBtn
+   in the dock still toggles the sheet, which is how it was dismissed before the
+   head existed at all. */
+@media (max-height: 500px) and (orientation: landscape) {
+    .mobile-keypad-dots {
+        justify-content: center;
+        padding-bottom: 0;
+    }
+
+    .keypad-head-title,
+    .keypad-close {
+        display: none;
+    }
+
+    .keypad-page {
+        margin-left: 0;
+    }
+}
+
+/* Phone landscape (<=500px tall): the notes sheet tightens its own chrome.
+ *
+ * Measured at 844x390: the sheet is 176px (45dvh), the P1 head takes 63px
+ * (a 44px close target plus 9px+9px padding) and the 9px textarea margin takes
+ * another 18px, leaving the textarea 94px -- under the 100px usable floor
+ * mobile_shell_layout.mjs asserts, and about five visible lines.
+ *
+ * The close control is KEPT at its full 44px here, unlike the keypad head: this
+ * is the only surface where Notes can be dismissed while the sheet covers the
+ * header action that opened it, so removing it would strand the user. The
+ * padding and the textarea margin give up 8px each instead, which costs nothing
+ * functional and returns the textarea to 110px.
+ *
+ * Placed after the media queries it corrects, per AGENTS.md section 3: this is
+ * an OVERRIDE of the coarse-pointer sheet rules, not a corrected base. */
+@media (max-height: 500px) and (orientation: landscape) {
+    .notepad-header {
+        padding: 5px;
+    }
+
+    .notepad-input {
+        margin: 5px;
+    }
+}
+
+/* Phone landscape (<=500px tall): the library sheet sheds its own chrome.
+ *
+ * Measured at 844x390 with the sheet open: head 63px + search field 58px +
+ * the Add/Command-Sets block 53px = 174px against a 135px panel, leaving the
+ * scroller 0px tall -- so the first row rendered outside its own scroller and
+ * lost the pre-scroll hit test. That is a reachability regression introduced by
+ * moving those two buttons below the search field, and it is measured, not
+ * cosmetic.
+ *
+ * The two buttons are app functions the mockup's rows do not depict, so on the
+ * tier with the least vertical budget they are the first thing to go -- the
+ * same call spec 363 already makes for the status bar. Both stay reachable:
+ * Command Sets from the account menu, and Add from the rail at every other
+ * tier. Nothing shrinks below the 44px floor.
+ *
+ * The search field also drops to the mockup's own padding here, freeing another
+ * 14px for the rows themselves. */
+@media (max-height: 500px) and (orientation: landscape) {
+    /* The sheet keeps min(56dvh, 66% of the workspace) (style.css): the
+       terminal's one-third floor under an open sheet is structural and
+       command_rail.mjs §5 asserts it. With phone landscape back on the
+       two-row header (owner ruling 2026-09-19) the workspace at 926x428 is
+       292px and the sheet 193px, and the chrome this block left -- header
+       44+5+5+1, panel padding 12+12, toolbar 46+4+4 -- put the list at 26px,
+       under the 47px one-row floor the same gate asserts. So the paddings
+       give up what the 48px of header took: 2px instead of 5 on the header,
+       4px instead of 12 on the panel, 2px instead of 4 around the toolbar
+       (26px back; the 44px close and the 44px search stay whole). */
+    .command-rail .command-rail-header-actions {
+        display: none;
+    }
+
+    .command-rail .command-toolbar {
+        margin: 2px 5px;
+        padding: 0 7px;
+        min-height: 44px;
+    }
+
+    .command-rail-header {
+        padding: 2px 9px;
+    }
+
+    .command-rail #commandLibraryPanel {
+        padding-top: 4px;
+        padding-bottom: 4px;
+    }
+
+    .command-rail-subtitle {
+        display: none;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   S36 — PHONE PORTRAIT DISPLAYS ONE PANE ONLY.
+
+   Owner ruling 2026-09-09: phone portrait shows only the ACTIVE pane; the
+   other pane stays in the DOM (assignment/menu unchanged) but is hidden by CSS.
+   Landscape and desktop show all assigned panes.
+
+   Query: (max-width: 767px) and (orientation: portrait)
+     - max-width matches the shell's own TOUCH_QUERY phone boundary
+     - orientation: portrait required because test gate mobile_shell_trusted.mjs:437
+       has 667×375 landscape viewport asserting landscape query matches
+
+   Grid reset: both columns AND rows, because variant split-2-rows uses
+   grid-template-rows: 1fr 1fr (line 381). Hiding one pane leaves an empty row
+   track, so the visible pane fills only half the height without this override.
+
+   :has() precondition: only hide when a pane is .active, protecting 6 test
+   fixtures that build panes without calling setActivePane.
+   -------------------------------------------------------------------------- */
+@media (max-width: 767px) and (orientation: portrait) {
+    .terminal-grid.split-2 {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr;
+    }
+    .terminal-grid:has(.terminal-pane.active) .terminal-pane:not(.active) {
+        display: none;
+    }
+    /* Owner ruling: portrait shows a single pane, so the "1" badge
+       and pane name identify nothing -- hide the label on the sole visible pane.
+       Shares the :has(.active) precondition with the hide rule above, so the
+       6 setActivePane-less fixtures keep their labels and only the real
+       single-pane portrait state is affected. */
+    .terminal-grid:has(.terminal-pane.active) .pane-label {
+        display: none;
+    }
+}

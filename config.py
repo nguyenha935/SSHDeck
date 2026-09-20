@@ -1,0 +1,188 @@
+import os
+import secrets
+from pathlib import Path
+from datetime import timedelta
+
+from dotenv import load_dotenv
+
+BASE_DIR = Path(__file__).parent
+
+# Load variables from a .env file in the project root, if present.
+# override=False ensures real environment variables (Docker, systemd, shell)
+# always take precedence over .env, so existing deployments are unaffected.
+load_dotenv(BASE_DIR / '.env')
+
+DATA_DIR = Path(os.environ.get('DATA_DIR', BASE_DIR / 'data'))
+KEYS_DIR = DATA_DIR / 'keys'
+PROFILES_FILE = DATA_DIR / 'profiles.json'
+KEYS_FILE = KEYS_DIR / 'keys.json'
+SYSTEM_COMMANDS_FILE = BASE_DIR / 'app' / 'resources' / 'commands' / 'system_commands.json'
+KNOWN_HOSTS_FILE = DATA_DIR / 'known_hosts'
+
+SESSION_TIMEOUT = int(os.environ.get('SESSION_TIMEOUT', '1800'))
+#
+# These two are a RUNAWAY GUARD, not a product feature. The old defaults (10
+# global, 3 per user) were a multi-tenant posture nobody asked for, and the
+# per-user 3 stopped the owner opening a fourth connection on their own box.
+# They are now set where a person cannot reach them but a loop still can: a
+# session costs one SSH transport, one tmux client per viewing socket and a
+# reader greenlet each, so a hundred of them is a memory question, not a
+# correctness one. Lower them with the env vars for a shared deployment.
+MAX_SESSIONS = int(os.environ.get('MAX_SESSIONS', '100'))
+MAX_SESSIONS_PER_USER = int(os.environ.get('MAX_SESSIONS_PER_USER', '50'))
+SSH_CONNECT_TIMEOUT = 10
+
+# How many browser sockets may display ONE tmux session at once.
+#
+# Each one is a real tmux client on its own SSH channel (see the views note in
+# app/ssh_manager.py), so this is not a product limit -- it is the bound that
+# stops a buggy or hostile client opening channels on one transport without
+# limit. Eight covers a desktop, a phone, a tablet and spares.
+MAX_VIEWS_PER_SESSION = int(os.environ.get('MAX_VIEWS_PER_SESSION', '8'))
+
+CHUNK_SIZE = 65536
+MAX_UPLOAD_SIZE = 1024 * 1024 * 100
+MAX_EDITOR_FILE_SIZE = int(os.environ.get('MAX_EDITOR_FILE_SIZE', str(5 * 1024 * 1024)))
+
+# Admin panel: comma-separated usernames granted admin on startup; the first
+# ever-registered user also becomes admin automatically (handled in auth).
+ADMIN_USERS = [u.strip() for u in os.environ.get('ADMIN_USERS', '').split(',') if u.strip()]
+ADMIN_PANEL_ENABLED = os.environ.get('ADMIN_PANEL_ENABLED', 'True') == 'True'
+
+
+def _csv_env(name):
+    """Parse a comma-separated environment variable into an immutable set."""
+    return frozenset(value.strip() for value in os.environ.get(name, '').split(',') if value.strip())
+
+
+# Tailscale SSH uses the SSHDeck node's shared tailnet identity. Keep it disabled
+# unless the operator explicitly enables it and grants access to trusted users.
+TAILSCALE_SSH_ENABLED = os.environ.get('TAILSCALE_SSH_ENABLED', 'false').lower() == 'true'
+# TAILSCALE_SSH_ALLOWED_SSHDECK_USERS is the ONE allowlist variable.
+#
+# The pre-standalone alias that used to be read as a fallback here was removed at
+# The standalone cutover: SSHDeck is now its own
+# project rather than a rename of an existing deployment, so there is no
+# unmigrated installation whose access could be silently revoked. Verified before
+# removal: neither the running container's environment nor the operator env list
+# defines the old name, so the fallback had no live reader.
+TAILSCALE_SSH_ALLOWED_SSHDECK_USERS = _csv_env(
+    'TAILSCALE_SSH_ALLOWED_SSHDECK_USERS')
+TAILSCALE_SSH_ALLOWED_TARGETS = frozenset(
+    target.lower() for target in _csv_env('TAILSCALE_SSH_ALLOWED_TARGETS')
+)
+TAILSCALE_SSH_ALLOWED_REMOTE_USERS = _csv_env('TAILSCALE_SSH_ALLOWED_REMOTE_USERS')
+
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+
+_secret_key = os.environ.get('SECRET_KEY')
+_KNOWN_PLACEHOLDERS = {'<YOUR-SECRET-KEY>', 'changeme', 'secret', 'your-secret-key'}
+if not _secret_key or _secret_key.strip().lower() in _KNOWN_PLACEHOLDERS:
+    if DEBUG:
+        _secret_key = secrets.token_hex(32)
+        print("⚠️  DEBUG MODE: Using auto-generated SECRET_KEY (not for production!)")
+    else:
+        raise RuntimeError(
+            "SECURITY ERROR: SECRET_KEY environment variable is required in production. "
+            "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+        )
+
+SECRET_KEY = _secret_key
+
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+_session_secure = os.environ.get('SESSION_COOKIE_SECURE', '').lower()
+if _session_secure == 'false':
+    SESSION_COOKIE_SECURE = False
+elif _session_secure == 'true':
+    SESSION_COOKIE_SECURE = True
+else:
+    SESSION_COOKIE_SECURE = not DEBUG
+PERMANENT_SESSION_LIFETIME = timedelta(minutes=30)
+
+REMEMBER_COOKIE_HTTPONLY = True
+REMEMBER_COOKIE_SAMESITE = 'Lax'
+REMEMBER_COOKIE_SECURE = SESSION_COOKIE_SECURE
+REMEMBER_COOKIE_DURATION = timedelta(days=7)
+
+MIN_PASSWORD_LENGTH = 8
+MAX_PASSWORD_LENGTH = 72  # bcrypt silently truncates beyond 72 bytes
+MAX_USERNAME_LENGTH = 32
+
+SOCKETIO_ASYNC_MODE = 'eventlet'
+SOCKETIO_PING_TIMEOUT = 60
+SOCKETIO_PING_INTERVAL = 25
+
+_allow_cors_wildcard = os.environ.get('ALLOW_CORS_WILDCARD', 'false').lower() == 'true'
+_cors_origins = os.environ.get('CORS_ORIGINS', '')
+if _cors_origins == '*':
+    if DEBUG or _allow_cors_wildcard:
+        if _allow_cors_wildcard and not DEBUG:
+            print("⚠️  CORS wildcard (*) enabled via ALLOW_CORS_WILDCARD - use only in trusted networks!")
+        elif DEBUG:
+            print("⚠️  DEBUG MODE: CORS set to wildcard (*) - not for production!")
+        CORS_ORIGINS = '*'
+    else:
+        raise RuntimeError(
+            "SECURITY ERROR: CORS_ORIGINS cannot be wildcard (*) in production. "
+            "Set it to your specific domain(s), e.g., CORS_ORIGINS=https://ssh.example.com "
+            "Or set ALLOW_CORS_WILDCARD=true if you understand the risks (e.g., homelab use)."
+        )
+elif _cors_origins and _cors_origins.strip().strip('<>') not in ('YOUR-DOMAIN', 'YOUR-ORIGIN'):
+    CORS_ORIGINS = [origin.strip() for origin in _cors_origins.split(',')]
+else:
+    CORS_ORIGINS = ['http://localhost:5000', 'http://127.0.0.1:5000']
+    if not DEBUG:
+        print("ℹ️  CORS_ORIGINS not set, using localhost only. Set CORS_ORIGINS for other origins.")
+
+RATELIMIT_ENABLED = os.environ.get('RATELIMIT_ENABLED', 'True') == 'True'
+# Backend for rate-limit counters.
+#   memory://  (default) — per-process, no external dependency.
+#   redis://host:port/db — survives app restarts while Redis keeps running.
+#   rediss://…           — same but over TLS.
+# Redis-backed rate limiting does not change the mandatory single-worker
+# deployment model. If Redis is unreachable, the app uses a recoverable
+# in-memory fallback and retries Redis periodically.
+RATELIMIT_STORAGE_URL = os.environ.get('RATELIMIT_STORAGE_URL', 'memory://')
+RATELIMIT_LOGIN_LIMIT = os.environ.get('RATELIMIT_LOGIN_LIMIT', '5 per minute')
+RATELIMIT_DEFAULT = os.environ.get('RATELIMIT_DEFAULT', '200 per hour')
+# Per-user limit on SSH connection attempts via WebSocket (ssh_connect /
+# quick_connect). Prevents an authenticated user from abusing the server as an
+# unthrottled SSH brute-force / port-scan proxy against third-party hosts.
+# Generous default so normal use and reconnects never hit it.
+# 10 per minute was reachable by hand: five profiles opened in a row, then a
+# reconnect round after a dropped tab, and the sixth connect is refused for a
+# minute. The guard exists so this server cannot be used as an unthrottled
+# brute-force proxy; 60 per minute still forbids that and no longer forbids a
+# person opening their own machines.
+RATELIMIT_SSH_CONNECT = os.environ.get('SSH_CONNECT_RATELIMIT', '60 per minute')
+
+REGISTRATION_ENABLED = os.environ.get('REGISTRATION_ENABLED', 'True') == 'True'
+
+_env_app_root = os.environ.get('APPLICATION_ROOT', '').rstrip('/')
+if _env_app_root:
+    APPLICATION_ROOT = _env_app_root
+
+# SSRF protection: block SSH connections to loopback/link-local addresses.
+# Set to 'true' in multi-tenant deployments to prevent users from probing
+# internal services via SSH. Defaults to 'false' for homelab use where
+# connecting to internal IPs is the primary use case.
+BLOCK_INTERNAL_SSH = os.environ.get('BLOCK_INTERNAL_SSH', 'false').lower() == 'true'
+
+MAX_DOWNLOAD_SIZE = int(os.environ.get('MAX_DOWNLOAD_SIZE', str(MAX_UPLOAD_SIZE)))
+MAX_ZIP_DOWNLOAD_SIZE = int(os.environ.get('MAX_ZIP_DOWNLOAD_SIZE', str(500 * 1024 * 1024)))
+
+# Entry count ceiling for recursive SFTP work (directory transfer, temporary
+# tree cleanup). Upstream default; bounds traversal so a hostile or pathological
+# remote directory cannot make a recursive transfer run without limit.
+MAX_TRANSFER_MEMBERS = int(os.environ.get('MAX_TRANSFER_MEMBERS', '10000'))
+if MAX_TRANSFER_MEMBERS < 1:
+    raise RuntimeError('MAX_TRANSFER_MEMBERS must be a positive integer')
+
+# Persistent sessions via tmux on the remote host.
+# When enabled, SSH sessions are wrapped in a tmux session on the remote host.
+# This means commands keep running even if the SSHDeck server restarts.
+# Reconnecting to the same host/user will reattach to the existing tmux session.
+TMUX_ENABLED = os.environ.get('TMUX_ENABLED', 'false').lower() == 'true'
+TMUX_SESSION_PREFIX = os.environ.get('TMUX_SESSION_PREFIX', 'sshdeck')
+TMUX_DEFAULT = os.environ.get('TMUX_DEFAULT', 'false').lower() == 'true'

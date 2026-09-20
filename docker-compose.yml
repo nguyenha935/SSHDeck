@@ -1,0 +1,106 @@
+##############################################
+# SSHDeck - All-in-One Docker Compose
+#
+# No .env file needed - edit values directly below
+#
+# BEFORE RUNNING:
+# 1. SECRET_KEY is optional — auto-generated & persisted on first run.
+# 2. Set CORS_ORIGINS to your domain (e.g. https://ssh.example.com)
+#    For homelab without TLS: http://your-server-ip:5000
+#    For wildcard (insecure): CORS_ORIGINS=* and ALLOW_CORS_WILDCARD=true
+##############################################
+
+services:
+  sshdeck:
+    # Builds from this checkout. No registry image is published yet, so a pull
+    # reference here would leave `docker compose up` broken for anyone cloning
+    # the project; `build: .` is runnable today. `image:` names the locally built
+    # result so the tag is stable across rebuilds. Switch to a registry
+    # reference only once an SSHDeck image is actually published.
+    build: .
+    image: sshdeck:local
+    container_name: sshdeck
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      # === SECRET_KEY: OPTIONAL ===
+      # Left unset, a strong key is auto-generated on first run and persisted to
+      # the data volume below (/app/data/secret_key). Set it explicitly only if
+      # you run multiple replicas or want to pin a fixed key:
+      #   - SECRET_KEY=<paste output of: openssl rand -hex 32>
+
+      # === CORS: Wildcard default for homelab use ===
+      # For production: replace * with your domain (e.g. https://ssh.example.com)
+      # and remove ALLOW_CORS_WILDCARD
+      - CORS_ORIGINS=*
+      - ALLOW_CORS_WILDCARD=true
+
+      # === Set to 1 if behind reverse proxy (Traefik, nginx, etc.) ===
+      - TRUSTED_PROXIES=0
+
+      # === Subfolder deployment (optional) ===
+      # Set when serving the app under a URL subpath, e.g. https://server.local/sshdeck
+      # Requires: TRUSTED_PROXIES=1 above AND a reverse proxy that strips the
+      # prefix and forwards it via the X-Forwarded-Prefix header.
+      # Leave commented to run at the root — behavior is unchanged when unset.
+      # See README "Subfolder Deployment" section for nginx/Traefik/Caddy examples.
+      # - APPLICATION_ROOT=/sshdeck
+
+      # === Set to false if accessing via HTTP without TLS ===
+      - SESSION_COOKIE_SECURE=false
+
+      # === Persistent remote sessions via tmux ===
+      # tmux must be installed on the remote SSH host. If it is unavailable,
+      # SSHDeck automatically falls back to a regular shell.
+      - TMUX_ENABLED=true
+      - TMUX_DEFAULT=true
+      - TMUX_SESSION_PREFIX=sshdeck
+
+      # === Tailscale SSH (optional, shared node identity) ===
+      # Disabled by default. See docs/tailscale-ssh.md for the required
+      # authorization controls and a persistent Tailscale sidecar example.
+      # Before enabling: create the first admin from a trusted network, disable
+      # self-registration, and configure narrow target/remote-user allowlists.
+      - TAILSCALE_SSH_ENABLED=false
+      # After the controlled first-admin bootstrap, uncomment this as a
+      # configuration fallback in addition to disabling registration in Admin.
+      # - REGISTRATION_ENABLED=False
+      # - TAILSCALE_SSH_ALLOWED_SSHDECK_USERS=operator
+      # - TAILSCALE_SSH_ALLOWED_TARGETS=tiny-server,100.64.0.10
+      # - TAILSCALE_SSH_ALLOWED_REMOTE_USERS=root,ubuntu
+
+      # === Optional: Usually no changes needed ===
+      - DEBUG=False
+      - HOST=0.0.0.0
+      - PORT=5000
+      - DATA_DIR=/app/data
+
+      # === Redis-backed rate limiting (optional) ===
+      # Uncomment the two lines below AND the redis service section at the
+      # bottom of this file to preserve counters across app restarts while
+      # Redis keeps running. The app must still use exactly one worker because
+      # live SSH state remains in-process.
+      # - RATELIMIT_STORAGE_URL=redis://redis:6379/0
+    # depends_on:
+    #   - redis
+    volumes:
+      - sshdeck_data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('127.0.0.1', 5000), 2); s.close()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ── Redis (optional — uncomment for external rate-limit counters) ──────
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: sshdeck-redis
+  #   restart: unless-stopped
+  #   # Only expose to the internal Docker network; no host port needed.
+  #   command: ["redis-server", "--save", "", "--appendonly", "no"]
+
+volumes:
+  sshdeck_data:
+    driver: local

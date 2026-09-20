@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<!--
+  SSHDeck auth v5 — REVIEW HARNESS.
+
+  Open docs/auth-preview/index.html in a browser. Pick a page, a viewport and a
+  theme; each frame is a real iframe at real pixel dimensions, so what you see
+  is what a device sees.
+
+  This harness ships nothing. templates/login.html, register.html,
+  change_password.html and admin.html are untouched until you approve.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SSHDeck auth v5 — 7 viewports × 10 themes</title>
+<link rel="stylesheet" href="../../static/css/style.css">
+<style>
+  /* Harness chrome only. The previews themselves are inside iframes and are
+     styled exclusively by style.css + auth-v5.css. */
+  body { margin: 0; font-family: system-ui, sans-serif;
+         background: #1a1a1a; color: #eee; }
+  .bar { position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap;
+         gap: 16px; align-items: center; padding: 12px 16px;
+         background: #111; border-bottom: 1px solid #333; }
+  .bar label { font-size: 13px; display: flex; gap: 6px; align-items: center; }
+  select { padding: 6px 8px; background: #222; color: #eee;
+           border: 1px solid #444; border-radius: 6px; font: inherit; }
+  h2 { margin: 24px 16px 8px; font-size: 14px; font-weight: 600; color: #9aa7b4; }
+  .grid { display: flex; flex-wrap: wrap; gap: 20px; padding: 0 16px 40px; align-items: flex-start; }
+  .cell { background: #0d0d0d; border: 1px solid #333; border-radius: 8px; overflow: hidden; }
+  .cell figcaption { padding: 6px 10px; font-size: 12px; color: #9aa7b4;
+                     border-bottom: 1px solid #333; background: #151515;
+                     white-space: nowrap; }
+  iframe { display: block; border: 0; background: #000; }
+  .note { margin: 16px; padding: 12px 14px; font-size: 13px; line-height: 1.6;
+          background: #14212e; border: 1px solid #24455f; border-radius: 8px; }
+  code { background: #222; padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <label>Page
+    <select id="pageSel">
+      <option value="login">login</option>
+      <option value="register">register</option>
+      <option value="change_password">change_password</option>
+      <option value="admin">admin</option>
+    </select>
+  </label>
+  <label>Theme
+    <select id="themeSel"></select>
+  </label>
+  <label>Show
+    <select id="modeSel">
+      <option value="viewports">all 7 viewports (one theme)</option>
+      <option value="themes">all 10 themes (one viewport)</option>
+    </select>
+  </label>
+  <label>Viewport
+    <select id="vpSel"></select>
+  </label>
+</div>
+
+<div class="note">
+  <strong>Every layout choice here is an inference</strong> — the v5 mockup has
+  no auth screen. Inferences are tagged <code>[INF-1]</code>…<code>[INF-8]</code>
+  in <code>docs/auth-preview/auth-v5.css</code> and listed in the report, so you
+  can approve or reject each one separately. Anything the mockup <em>does</em>
+  cover (tokens, icon set, radii, the 44px floor) is cited by line number in the
+  CSS comments.
+</div>
+
+<h2 id="caption"></h2>
+<div class="grid" id="grid"></div>
+
+<script>
+// The canonical 7, copied from tests/browser/mobile_shell_layout.mjs:107-131 so
+// the preview and the suites cannot drift apart.
+const VIEWPORTS = [
+  { label: 'phone-small',     w: 359,  h: 800  },
+  { label: 'phone',           w: 428,  h: 926  },
+  { label: 'phone-360',       w: 360,  h: 800  },
+  { label: 'landscape',       w: 926,  h: 428  },
+  { label: 'tablet',          w: 768,  h: 1024 },
+  { label: 'ipad-portrait',   w: 834,  h: 1194 },
+  { label: 'ipad-landscape',  w: 1194, h: 834  },
+  { label: 'laptop',          w: 1280, h: 800  },
+  { label: 'desktop',         w: 1920, h: 1080 },
+];
+
+// 10 themes: glass IS :root (it has no body[data-theme] block), plus the nine
+// declared at style.css:312-829.
+const THEMES = ['glass', 'retro', 'solar', 'paper', 'noir', 'arctic-ice',
+                'rose-gold', 'cyberpunk-neon', 'emerald-matrix', 'obsidian'];
+
+const pageSel  = document.getElementById('pageSel');
+const themeSel = document.getElementById('themeSel');
+const modeSel  = document.getElementById('modeSel');
+const vpSel    = document.getElementById('vpSel');
+const grid     = document.getElementById('grid');
+const caption  = document.getElementById('caption');
+
+THEMES.forEach(t => themeSel.add(new Option(t, t)));
+VIEWPORTS.forEach((v, i) => vpSel.add(new Option(`${v.label} ${v.w}×${v.h}`, i)));
+vpSel.value = '1';
+
+let bodies = null;
+
+async function loadBodies() {
+  const html = await (await fetch('pages.html')).text();
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  bodies = {};
+  doc.querySelectorAll('template[id^="page-"]').forEach(t => {
+    bodies[t.id.replace('page-', '')] = t.innerHTML;
+  });
+}
+
+function frameFor(page, theme, vp) {
+  const fig = document.createElement('figure');
+  fig.className = 'cell';
+  fig.style.margin = '0';
+
+  const cap = document.createElement('figcaption');
+  cap.textContent = `${vp.label} · ${vp.w}×${vp.h} · ${theme}`;
+  fig.appendChild(cap);
+
+  // Tall viewports are shown at reduced height so the grid stays scannable;
+  // WIDTH is always exact, because width is what the layout responds to.
+  const shownH = Math.min(vp.h, 760);
+
+  const f = document.createElement('iframe');
+  f.width = vp.w;
+  f.height = shownH;
+  fig.appendChild(f);
+
+  f.addEventListener('load', () => {
+    const d = f.contentDocument;
+    d.documentElement.lang = 'en';
+    d.head.innerHTML = `
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <link rel="stylesheet" href="../../static/css/style.css">
+      <link rel="stylesheet" href="auth-v5.css">`;
+    // data-theme on <body> is exactly how the shipped app selects a theme.
+    d.body.setAttribute('data-theme', theme);
+    d.body.className = 'a5';
+    d.body.innerHTML = bodies[page];
+  });
+  f.src = 'about:blank';
+  return fig;
+}
+
+function render() {
+  const page = pageSel.value;
+  grid.innerHTML = '';
+  if (modeSel.value === 'viewports') {
+    const theme = themeSel.value;
+    caption.textContent = `${page} — all viewports, theme: ${theme}`;
+    VIEWPORTS.forEach(v => grid.appendChild(frameFor(page, theme, v)));
+  } else {
+    const vp = VIEWPORTS[Number(vpSel.value)];
+    caption.textContent = `${page} — all 10 themes at ${vp.label} ${vp.w}×${vp.h}`;
+    THEMES.forEach(t => grid.appendChild(frameFor(page, t, vp)));
+  }
+}
+
+[pageSel, themeSel, modeSel, vpSel].forEach(el =>
+  el.addEventListener('change', render));
+
+loadBodies().then(render);
+</script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="SSHDeck">
+  <title>SSHDeck</title>
+  <!-- THE TAB ICON IS THE ROUTES, NOT THE PLATE.
+       The delivered mark is a filled rounded square with the routes cut out of
+       it. That is right for a home screen, where the icon owns a tile. In a tab
+       strip it is 16 CSS pixels of solid ink with a hard edge, which the owner
+       read as "background den xong con co ca vien cuc ky xau" (2026-09-19). So
+       the tab icon inverts the figure: the routes themselves are the ink on a
+       transparent ground, scaled to 2.1 so the strokes survive 16px. Same
+       geometry, same file, no second drawing.
+
+       The two literal colours are the one pair this project allows: browser
+       chrome cannot see the app's themes, so the ink follows the OS instead.
+       No double hyphen inside an XML comment (entry 27). -->
+  <style>
+    svg { color: #000000 }
+    @media (prefers-color-scheme: dark) { svg { color: #FFFFFF } }
+  </style>
+  <defs>
+    <path id="brand-route-a" d="M10 240H158C199 240 222 219 250 188L405 -20C417 -34 438 -35 452 -23C466 -11 467 10 454 24L297 226C279 246 279 266 297 286L396 397C408 410 407 429 394 440C381 451 362 450 351 437L250 324C222 293 199 272 158 272H10C-3 272 -12 266 -12 256C-12 246 -3 240 10 240Z"/>
+    <path id="brand-route-b" d="M-105 240H158C199 240 222 219 250 188L400 6C411 -7 429 -8 442 2C455 13 456 30 445 42L297 226C279 246 279 266 297 286L405 402C418 416 417 437 403 449C389 461 368 459 356 445L248 326C221 295 199 272 158 272H-105C-118 272 -127 266 -127 256C-127 246 -118 240 -105 240Z"/>
+  </defs>
+  <g transform="translate(256 256) scale(2.1) translate(-256 -256)"
+     fill="currentColor" stroke="none">
+    <use href="#brand-route-a" transform="translate(256 256) rotate(-10) scale(.64) translate(-225 -256)"/>
+    <use href="#brand-route-b" transform="translate(256 256) rotate(148) scale(.64) translate(-225 -256)"/>
+    <circle cx="256" cy="256" r="28"/>
+  </g>
+</svg>

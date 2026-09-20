@@ -1,0 +1,15 @@
+# Normalize line endings automatically for text files (LF in the repo).
+* text=auto
+
+# Shell scripts run inside Linux containers. Force LF so a Windows checkout
+# (core.autocrlf=true) never rewrites the shebang to "#!/bin/bash\r", which
+# makes the container fail with "no such file or directory".
+*.sh text eol=lf
+
+# The browser fixtures are byte-exact evidence: their CRLF terminators ARE the
+# property under test (a bare LF moves down without returning to column 0, so
+# an LF-only transcript stair-steps across the screen instead of scrolling it).
+# `* text=auto` above normalised them to LF on the first commit, which would
+# have handed a fresh clone bytes the server never sends -- measured
+# 2026-09-18, the blob held LF while the working file held CRLF.
+tests/fixtures/*.txt -text

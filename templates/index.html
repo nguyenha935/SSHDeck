@@ -1,0 +1,1756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="app-root" content="{{ url_prefix }}">
+    <meta name="max-editor-file-size" content="{{ max_editor_file_size|default(5242880) }}">
+    <title>SSHDeck</title>
+
+    <!-- H6: /favicon.ico used to 404. The SVG is the primary icon (crisp at any
+         size, same asset as the in-app brand logo); the .ico is the legacy
+         fallback and is ALSO served from the site root by a Flask route, because
+         browsers request /favicon.ico without reading this markup. -->
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icons/favicon.svg') }}?v=3">
+    <link rel="alternate icon" type="image/x-icon" href="{{ url_for('static', filename='icons/favicon.ico') }}?v=3">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}?v=3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/xterm/xterm.css') }}?v=6" />
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/highlight/github-dark.min.css') }}?v=1" />
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/material-icons/material-icons.css') }}?v=1">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=70">
+    <!-- deck.css owns the v5 shell and MUST load after style.css: it supersedes
+         rather than merges, and the cascade order is what lets it win without
+         !important. Superseded rules are deleted from style.css as each region
+         lands, so the two files never both own the same property. -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/deck-tokens.css') }}?v=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/deck.css') }}?v=38">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sftp-file-manager.css') }}?v=6">
+</head>
+<body data-theme="{{ theme|default('glass') }}">
+    {% include '_brand_symbol.html' %}
+
+    <!-- v5 window shell -- mockup line 220 (.tw5-window). The app had NO such
+         element at all: body's direct children were header/reconnectBar/main
+         plus the modal stack, so the border, 12px radius and 0 18px 42px shadow
+         the mockup draws around the whole product had nowhere to attach (the
+         scan reported every .tw5-window property as APP-ELEMENT-MISSING).
+
+         It wraps ONLY header + reconnectBar + main, i.e. the product chrome.
+         The modal stack, #sessionActionsControl and #notificationContainer stay
+         OUTSIDE as body-level overlays: they are position:fixed shell-level
+         layers, and reparenting them inside a border-radius+overflow container
+         would clip them. #sessionActionsControl in particular is documented as
+         a stable body-level node that never relocates.
+
+         Written as an HTML comment, NOT a Jinja comment: the browser suites
+         render this template through a minimal Jinja stand-in that strips
+         statement tags but not comment tags, so a Jinja comment survives into
+         the served markup as literal text. Measured: it displaced the header
+         and pushed the terminal grid down, failing `gridTop === headerH` at all
+         five desktop tiers in desktop_shell.mjs. An HTML comment is inert in
+         both renderers. -->
+    <div class="deck-window" id="deckWindow">
+
+    <header class="header">
+        <div class="header-content">
+            <div class="header-title-row" id="headerBrand">
+                <!-- v5 section 2: working name SSHDeck. The mark is the one the
+                     owner delivered (2026-09-18), inline so it takes the theme's
+                     ink -- see templates/_brand_symbol.html. The wordmark is the
+                     SAME node as the document-title key app.title, so there is
+                     exactly one brand leaf in the shell; app.title carries the
+                     literal 'SSHDeck' in every locale because a product name is
+                     not translated. Section 3 hides the wordmark at 359px and
+                     keeps the mark. Package, service, endpoint, storage and
+                     namespace identifiers are untouched. -->
+                <span class="brand-logo" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#icon-brand"></use></svg></span>
+                <h1 class="app-title" data-i18n="app.title">SSHDeck</h1>
+            </div>
+            <div class="header-buttons">
+                <!-- W14 item 7: #newConnectionBtn no longer lives here. The
+                     SAME node is the permanent first child of
+                     .session-tabs-row in every viewport, icon-only 44px. Its
+                     title/aria-label travel with it: the text label is hidden
+                     at EVERY breakpoint, so the accessible name must stay on
+                     the node, not be re-derived per tier. -->
+                <div class="header-group" role="group" aria-label="Tools">
+                    <!-- Contextual per-session SFTP. The label is the SHORT
+                         mockup-v5 form ("Tệp" / Files, spec line 69), not
+                         "File Manager": this opens the inline one-session file
+                         browser for the active session. The global
+                         server-to-server surface is a different control
+                         (#fileTransferOpenBtn, "File Transfer / Truyền tệp") and
+                         the browser<->server form is a third
+                         (#fmUploadDownloadBtn, "Upload / Download").
+                         Owner ruling 2026-08-10, Entry 40. -->
+                    <button id="fileTransferBtn" class="btn btn-secondary" type="button"
+                            title="Files" data-i18n-title="fm.filesTitle"><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-folder-open"></use></svg> <span
+                            class="btn-label"
+                            data-i18n="fm.filesTitle">Files</span></button>
+                    <button id="commandLibraryBtn" class="btn btn-secondary" type="button"
+                            title="Commands" data-i18n-title="commands.workspace"><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-library"></use></svg> <span
+                            class="btn-label btn-label-desktop"
+                            data-i18n="commands.workspace">Commands</span><span
+                            class="btn-label btn-label-menu"
+                            data-i18n="commands.library">Command Library</span></button>
+                    <!-- H2/H3: #reloadPageBtn and #manageProfilesBtn are NOT
+                         header members in v5. The mockup's desktop header is
+                         exactly four elements (lines 66-72: brand, Ket noi moi,
+                         Tep, Lenh, account), and Profiles lives in the account
+                         menu (line 76).
+
+                         Both keep their capability by LIVING in the account
+                         dropdown (below), which TouchActionRow moves wholesale
+                         into the touch global menu -- never cloned, so ids,
+                         listeners and aria travel with them. Deleting them
+                         would delete capability; hosting them there does not. -->
+                </div>
+
+                <span class="header-divider" aria-hidden="true"></span>
+
+                <div class="account-selector">
+                    <button class="btn btn-secondary account-btn-header" id="accountBtnHeader" type="button" aria-label="Account menu" aria-haspopup="true" aria-expanded="false">
+                        <span class="account-avatar" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-contact-round"></use></svg></span>
+                        <span class="account-name">{{ current_user.username }}</span>
+                        <span class="account-caret" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-chevron-down"></use></svg></span>
+                    </button>
+                    <span id="accountDropdownRestoreMarker" hidden></span>
+                    <div class="account-dropdown-header" id="accountDropdownHeader"
+                         aria-hidden="true">
+                        <!-- H8: the account block that opens the menu. Mockup
+                             line 75:
+                               <div class="tw5-menu-account"><span>NH</span>
+                                 <div><strong>Nguyễn Hoàng</strong>
+                                 <small>Chủ dự án</small></div></div>
+                             It is the FIRST child of .tw5-global-menu (line 74),
+                             ahead of Profiles (76). Presentation only -- the
+                             username is the same value #accountBtnHeader already
+                             renders, and the block carries no control, so no
+                             listener, id or capability is involved. -->
+                        <div class="account-menu-identity">
+                            <span class="account-avatar" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-contact-round"></use></svg></span>
+                            <div>
+                                <strong class="account-menu-name">{{ current_user.username }}</strong>
+                                <small class="account-menu-role" data-i18n="account.signedIn">Signed in</small>
+                            </div>
+                        </div>
+                        <!-- H3: Profiles is the first entry of the account menu
+                             (mockup line 76), not a header button. Same node and
+                             same id as before, so profile-manager.js:9 keeps its
+                             listener and no capability is lost.
+
+                             H2: Reload and the Command Library opener follow it.
+                             They are APPLICATION-level actions, which is why the
+                             mockup keeps them out of the workspace row, and the
+                             header now has exactly its four v5 elements. On touch
+                             TouchActionRow moves these same nodes into the More
+                             sheet exactly as it did when they started in the
+                             header -- SECONDARY in touch-action-row.js:118-121
+                             looks them up by id, not by parent. -->
+                        <button id="manageProfilesBtn" class="account-item account-action" type="button"
+                                title="Manage profiles" data-i18n-title="profiles.manage"><span class="account-item-icon" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-contact-round"></use></svg></span> <span data-i18n="profiles.manage">Profiles</span></button>
+                        <button id="reloadPageBtn" class="account-item account-action" type="button"
+                                title="Reload page"
+                                data-i18n-title="terminal.reloadPage"
+                                aria-label="Reload page"
+                                data-i18n-aria-label="terminal.reloadPage"><span class="account-item-icon" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-refresh-cw"></use></svg></span> <span data-i18n="terminal.reloadPage">Reload page</span></button>
+                        <!-- File Transfer = SSH server -> SSH server (owner ruling
+                             2026-08-10, Entry 40). It opens the DUAL-PANE
+                             surface, which is the only surface that can express a
+                             source AND a destination connection. It is NOT the
+                             per-session file browser (#fileTransferBtn) and NOT the
+                             browser<->server Upload/Download form (#fileTransferModal,
+                             reached from inside the per-session file tooling). -->
+                        <button id="fileTransferOpenBtn" class="account-item account-action" type="button"
+                                title="File Transfer"
+                                data-i18n-title="files.fileTransfer"
+                                aria-label="File Transfer"
+                                data-i18n-aria-label="files.fileTransfer"><span class="account-item-icon" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-arrow-right-left"></use></svg></span> <span data-i18n="files.fileTransfer">File Transfer</span></button>
+
+                        <div class="account-divider" role="separator"></div>
+
+                        <button type="button" class="account-item account-expander"
+                                id="themeExpanderHeader" aria-haspopup="true"
+                                aria-expanded="false">
+                            <span class="account-item-icon" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-palette"></use></svg></span>
+                            <span class="account-expander-label" data-i18n="account.theme">Theme</span>
+                            <span class="account-current" id="currentThemeLabel"></span>
+                            <span class="account-caret" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-chevron-down"></use></svg></span>
+                        </button>
+                        <div class="theme-dropdown-header account-submenu" id="themeDropdownHeader"></div>
+
+                        <button type="button" class="account-item account-expander"
+                                id="langExpanderHeader" aria-haspopup="true"
+                                aria-expanded="false">
+                            <span class="account-item-icon" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-languages"></use></svg></span>
+                            <span class="account-expander-label" data-i18n="account.language">Language</span>
+                            <span class="account-current account-current-flag" id="currentLangFlagHeader">🇬🇧</span>
+                            <span class="account-caret" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-chevron-down"></use></svg></span>
+                        </button>
+                        <div class="lang-dropdown-header account-submenu" id="langDropdownHeader"></div>
+
+                        <div class="account-item" style="display:flex;align-items:center;gap:8px;padding:6px 12px;">
+                            <span class="account-item-icon" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-rotate-ccw"></use></svg></span>
+                            <label class="account-expander-label" for="scrollbackInput">Scrollback</label>
+                            <input type="number" id="scrollbackInput" min="50" max="10000" step="50"
+                                   style="width:70px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary);padding:2px 6px;font-size:12px;text-align:right;"
+                                   title="Terminal scrollback lines">
+                            <span style="font-size:11px;opacity:0.6;">lines</span>
+                        </div>
+
+                        <div class="account-divider" role="separator"></div>
+
+                        <button id="manageKeysBtn" class="account-item account-action" type="button"><span class="account-item-icon" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-key-round"></use></svg></span> <span data-i18n="keys.manageKeys">SSH Keys</span></button>
+                        <button id="manageJumpHostsBtn" class="account-item account-action" type="button"><span class="account-item-icon" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-network"></use></svg></span> <span data-i18n="jumphosts.manage">Jump Hosts</span></button>
+                        {% if current_user.is_admin %}<a id="adminPanelBtn" class="account-item account-action" href="{{ url_for('admin_page') }}"><span class="account-item-icon" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-settings"></use></svg></span> <span data-i18n="admin.title">Admin</span></a>{% endif %}
+                        <button id="changePasswordBtn" class="account-item account-action" type="button"><span class="account-item-icon" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-lock"></use></svg></span> <span data-i18n="auth.changePassword">Change Password</span></button>
+                        <button id="logoutBtn" class="account-item account-action" type="button"><span class="account-item-icon" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-log-out"></use></svg></span> <span data-i18n="auth.logout">Logout</span></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!--
+          Touch global/action row (plan v5 section 3, row one of two).
+          =========================================================
+
+          Row one is the six global actions; row two is the session strip and
+          nothing else. On a fine-pointer desktop this row is display:none and
+          the same controls stay in .tab-row-actions, so desktop is untouched.
+
+          The six actions are RELOCATED here on touch, never cloned: Broadcast,
+          Save transcript, Notes and the global Menu are the very same elements
+          (same ids, same listeners, same aria state) that .tab-row-actions and
+          the dock own on desktop. Cloning would duplicate #broadcastToggleBtn's
+          aria-pressed state and give the app two menu triggers, which v5
+          section 3 forbids. Only Layout and Reconnect are declared here, since
+          neither had a single-button form before: Layout replaces the 3-button
+          split cluster (that cluster is what made six actions overflow a 359px
+          row), and Reconnect proxies the canonical #sessionActionReconnect.
+
+          Width at the narrowest supported viewport: 6 x 44px = 264px of
+          359 - 8 = 351px usable. No wrap, no scroll, no overflow surface.
+        -->
+        <div class="touch-action-row" id="touchActionRow" role="group"
+             aria-label="Global actions" data-i18n-aria-label="terminal.globalActions">
+        </div>
+
+        <!--
+          The session strip. It used to be a second bar stacked under the one
+          above, which is where 244px of phone chrome came from; now both are
+          rows of the same 48px bar and .header-content / .session-tabs-row are
+          display: contents so their children lay out as siblings.
+
+          W14 item 7 (owner instruction): #newConnectionBtn lives HERE
+          permanently, icon-only 44px, as the FIRST CHILD of this row in every
+          viewport -- desktop, iPad and phone alike. It is no longer relocated
+          into #mobileMoreSheet; there is exactly one node with one home. It
+          also keeps the empty strip anchored: even with zero sessions the row
+          paints because this button is in it.
+
+          DOM order is [#newConnectionBtn, #sessionTabs, .tab-row-actions],
+          and nothing in it ever relocates: the strip has ONE home at every
+          viewport. Phone landscape used to move it (and the brand) into the
+          composer dock under a 40px header band; the owner retired that on
+          2026-09-19 -- a phone is too small for that layout, which was
+          drawn for wide screens -- so phone landscape keeps the same
+          two-row touch header as portrait.
+
+          The old #newTabBtn lived at the end of this row and its handler was
+          literally document.getElementById('newConnectionBtn').click() -- one
+          action behind two buttons with two different labels.
+        -->
+        <div class="session-tabs-row">
+            <button id="newConnectionBtn" class="btn btn-primary strip-new-connection" type="button"
+                    title="New Connection"
+                    data-i18n-title="connection.newConnection"
+                    aria-label="New Connection"
+                    data-i18n-aria-label="connection.newConnection"><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-plus"></use></svg> <span
+                    class="btn-label"
+                    data-i18n="connection.newConnection">New Connection</span></button>
+            <div class="session-tabs" id="sessionTabs"></div>
+            <div class="tab-row-actions">
+                <!-- v5 section 4: the desktop contextual toolbar is icon-only and
+                     leads with ONE Layout trigger plus an anchored dropdown. Its
+                     markup home is here, not in #touchActionRow: that row is
+                     display:none on a fine pointer, so a child of it could never
+                     be shown on desktop. touch-action-row.js moves this same node
+                     into the touch row on coarse pointers, so there is still
+                     exactly one Layout trigger in the shell. -->
+                <div class="touch-layout-control" id="touchLayoutControl">
+                    <button class="touch-action-btn" id="layoutMenuBtn" type="button"
+                            aria-haspopup="menu" aria-controls="layoutMenu"
+                            aria-expanded="false"
+                            title="Layout" data-i18n-title="terminal.layout"
+                            aria-label="Layout" data-i18n-aria-label="terminal.layout">
+                        <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-panels-top-left"></use></svg>
+                        <!-- v5 line 92: the desktop layout trigger pairs the glyph
+                             with a chevron-down to mark it as a menu opener. The
+                             touch variant (v5 line 120) shows the glyph alone, so
+                             the chevron is hidden inside #touchActionRow in CSS
+                             rather than being a second node that relocates. -->
+                        <svg class="icon layout-trigger-caret" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-chevron-down"></use></svg>
+                    </button>
+                    <!-- Anchored under its trigger (v5 section 6). Options are
+                         rendered from the canonical .split-controls buttons so the
+                         device cap stays in one place. -->
+                    <div class="touch-layout-menu" id="layoutMenu" role="menu"
+                         aria-labelledby="layoutMenuBtn" hidden></div>
+                </div>
+                <!-- The canonical layout engine controls: a PROGRAMMATIC behavior
+                     source only, never a user surface. v5 section 4 replaces the
+                     four numbered buttons with the single Layout dropdown above,
+                     so leaving these rendered, tabbable or exposed to AT would be
+                     a second invisible layout UI. They are therefore hidden (no
+                     box, no hit testing), aria-hidden (out of the a11y tree) and
+                     tabindex="-1" (out of the tab order). Element.click() is
+                     unaffected by all three, so renderLayoutMenu can still read
+                     their dataset/aria-pressed and delegate to them, and the pane
+                     cap and engine each stay expressed exactly once. -->
+                <!-- v5 lines 102-110 define EIGHT distinct layout choices, and
+                     two pairs of them share a pane count: "2 dọc" / "2 ngang"
+                     are both 2 panes, and "4 pane" / "4 + chính" are both 4.
+                     So data-layout alone cannot identify a choice -- each button
+                     also carries data-variant, and the (layout, variant) pair is
+                     what the engine keys its grid template on. The variant is
+                     the DISCRIMINATOR, not decoration: without it the dropdown
+                     would render two identical-looking entries that collapse
+                     onto the same layout.
+
+                     'default' is spelled explicitly rather than left absent so
+                     the engine never has to distinguish "no variant" from "the
+                     ordinary one" -- a missing dataset value reads as undefined
+                     and would have to be defaulted at every read site. -->
+                <div class="split-controls" role="group" aria-label="Split layout"
+                     aria-hidden="true" hidden>
+                    <button type="button" tabindex="-1" class="split-btn active" data-layout="1" data-variant="default" title="Single pane" aria-label="Single pane" aria-pressed="true">1</button>
+                    <button type="button" tabindex="-1" class="split-btn" data-layout="2" data-variant="default" title="Two panes, side by side" aria-label="Two panes, side by side" aria-pressed="false">2</button>
+                    <button type="button" tabindex="-1" class="split-btn" data-layout="2" data-variant="rows" title="Two panes, stacked" aria-label="Two panes, stacked" aria-pressed="false">2</button>
+                    <button type="button" tabindex="-1" class="split-btn" data-layout="3" data-variant="default" title="Three panes" aria-label="Three panes" aria-pressed="false">3</button>
+                    <button type="button" tabindex="-1" class="split-btn" data-layout="4" data-variant="default" title="Quad pane" aria-label="Quad pane" aria-pressed="false">4</button>
+                    <button type="button" tabindex="-1" class="split-btn" data-layout="4" data-variant="main" title="Four panes with a primary" aria-label="Four panes with a primary" aria-pressed="false">4</button>
+                    <button type="button" tabindex="-1" class="split-btn" data-layout="5" data-variant="default" title="Five panes" aria-label="Five panes" aria-pressed="false">5</button>
+                    <!-- v5 section 7 caps desktop at 1-6. The cap is enforced in
+                         the ENGINE (SessionManager.layoutIsAllowed), not by
+                         hiding markup: a hidden button is still clickable via
+                         Element.click(), and a restored localStorage layout
+                         never goes through a button at all. -->
+                    <button type="button" tabindex="-1" class="split-btn" data-layout="6" data-variant="default" title="Six panes" aria-label="Six panes" aria-pressed="false">6</button>
+                </div>
+                <button class="tab-row-icon-btn" id="broadcastToggleBtn" type="button" aria-pressed="false" title="Broadcast to all sessions" data-i18n-title="broadcast.toggle" aria-label="Broadcast to all sessions" data-i18n-aria-label="broadcast.toggle">
+                    <span aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-radio-tower"></use></svg></span>
+                </button>
+                <button class="tab-row-icon-btn" id="saveTranscriptBtn" title="Save Transcript" data-i18n-title="terminal.saveTranscript" aria-label="Save transcript" data-i18n-aria-label="terminal.saveTranscript">
+                    <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-file-down"></use></svg>
+                </button>
+                <!-- Reconnect's markup home is here for the same reason Layout's
+                     is: #touchActionRow is display:none on a fine pointer. It
+                     proxies the canonical #sessionActionReconnect and mirrors its
+                     disabled state (touch-action-row.js syncReconnect). -->
+                <button class="tab-row-icon-btn" id="touchReconnectBtn" type="button"
+                        title="Reconnect" data-i18n-title="session.reconnect"
+                        aria-label="Reconnect" data-i18n-aria-label="session.reconnect"
+                        disabled>
+                    <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-refresh-cw"></use></svg>
+                </button>
+                <!-- The ONE Notes control. v5 section 3 lists Ghi chú among the
+                     six touch header actions, so this node relocates into the
+                     touch action row / More sheet instead of a second dock
+                     button existing. aria-controls/aria-expanded moved here
+                     from the removed #mobileNotepadBtn: they describe the
+                     touch sheet this node now opens. -->
+                <button class="tab-row-icon-btn" id="notepadOpenBtn" type="button"
+                        title="Notepad" data-i18n-title="terminal.notepad"
+                        aria-label="Notepad" data-i18n-aria-label="terminal.notepad"
+                        aria-controls="notepadPanel" aria-expanded="false">
+                    <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-notebook-pen"></use></svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <h2 class="visually-hidden" data-i18n="terminal.workspaceHeading">Terminal workspace</h2>
+        <!-- session-meta kept hidden for JS references; visible session-bar only on mobile -->
+        <div aria-hidden="true" style="display:none">
+            <div id="sessionMeta"><div id="sessionMetaTitle"></div><div id="sessionMetaNotes"></div></div>
+        </div>
+        <!-- Plan v5 section 5: Broadcast has no bar or input of its own. It is a
+             target switch over the single shared composer, so its text, send
+             control and session counter all live there. -->
+        <div class="workspace" id="workspace">
+            <div class="terminal-area">
+
+                <div class="terminals-container" id="terminalsContainer">
+                    <div class="terminal-grid split-1" id="terminalGrid"></div>
+                    <div class="drop-overlay hidden" id="dropOverlay">
+                        <div class="drop-overlay-content">
+                            <div class="drop-title">Drop file to upload</div>
+                            <div class="drop-subtitle">Release to choose destination path</div>
+                        </div>
+                    </div>
+                    <div class="terminal-search-bar hidden" id="terminalSearchBar">
+                        <!-- P4 / mockup line 185 opens the bar with a search
+                             glyph, the same way the library's search field does
+                             (line 181). The app had none, so the bar read as a
+                             bare text box floating over the terminal. -->
+                        <svg class="icon search-glyph" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-search"></use></svg>
+                        <input type="text" id="terminalSearchInput" data-i18n-placeholder="terminal.searchPlaceholder" placeholder="Search in terminal…" autocomplete="off" />
+                        <span class="search-count" id="terminalSearchCount"></span>
+                        <button class="search-btn search-prev" id="terminalSearchPrev" title="Previous (Shift+Enter)" data-i18n-title="terminal.searchPrevious" aria-label="Previous match" data-i18n-aria-label="terminal.searchPrevious"><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-chevron-up"></use></svg></button>
+                        <button class="search-btn search-next" id="terminalSearchNext" title="Next (Enter)" data-i18n-title="terminal.searchNext" aria-label="Next match" data-i18n-aria-label="terminal.searchNext"><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-chevron-down"></use></svg></button>
+                        <button class="search-btn search-close" id="terminalSearchClose" title="Close (Escape)" data-i18n-title="terminal.searchClose" aria-label="Close search" data-i18n-aria-label="terminal.searchClose"><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-x"></use></svg></button>
+                    </div>
+                </div>
+            </div>
+            <div class="resize-handle" id="resizeHandle" title="Drag to resize">
+                <div class="resize-handle-line"></div>
+            </div>
+            <aside class="notepad-panel" id="notepadPanel">
+                <!-- P1 / mockup line 177: the panel head is title-block + close,
+                     not two stacked rows. .notepad-title-row is that block (spec
+                     line 293: display:grid; gap:2px), so the title sits over its
+                     subtitle and the close control is the head's second flex
+                     child. The save status stays inside the subtitle line rather
+                     than beside the title: it is transient ("saving" -> "saved"
+                     -> blank) and giving it the title row's own slot made the
+                     heading shift horizontally every keystroke. -->
+                <div class="notepad-header">
+                    <div class="notepad-title-row">
+                        <div class="notepad-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                            <span data-i18n="terminal.notepadTitle">Session notes</span>
+                            <div class="notepad-mode-toggle" id="notepadModeToggle" role="radiogroup" aria-label="Notepad storage scope">
+                                <button type="button" class="notepad-mode-btn active" id="notepadModeGlobalBtn"
+                                        data-mode="global" role="radio" aria-checked="true"
+                                        data-i18n="terminal.notepadGlobal">Global</button>
+                                <button type="button" class="notepad-mode-btn" id="notepadModeServerBtn"
+                                        data-mode="per_server" role="radio" aria-checked="false"
+                                        data-i18n="terminal.notepadPerServer">Per-server</button>
+                            </div>
+                        </div>
+                        <div class="notepad-meta">
+                            <span data-i18n="terminal.notepadMeta">Auto-saved</span>
+                            <!-- Mockup 177 reads "Tự lưu · tiny": the host names
+                                 WHICH session these notes belong to, which matters
+                                 because the notepad swaps content on session
+                                 change. Written by app.js; the separator is part
+                                 of the host span so an absent host leaves no
+                                 dangling middot. -->
+                            <span class="notepad-meta-host" id="notepadMetaHost"></span>
+                            <span class="notepad-save-status" id="notepadSaveStatus"></span>
+                        </div>
+                    </div>
+                    <button type="button" class="notepad-close" id="notepadCloseBtn"
+                            aria-label="Close" data-i18n-aria-label="common.close">
+                        <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-x"></use></svg>
+                    </button>
+                </div>
+                <textarea id="sessionNotepad" class="notepad-input"
+                          data-i18n-placeholder="terminal.notepadPlaceholder"
+                          placeholder="Write notes, commands, or snippets here..."></textarea>
+            </aside>
+            <!-- Command Library rail: shares the auxiliary grid cell with
+                 .notepad-panel above, so the two are alternatives (app.js
+                 dispatches sshdeck:aux-panel-opening to close the other). Moved
+                 here from the former blocking workspace dialog. -->
+            <aside class="command-rail" id="commandRail"
+                   aria-labelledby="commandRailTitle" aria-hidden="true" inert>
+                <div class="command-rail-header">
+                    <div class="command-rail-title-row">
+                        <!-- P1/P2 / mockup line 181: the head is a title block
+                             (title over subtitle, spec 293) plus a close control,
+                             the same shape as the Notes head at line 177. -->
+                        <div class="command-rail-title-block">
+                            <h2 class="command-rail-title" id="commandRailTitle"
+                                data-i18n="commands.library">Command Library</h2>
+                            <div class="command-rail-subtitle" data-i18n="commands.railSubtitle">Insert to edit before running</div>
+                        </div>
+                        <button type="button" class="command-rail-close" id="commandRailCloseBtn"
+                                aria-label="Close" data-i18n-aria-label="common.close">
+                            <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-x"></use></svg>
+                        </button>
+                    </div>
+                </div>
+                <section id="commandLibraryPanel" class="command-workspace-panel">
+                    <label class="command-toolbar">
+                        <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-search"></use></svg>
+                        <input type="search" id="commandSearchInput" class="search-input" data-i18n-placeholder="commands.searchPlaceholder" placeholder="Search commands, parameters, or descriptions...">
+                    </label>
+                    <!-- Add + Command Sets are app functions the mockup's two
+                         sample rows do not depict. They stay, but out of both
+                         the head and the search box: mockup line 181 draws the
+                         head as exactly two children (title block, close) and
+                         line 296 draws .tw5-search as a bordered field holding
+                         an icon and an input and nothing else. Putting them here
+                         keeps both shapes and still leaves the two controls
+                         above the list, where they were. -->
+                    <div class="command-rail-header-actions">
+                        <button type="button" class="btn btn-secondary command-rail-sets-btn"
+                                id="commandRailSetsBtn" data-i18n="commandSets.manageOpen">Command Sets…</button>
+                        <button class="btn btn-primary command-rail-add-btn" id="addCommandBtn"><span data-i18n="commands.addCommand">Add Command</span> <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-plus"></use></svg></button>
+                    </div>
+                    <div class="os-filter-toolbar">
+                        <span data-i18n="commands.filterByOs">Filter by OS:</span>
+                        <div class="os-filter-buttons">
+                            <button class="os-filter-btn active" data-os="all"><span data-i18n="commands.osAll">All</span></button>
+                            <button class="os-filter-btn" data-os="linux">Linux</button>
+                            <button class="os-filter-btn" data-os="macos">macOS</button>
+                            <button class="os-filter-btn" data-os="bsd">BSD</button>
+                            <button class="os-filter-btn" data-os="windows">Windows</button>
+                        </div>
+                        <div class="os-detected"><span data-i18n="commands.detected">Detected</span>: <strong id="currentOsDisplay">-</strong></div>
+                    </div>
+                    <!-- Stacked cards, not a 5-column table: a narrow rail cannot
+                         carry five columns without truncating the primary action. -->
+                    <div class="commands-card-list" id="commandsList"></div>
+                    <div class="command-help">
+                        <p><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-highlighter"></use></svg> <strong data-i18n="common.tip">Tip</strong>: <span data-i18n="commands.helpTip">Press F1 to open the library anytime. Clicking ⤵ inserts the command into your editable draft — nothing runs until you press Send or Ctrl+Enter.</span></p>
+                        <p><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-lock"></use></svg> <span data-i18n="commands.helpSystem">System commands (gray background) are read-only. User commands can be edited or deleted.</span></p>
+                    </div>
+                </section>
+                <!-- Plan v5 section 5: no draft or send control here. The rail has no
+                     composer of its own. Insert targets the single shared composer on
+                     touch and in Broadcast, and on fine-pointer desktop writes to the
+                     terminal prompt with no CR, leaving it editable until Enter. -->
+            </aside>
+            <!-- P3 / mockup v5 line 182: SFTP is a COMPACT auxiliary inspector
+                 integrated with the terminal, not the legacy full-screen dual-pane
+                 modal. The modal is still created lazily by SFTPFileManager and is
+                 kept as the advanced two-pane transfer surface; this panel is the
+                 PRIMARY File button destination and renders the active remote pane
+                 through the same manager state and socket operations.
+
+                 The panel is a permanent workspace child so it shares the same
+                 auxiliary slot and device positioning rules as Notes / Commands:
+                 desktop side rail, iPad right overlay, phone bottom sheet. It owns
+                 NO duplicate action IDs -- SFTPFileManager renders the compact
+                 controls into this empty host with `fmInline*` IDs (the pane key
+                 is 'inline', so every existing fm${capitalize(pane)} helper
+                 resolves them) and delegates every action back to the canonical
+                 manager methods. -->
+            <aside class="sftp-panel" id="sftpPanel"
+                   aria-labelledby="fmInlineTitle" aria-hidden="true" inert></aside>
+        </div>
+        <!--
+          Status bar (approved v5 mockup, bottom band).
+          =============================================
+
+          Connection state + latency on the left, encoding + terminal geometry on
+          the right, exactly as the mockup draws it. Last child of .main-content
+          so it participates in the existing flex column rather than being
+          overlaid: an overlay would cover the bottom terminal row instead of
+          being accounted for, which is the opposite of DESIGN.md section 10's
+          reserve-the-space rule.
+
+          role=status + aria-live=polite, because latency and geometry change
+          without user action; polite so it never interrupts terminal output.
+          It is NOT a landmark and carries no interactive control -- purely an
+          indicator, so it stays out of the tab order.
+
+          On phone portrait, small phone and phone landscape this band is
+          display:none (see style.css): those tiers have a fixed geometry budget
+          and the mockup's own touch rows do not draw it. Their state and
+          latency remain reachable from the existing session chip and More sheet,
+          so no information is lost -- only the redundant band.
+        -->
+        <div class="status-bar" id="statusBar" role="status" aria-live="polite">
+            <div class="status-bar-left">
+                <span class="status-bar-state" id="statusBarState">
+                    <span class="status-dot" id="statusBarDot" aria-hidden="true"></span>
+                    <span class="status-bar-state-text" id="statusBarStateText"
+                          data-i18n="status.disconnected">Disconnected</span>
+                </span>
+                <span class="status-bar-sep" aria-hidden="true">·</span>
+                <span class="status-bar-latency" id="statusBarLatency"></span>
+            </div>
+            <div class="status-bar-right">
+                <span class="status-bar-encoding" id="statusBarEncoding">UTF-8</span>
+                <span class="status-bar-sep" aria-hidden="true">·</span>
+                <span class="status-bar-dims" id="statusBarDims"></span>
+            </div>
+        </div>
+    </main>
+
+    <!-- Mobile action sheet and dock. The dock keeps one 48px functional
+         control band; safe-area space is added outside that band by CSS. -->
+    <div class="session-bar hidden" id="sessionBar">
+        <!-- ONE canonical global menu (owner correction 2026-08-10).
+
+             The owner reported "mobile still exposes two menu entry points".
+             This surface used to be a SECOND menu: an intermediate
+             #mobileMoreActions list of four proxy buttons, one of which
+             (Settings) navigated to a #mobileSettingsView that then hosted the
+             real #accountDropdownHeader tree, plus a #mobileProfilesBtn proxy
+             duplicating a control that already exists inside that tree. Two
+             surfaces, two shapes, two routes to the same actions, and Profiles
+             reachable twice.
+
+             It is now a HOST and nothing else. #mobileMoreBtn opens the
+             canonical #accountDropdownHeader tree directly -- the same tree the
+             desktop account button opens, the same DOM node, the same
+             listeners -- moved in by header-menus.js and moved back to
+             .account-selector on the way out. No intermediate list, no Settings
+             step, no Back view, no proxies.
+
+             New Connection, Files, Commands and Reload are not cloned into it
+             either: touch-action-row.js MOVES those real controls in, so each
+             action exists exactly once in the document and keeps the listener
+             that already works.
+
+             It stays a role="dialog" labelled by a visually-hidden heading, and
+             it stays a child of #sessionBar so the dock/overlay stacking
+             context is unchanged. -->
+        <section class="mobile-more-sheet" id="mobileMoreSheet"
+                 role="dialog" aria-labelledby="mobileMoreTitle"
+                 aria-hidden="true" hidden inert>
+            <h2 class="visually-hidden" id="mobileMoreTitle"
+                data-i18n="account.menu">Account menu</h2>
+
+            <!-- The single host. The canonical account tree is moved in here on
+                 open and restored to the desktop header on close, so there is
+                 exactly one such tree in the document at all times.
+
+                 It has exactly ONE child: that tree. Relocated real controls
+                 (New Connection, Files, Command Library) used to be appended
+                 here as the tree's SIBLINGS, which painted them as separate
+                 bordered cards above an unbordered tree -- two visual row
+                 systems in one menu. touch-action-row.js now inserts them
+                 INSIDE the tree, immediately after its identity block, giving
+                 one continuous menu: identity, New Connection, Files, Command
+                 Library, Profiles, then the remaining settings and actions
+                 (owner correction 2026-08-10, second pass). -->
+            <div class="mobile-settings-host" id="mobileSettingsHost"></div>
+        </section>
+
+        <div class="mobile-input-bar" id="mobileInputBar">
+            <button class="btn btn-secondary mobile-dock-btn"
+                    id="mobileMoreBtn" type="button"
+                    aria-label="More actions"
+                    aria-haspopup="dialog"
+                    aria-controls="mobileMoreSheet"
+                    aria-expanded="false">
+                <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-menu"></use></svg>
+            </button>
+            <!-- B2 / mockup line 192: the Broadcast target is a real element at
+                 the START of the dock, not a caption inside the textarea:
+                 radio-tower + "Tất cả N" + chevron-down. N counts only
+                 CONNECTED, sendable sessions (BroadcastInput.targetCount,
+                 amendment line 83), so it states the true blast radius before
+                 a fan-out send. Hidden outside Broadcast, where the target is
+                 simply the selected session (amendment line 77).
+
+                 W14 item 6: the picker IS now specified, so the chip is the
+                 button the mockup always drew ([INF-B2] anticipated exactly
+                 this flip: "if a picker is specified later this becomes a
+                 button again with no visual change"). Geometry, icons and
+                 copy are unchanged; the click opens #broadcastTargetMenu (a
+                 JS-built sibling anchored to this bar by CSS), and the label
+                 carries the x/y count in a custom subset. aria-live stays so
+                 count changes are announced without moving focus off the
+                 composer. -->
+            <button class="composer-target" id="composerTarget" type="button"
+                    aria-live="polite" aria-haspopup="menu"
+                    aria-controls="broadcastTargetMenu" aria-expanded="false" hidden>
+                <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-radio-tower"></use></svg>
+                <span class="composer-target-label"></span>
+                <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-chevron-down"></use></svg>
+            </button>
+            <div class="mobile-composer">
+                <textarea id="mobileInput" rows="1" data-i18n-placeholder="terminal.mobileInputPlaceholder" placeholder="Command…"
+                          aria-label="Command input" data-i18n-aria-label="terminal.mobileInputLabel"
+                          maxlength="4096" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+                <span class="mobile-composer-help" role="note" data-i18n="terminal.composerHelp">Edit, then Send.</span>
+            </div>
+            <button class="btn btn-secondary mobile-dock-btn" id="mobileKeypadBtn" type="button"
+                    aria-label="Function keys" data-i18n-aria-label="terminal.keypad"
+                    aria-controls="mobileKeypad" aria-expanded="false">
+                <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-keyboard"></use></svg>
+            </button>
+            <button class="btn btn-secondary mobile-dock-btn mobile-exit-scroll-btn" id="exitScrollBtn" type="button"
+                    aria-label="Exit scroll" data-i18n-aria-label="tmux.exitScroll"
+                    aria-hidden="true" hidden>
+                <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-arrow-down-to-line"></use></svg>
+                <span class="btn-label" data-i18n="tmux.exitScroll">Exit scroll</span>
+            </button>
+            <button class="btn btn-primary mobile-dock-btn" id="mobileSendBtn" type="button" aria-label="Send"
+                    data-i18n-aria-label="commandPanel.send">
+                <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-send"></use></svg>
+                <!-- Icon-only on touch; the fine-pointer Broadcast override is
+                     the only place this label is revealed. -->
+                <span class="btn-label" data-i18n="commandPanel.send">Send</span>
+            </button>
+        </div>
+        <!-- W14 item 3: the touch-tier mini status band. The desktop #statusBar
+             (dot + state + latency + dims) is hidden on touch shells, and
+             nothing existed below the composer -- the flush bottom edge the
+             owner reported. This compact row mirrors the desktop pattern with
+             the same .status-dot component and chrome status tokens (so all
+             ten themes come free), fed by the same `session_latency` poll via
+             `sshdeck:session-latency-changed`. It is a separate flex line of
+             the dock (order 1, between the composer line and the keypad's
+             order 2); one height term (--mobile-status-band) is charged to
+             --composer-dock-height, so the elastic workspace flexes instead of
+             overlaying. Short-landscape tiers keep their approved single 48px
+             band: the rule re-hides the row and zeroes the term there. -->
+        <div class="mobile-mini-status" id="mobileMiniStatus" role="status"
+             aria-live="polite" data-i18n-aria-label="status.mobileMiniBar"
+             aria-label="Connection status">
+            <span class="status-dot" id="mobileMiniStatusDot" aria-hidden="true"></span>
+            <span class="mobile-mini-status-state" id="mobileMiniStatusText"
+                  data-i18n="status.disconnected">Disconnected</span>
+            <span class="mobile-mini-status-latency" id="mobileMiniStatusLatency"></span>
+        </div>
+        <!-- Mobile function keypad: the keys a soft keyboard does not offer.
+             Without arrows there is no way to pick an item in a menu (claude,
+             vim, any TUI list) on a phone at all.
+
+             It immediately follows the sole composer inside #sessionBar as a
+             normal-flow flex item. Opening it grows the dock and shrinks the
+             elastic terminal workspace; it never overlays terminal rows.
+
+             data-key values are DOM KeyboardEvent key names on purpose: the
+             handler dispatches a synthetic KeyboardEvent at xterm's hidden
+             textarea and lets XTERM do the encoding. That is what makes an
+             arrow correct in both cursor-key modes — \x1b[A in a shell but
+             \x1bOA once an app sets DECCKM. Hard-coding either form would
+             break the other, which is exactly the bug this is meant to fix.
+             data-seq is only for the control bytes xterm has no key for. -->
+        <div class="mobile-keypad" id="mobileKeypad" aria-hidden="true">
+            <!-- Two rows only, so the keypad stays short and leaves the terminal
+                 room. The exact v5 inventory is split across two eight-key pages.
+                 Both pages remain in one horizontal track; Next and Previous move
+                 that track without mounting another keypad or composer. -->
+            <div class="mobile-keypad-dots">
+                <!-- P6 / mockup line 194: the keypad head is
+                     "Phím terminal" + "Trang 1 / 2" + a close chevron, not
+                     two bare dots. The dots STAY -- they are the swipe
+                     affordance for the scroll-snap track and the mockup's
+                     static page label cannot show which of the two is live
+                     mid-swipe -- but they now sit inside a labelled head so
+                     the sheet says what it is and can be dismissed without
+                     reaching back to the dock button.
+
+                     aria-hidden is off the wrapper now (it would have
+                     hidden the title and the close control from a screen
+                     reader) and moved onto the decorative dots themselves. -->
+                <strong class="keypad-head-title" data-i18n="terminal.keypadTitle">Terminal keys</strong>
+                <span class="keypad-page" id="keypadPageLabel"></span>
+                <span class="keypad-dot-track" aria-hidden="true">
+                    <span class="keypad-dot is-active"></span>
+                    <span class="keypad-dot"></span>
+                </span>
+                <button type="button" class="keypad-close" id="keypadCloseBtn"
+                        aria-label="Close" data-i18n-aria-label="common.close">
+                    <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-chevron-down"></use></svg>
+                </button>
+            </div>
+            <div class="mobile-keypad-pages" id="mobileKeypadPages">
+                <div class="mobile-keypad-grid" aria-label="Navigation keys" role="group">
+                    <!-- All four arrows together on the FIRST row, in the reading
+                         order of a compact laptop arrow cluster (left, up, down,
+                         right). A true inverted T would need two empty cells,
+                         which would push the key count past the two pages. -->
+                    <button type="button" class="keypad-key" data-key="ArrowLeft" aria-label="Arrow left">
+                        <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-chevron-left"></use></svg>
+                    </button>
+                    <button type="button" class="keypad-key" data-key="ArrowUp" aria-label="Arrow up">
+                        <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-chevron-up"></use></svg>
+                    </button>
+                    <button type="button" class="keypad-key" data-key="ArrowDown" aria-label="Arrow down">
+                        <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-chevron-down"></use></svg>
+                    </button>
+                    <button type="button" class="keypad-key" data-key="ArrowRight" aria-label="Arrow right">
+                        <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-chevron-right"></use></svg>
+                    </button>
+
+                    <button type="button" class="keypad-key" data-key="Escape" aria-label="Escape">Esc</button>
+                    <button type="button" class="keypad-key" data-key="Tab" aria-label="Tab">Tab</button>
+                    <button type="button" class="keypad-key" data-seq="&#x1b;[Z" aria-label="Shift Tab">&#x21e7;Tab</button>
+                    <button type="button" class="keypad-key" data-keypad-page="2"
+                            aria-label="Next keypad page"
+                            data-i18n-aria-label="terminal.keypadNextLabel"
+                            data-i18n="terminal.keypadNext">Next &#x203a;</button>
+                </div>
+                <div class="mobile-keypad-grid" aria-label="Control and paging keys" role="group">
+                    <button type="button" class="keypad-key" data-key="Home" aria-label="Home">Home</button>
+                    <button type="button" class="keypad-key" data-key="PageUp" aria-label="Page up">PgUp</button>
+                    <button type="button" class="keypad-key" data-key="PageDown" aria-label="Page down">PgDn</button>
+                    <button type="button" class="keypad-key" data-key="End" aria-label="End">End</button>
+
+                    <!-- Ctrl and Alt are STICKY MODIFIERS, not one-shot bytes. They
+                         replace the four hardcoded ^C/^D/^Z/^L keys the v5 inventory
+                         removed: arming Ctrl and then tapping C still sends 0x03, so
+                         interrupting a running command stays one two-tap gesture and
+                         is not lost. aria-pressed carries the armed state. -->
+                    <button type="button" class="keypad-key" data-keypad-modifier="ctrl"
+                            aria-pressed="false" aria-label="Control">Ctrl</button>
+                    <button type="button" class="keypad-key" data-keypad-modifier="alt"
+                            aria-pressed="false" aria-label="Alt">Alt</button>
+                    <button type="button" class="keypad-key" data-key="Delete" aria-label="Delete">Del</button>
+                    <button type="button" class="keypad-key" data-keypad-page="1"
+                            aria-label="Previous keypad page"
+                            data-i18n-aria-label="terminal.keypadPreviousLabel"
+                            data-i18n="terminal.keypadPrevious">&#x2039; Previous</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    </div><!-- /.deck-window -->
+
+    <div class="modal modal-wide modal-shell" id="connectionModal" role="dialog" aria-modal="true" aria-labelledby="connectionModalTitle" aria-hidden="true">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="connectionModalTitle" data-i18n="connection.newSSHConnection">New SSH Connection</h2>
+                <button type="button" class="close" id="closeConnectionModal" aria-label="Close" data-i18n-aria-label="common.close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="connectionForm">
+
+                    <!-- WHICH LIFECYCLE ACTION opened this form.
+
+                         Reconnect (credential route) and Reset both end up in
+                         this one modal, and that is exactly what made the two
+                         actions indistinguishable: the owner reported every
+                         control "opening the same lose-tmux reconnect modal".
+                         The confirm dialog says it once and disappears; this
+                         says it for as long as the form is open, which is when
+                         the user is actually deciding.
+
+                         Empty and hidden by default, so an ordinary New
+                         Connection is unchanged. Written only by
+                         SessionManager.setConnectionFormIntent, which is also
+                         the sole clearer. Not a live region: the toast already
+                         announces the change, and a second announcement of the
+                         same sentence is noise. -->
+                    <div class="connection-intent" id="connectionFormIntent" hidden>
+                        <svg class="icon" aria-hidden="true"><use id="connectionFormIntentIcon" href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-plug-zap"></use></svg>
+                        <div class="connection-intent-text">
+                            <strong id="connectionFormIntentTitle"></strong>
+                            <small id="connectionFormIntentDetail"></small>
+                        </div>
+                    </div>
+
+                    <div class="form-group" id="recentConnectionsGroup" style="display: none;">
+                        <label data-i18n="connection.recentConnections">Recent Connections</label>
+                        <div id="recentConnectionsList" class="recent-connections-list"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="profileSelect" data-i18n="connection.loadProfile">Load Profile (Optional)</label>
+                        <div style="display: flex; gap: 10px;">
+                            <select id="profileSelect" class="form-control" style="flex: 1;">
+                                <option value="" data-i18n="connection.selectProfile">-- Select Profile --</option>
+                            </select>
+                            <button type="button" id="deleteProfileBtn" class="btn btn-danger" style="display: none;"><span data-i18n="common.delete">Delete</span> <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-trash-2"></use></svg></button>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group flex-2">
+                            <label for="hostInput" data-i18n="connection.host">Host *</label>
+                            <input type="text" id="hostInput" class="form-control" placeholder="192.168.1.100" required>
+                            <div class="field-hint" id="hostHint"></div>
+                        </div>
+                        <div class="form-group flex-1">
+                            <label for="portInput" data-i18n="connection.port">Port *</label>
+                            <input type="number" id="portInput" class="form-control" value="22" required>
+                            <div class="field-hint" id="portHint"></div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="usernameInput" data-i18n="auth.username">Username *</label>
+                        <input type="text" id="usernameInput" class="form-control" placeholder="root" required>
+                        <div class="field-hint" id="usernameHint"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="authTypeSelect" data-i18n="connection.authMethod">Authentication Method</label>
+                        <select id="authTypeSelect" class="form-control">
+                            <option value="password" data-i18n="auth.password">Password</option>
+                            <option value="key" data-i18n="connection.sshKey">SSH Key</option>
+                            {% if tailscale_ssh_allowed %}
+                            <option value="tailscale" data-i18n="connection.tailscaleSSH">Tailscale SSH</option>
+                            {% endif %}
+                        </select>
+                    </div>
+
+                    <div class="form-group" id="passwordGroup">
+                        <label for="passwordInput" data-i18n="auth.password">Password *</label>
+                        <div class="input-wrapper with-toggle">
+                            <input type="password" id="passwordInput" class="form-control" data-i18n-placeholder="auth.password" placeholder="Password">
+                            <button type="button" class="password-toggle" data-target="passwordInput" aria-label="Toggle password visibility" data-i18n-aria-label="auth.togglePasswordVisibility"><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-eye"></use></svg></button>
+                        </div>
+                        <div class="field-hint" id="passwordHint"></div>
+                    </div>
+
+                    <div class="form-group hidden" id="keyGroup">
+                        <label for="keySelect" data-i18n="connection.sshKey">SSH Key *</label>
+                        <select id="keySelect" class="form-control">
+                            <option value="" data-i18n="connection.selectSSHKey">-- Select SSH Key --</option>
+                        </select>
+                        <div class="field-hint" id="keyHint"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="jumpHostSelect" data-i18n="connection.jumpHost">Jump Host</label>
+                        <select id="jumpHostSelect" class="form-control">
+                            <option value="" data-i18n="connection.noJumpHost">None (direct connection)</option>
+                        </select>
+                        <div class="field-hint" data-i18n="connection.jumpHostHint">Manage jump hosts in the account menu.</div>
+                    </div>
+
+                    <div class="form-group hidden" id="jumpHostPasswordGroup">
+                        <label for="jumpHostPasswordInput" data-i18n="connection.jumpHostPassword">Jump Host Password</label>
+                        <div class="input-wrapper with-toggle">
+                            <input type="password" id="jumpHostPasswordInput" class="form-control" data-i18n-placeholder="auth.password" placeholder="Password">
+                            <button type="button" class="password-toggle" data-target="jumpHostPasswordInput" aria-label="Toggle password visibility" data-i18n-aria-label="auth.togglePasswordVisibility"><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-eye"></use></svg></button>
+                        </div>
+                        <div class="field-hint" data-i18n="connection.jumpHostPasswordHint">This bastion uses password auth — enter its password (never stored).</div>
+                    </div>
+
+                    <div class="form-group post-connect-config">
+                        <div class="post-connect-label">
+                            <span data-i18n="connection.runAfterConnect">Run after connecting (optional)</span>
+                            <button type="button" class="info-tooltip-trigger" aria-label="About post-connect modes" data-i18n-aria-label="accessibility.aboutPostConnectModes" aria-describedby="postConnectModeTooltip">?</button>
+                            <span id="postConnectModeTooltip" class="info-tooltip" role="tooltip" data-i18n="connection.runAfterConnectTooltip">Choose one source. The exact command is shown before connecting.</span>
+                        </div>
+                        <div class="post-connect-mode-selector" role="group" aria-label="Post-connect command source" data-i18n-aria-label="accessibility.postConnectSource">
+                            <button type="button" id="connectionCommandModeNone" class="post-connect-mode active" data-command-mode="none" aria-pressed="true" data-i18n="commandModes.none">None</button>
+                            <button type="button" id="connectionCommandModeSet" class="post-connect-mode" data-command-mode="command_set" aria-pressed="false" data-i18n="commandModes.commandSet">Command Set</button>
+                            <button type="button" id="connectionCommandModeCommand" class="post-connect-mode" data-command-mode="command" aria-pressed="false" data-i18n="commandModes.command">Command</button>
+                            <button type="button" id="connectionCommandModeFreeText" class="post-connect-mode" data-command-mode="free_text" aria-pressed="false" data-i18n="commandModes.freeText">Free text</button>
+                        </div>
+
+                        <div id="connectionCommandSetPanel" class="post-connect-panel hidden">
+                            <label for="commandSetSelect" data-i18n="connection.commandSet">Command Set</label>
+                            <div class="command-set-selector-row">
+                                <select id="commandSetSelect" class="form-control">
+                                    <option value="" data-i18n="commandSets.none">Select a command set</option>
+                                </select>
+                                <button type="button" id="editSelectedCommandSetBtn" class="btn btn-secondary btn-sm" data-i18n="common.edit">Edit</button>
+                                <button type="button" id="manageCommandSetsBtn" class="btn btn-secondary btn-sm" data-i18n="commands.workspace">Commands</button>
+                            </div>
+                        </div>
+
+                        <div id="connectionSingleCommandPanel" class="post-connect-panel hidden">
+                            <label for="connectionCommandSelect" data-i18n="commandModes.selectCommand">Saved Command</label>
+                            <div class="command-set-selector-row">
+                                <select id="connectionCommandSelect" class="form-control"></select>
+                                <button type="button" id="editSelectedCommandBtn" class="btn btn-secondary btn-sm" data-i18n="common.edit">Edit</button>
+                            </div>
+                            <label for="connectionCommandParameters" class="post-connect-parameters-label">
+                                <span data-i18n="commands.parameters">Parameters</span>
+                                <button type="button" class="info-tooltip-trigger" aria-label="About parameter overrides" data-i18n-aria-label="accessibility.aboutParameterOverrides" aria-describedby="commandParametersTooltip">?</button>
+                                <span id="commandParametersTooltip" class="info-tooltip" role="tooltip" data-i18n="commandModes.parametersTooltip">Leave unchanged to use the saved default. Editing parameters does not modify the saved Command.</span>
+                            </label>
+                            <input type="text" id="connectionCommandParameters" class="form-control" maxlength="4096">
+                        </div>
+
+                        <div id="connectionFreeTextPanel" class="post-connect-panel hidden">
+                            <label for="startupCommandsInput" data-i18n="commandModes.freeText">Free text</label>
+                            <textarea id="startupCommandsInput" class="form-control" rows="4" maxlength="4096" spellcheck="false"></textarea>
+                        </div>
+
+                        <div class="post-connect-preview-header">
+                            <span data-i18n="commandModes.exactPreview">Exact command preview</span>
+                        </div>
+                        <pre id="connectionCommandPreview" class="command-set-preview empty" aria-live="polite"></pre>
+                        <div id="legacyCommandsNotice" class="legacy-command-notice hidden">
+                            <span data-i18n="commandSets.legacyNotice">This profile still uses legacy free-text commands.</span>
+                            <button type="button" id="convertLegacyCommandsBtn" class="btn btn-secondary btn-sm" data-i18n="commandSets.convert">Convert</button>
+                        </div>
+                        <div class="field-hint" data-i18n="connection.commandSetHint">Runs on the remote host after a successful connection, not in SSHDeck. Not run again when reconnecting to an existing tmux session.</div>
+                    </div>
+
+                    {% if tmux_enabled %}
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="useTmuxCheck" {% if tmux_default %}checked{% endif %}>
+                            <span data-i18n="session.persistentTmux">Persistent session (tmux)</span>
+                        </label>
+                        <div class="field-hint" data-i18n="session.persistentTmuxHint">Keeps terminal alive on the remote host even when you close the browser or server restarts. Reattaches to existing tmux session automatically.</div>
+                    </div>
+                    {% endif %}
+
+                    <!-- W14 item 8: save-as-profile from the connection modal.
+                         The checkbox defaults OFF so an ordinary Connect is
+                         unchanged; only a SUCCESSFUL connect submitted with the
+                         box checked turns the form into a profile. Secrets never
+                         leave this form: the payload assembled on success carries
+                         host/port/user/auth/key and NEVER the password. The
+                         profile-name field is only active while the checkbox is
+                         checked. The auto-launch path (launchProfileForPane)
+                         submits this same form programmatically but never touches
+                         this checkbox, so it cannot couple a launch with a save
+                         -- the decoupling the retired negative test protected,
+                         now enforced by positive contracts in
+                         test_profile_launcher_ui.py. -->
+                    <div class="form-group" id="saveProfileGroup">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="saveProfileCheck">
+                            <span data-i18n="connection.saveAsProfile">Save as profile</span>
+                        </label>
+                        <div class="hidden" id="profileNameGroup">
+                            <label for="profileNameInput" data-i18n="connection.profileName">Profile Name</label>
+                            <input type="text" id="profileNameInput" class="form-control" maxlength="128" data-i18n-placeholder="connection.profileNamePlaceholder" placeholder="My Server">
+                            <div class="field-hint" id="profileHint"></div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" id="cancelConnectionBtn" data-i18n="common.cancel">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="connectBtn">
+                            <span class="btn-label" data-i18n="connection.connect">Connect</span>
+                            <span class="btn-spinner hidden" id="connectSpinner"></span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal modal-large modal-shell" id="profileManagementModal" role="dialog" aria-modal="true" aria-labelledby="profileManagementTitle" aria-hidden="true">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="profileManagementTitle" data-i18n="profiles.manage">Profiles</h2>
+                <button type="button" class="close" id="closeProfileManagementModal" aria-label="Close" data-i18n-aria-label="common.close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <section id="profileManagementView">
+                    <div class="profile-management-toolbar">
+                        <p data-i18n="profiles.manageHint">Save and update connection settings without connecting.</p>
+                        <button type="button" id="newProfileBtn" class="btn btn-primary" data-i18n="profiles.create">Create profile</button>
+                    </div>
+                    <div id="profileManagementList" class="profile-management-list"></div>
+                </section>
+
+                <section id="profileEditorView" class="hidden">
+                    <form id="profileEditorForm">
+                        <input type="hidden" id="profileEditorId">
+                        <div class="form-group">
+                            <label for="profileEditorName" data-i18n="connection.profileName">Profile Name *</label>
+                            <input type="text" id="profileEditorName" class="form-control" maxlength="128" required>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group flex-2">
+                                <label for="profileEditorHost" data-i18n="connection.host">Host *</label>
+                                <input type="text" id="profileEditorHost" class="form-control" required>
+                            </div>
+                            <div class="form-group flex-1">
+                                <label for="profileEditorPort" data-i18n="connection.port">Port *</label>
+                                <input type="number" id="profileEditorPort" class="form-control" min="1" max="65535" value="22" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="profileEditorUsername" data-i18n="auth.username">Username *</label>
+                            <input type="text" id="profileEditorUsername" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="profileEditorAuthType" data-i18n="connection.authMethod">Authentication Method</label>
+                            <select id="profileEditorAuthType" class="form-control">
+                                <option value="password" data-i18n="auth.password">Password</option>
+                                <option value="key" data-i18n="connection.sshKey">SSH Key</option>
+                                {% if tailscale_ssh_allowed %}<option value="tailscale" data-i18n="connection.tailscaleSSH">Tailscale SSH</option>{% endif %}
+                            </select>
+                        </div>
+                        <div class="form-group hidden" id="profileEditorKeyGroup">
+                            <label for="profileEditorKeySelect" data-i18n="connection.sshKey">SSH Key</label>
+                            <select id="profileEditorKeySelect" class="form-control"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="profileEditorJumpHostSelect" data-i18n="connection.jumpHost">Jump Host</label>
+                            <select id="profileEditorJumpHostSelect" class="form-control"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="profileEditorPostConnectMode" data-i18n="connection.runAfterConnect">Run after connecting</label>
+                            <select id="profileEditorPostConnectMode" class="form-control">
+                                <option value="none" data-i18n="commandModes.none">None</option>
+                                <option value="command_set" data-i18n="commandModes.commandSet">Command Set</option>
+                                <option value="command" data-i18n="commandModes.command">Command</option>
+                                <option value="free_text" data-i18n="commandModes.freeText">Free text</option>
+                            </select>
+                        </div>
+                        <div id="profileEditorCommandSetGroup" class="form-group hidden">
+                            <label for="profileEditorCommandSetSelect" data-i18n="connection.commandSet">Command Set</label>
+                            <select id="profileEditorCommandSetSelect" class="form-control"></select>
+                        </div>
+                        <div id="profileEditorCommandGroup" class="hidden">
+                            <div class="form-group">
+                                <label for="profileEditorCommandSelect" data-i18n="commandModes.selectCommand">Saved Command</label>
+                                <select id="profileEditorCommandSelect" class="form-control"></select>
+                            </div>
+                            <div class="form-group">
+                                <label for="profileEditorCommandParameters" data-i18n="commands.parameters">Parameters</label>
+                                <input type="text" id="profileEditorCommandParameters" class="form-control" maxlength="4096">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="profileEditorUseDefaultParameters" checked>
+                                    <span data-i18n="commandModes.useSavedParameters">Use saved default parameters</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div id="profileEditorFreeTextGroup" class="form-group hidden">
+                            <label for="profileEditorStartupCommands" data-i18n="commandModes.freeText">Free text</label>
+                            <textarea id="profileEditorStartupCommands" class="form-control" rows="5" maxlength="4096" spellcheck="false"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="profileEditorCommandPreview" data-i18n="commandModes.exactPreview">Exact command preview</label>
+                            <pre id="profileEditorCommandPreview" class="command-set-preview empty" aria-live="polite"></pre>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" id="cancelProfileEditorBtn" class="btn btn-secondary" data-i18n="common.cancel">Cancel</button>
+                            <button type="submit" class="btn btn-primary" data-i18n="common.save">Save</button>
+                        </div>
+                    </form>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal modal-wide modal-shell" id="keyManagementModal" role="dialog" aria-modal="true" aria-labelledby="keyManagementTitle" aria-hidden="true">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="keyManagementTitle" data-i18n="keys.manageSSHKeys">Manage SSH Keys</h2>
+                <button type="button" class="close" id="closeKeyModal" aria-label="Close" data-i18n-aria-label="common.close">&times;</button>
+            </div>
+            <div class="modal-body">
+
+                <div class="key-upload-section">
+                    <h3 data-i18n="keys.uploadNewKey">Upload New Key</h3>
+                    <form id="keyUploadForm">
+                        <div class="form-group">
+                            <label for="keyNameInput" data-i18n="keys.keyName">Key Name</label>
+                            <input type="text" id="keyNameInput" class="form-control" data-i18n-placeholder="keys.keyNamePlaceholder" placeholder="Production Server Key" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="keyContentInput" data-i18n="keys.privateKey">Private Key</label>
+                            <textarea id="keyContentInput" class="form-control" rows="10" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----
+..." required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary"><span data-i18n="keys.uploadKey">Upload Key</span> <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-arrow-up"></use></svg></button>
+                    </form>
+                </div>
+
+                <div class="keys-list-section">
+                    <h3 data-i18n="keys.storedKeys">Stored Keys</h3>
+                    <div id="keysList" class="keys-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal modal-xlarge modal-shell" id="commandSetsModal" role="dialog" aria-modal="true" aria-labelledby="commandSetsTitle" aria-hidden="true">
+        <div class="modal-content command-workspace-content command-set-modal-content">
+            <div class="modal-header">
+                <h2 id="commandSetsTitle" data-i18n="commandSets.manage">Command Sets</h2>
+                <button type="button" class="close" id="closeCommandSetsModal" aria-label="Close" data-i18n-aria-label="common.close">&times;</button>
+            </div>
+            <div class="modal-body command-workspace-body">
+
+                <section id="commandSetsPanel" class="command-workspace-panel command-set-modal-body">
+                <section id="commandSetManagementView">
+                    <div class="command-set-management-toolbar">
+                        <p data-i18n="commandSets.manageHint">Build reusable command sequences and assign one to any connection profile.</p>
+                        <button type="button" id="newCommandSetBtn" class="btn btn-primary" data-i18n="commandSets.create">Create command set</button>
+                    </div>
+                    <div id="commandSetManagementList" class="command-set-management-list"></div>
+                </section>
+
+                <section id="commandSetEditorView" class="hidden">
+                    <form id="commandSetForm">
+                        <h3 id="commandSetEditorTitle" data-i18n="commandSets.create">Create command set</h3>
+                        <div class="form-row">
+                            <div class="form-group flex-1">
+                                <label for="commandSetNameInput"><span data-i18n="commands.name">Name</span> *</label>
+                                <input id="commandSetNameInput" class="form-control" type="text" maxlength="128" required>
+                            </div>
+                            <div class="form-group flex-2">
+                                <label for="commandSetDescriptionInput" data-i18n="commands.description">Description</label>
+                                <input id="commandSetDescriptionInput" class="form-control" type="text">
+                            </div>
+                        </div>
+                        <div class="command-set-sudo-option">
+                            <label for="commandSetUseSudoInput">
+                                <input id="commandSetUseSudoInput" type="checkbox">
+                                <span data-i18n="commandSets.useSudo">Run commands with sudo</span>
+                            </label>
+                            <p data-i18n="commandSets.useSudoHint">Adds sudo to every non-empty command line. Lines already starting with sudo remain unchanged.</p>
+                        </div>
+                        <div class="command-set-builder">
+                            <section class="command-set-library-pane" aria-labelledby="commandSetLibraryHeading">
+                                <h4 id="commandSetLibraryHeading" data-i18n="commands.library">Command Library</h4>
+                                <input id="commandSetSearchInput" class="form-control" type="search" data-i18n-placeholder="commands.searchPlaceholder" placeholder="Search commands, parameters, or descriptions...">
+                                <div class="command-set-os-filters" aria-label="Operating system filter" data-i18n-aria-label="accessibility.operatingSystemFilter">
+                                    <button type="button" class="os-filter-btn command-set-os-filter active" data-os="all" data-i18n="commands.osAll">All</button>
+                                    <button type="button" class="os-filter-btn command-set-os-filter" data-os="linux">Linux</button>
+                                    <button type="button" class="os-filter-btn command-set-os-filter" data-os="macos">macOS</button>
+                                    <button type="button" class="os-filter-btn command-set-os-filter" data-os="bsd">BSD</button>
+                                    <button type="button" class="os-filter-btn command-set-os-filter" data-os="windows">Windows</button>
+                                </div>
+                                <div id="commandSetLibraryResults" class="command-set-library-results"></div>
+                            </section>
+                            <section class="command-set-steps-pane" aria-labelledby="commandSetStepsHeading">
+                                <div class="command-set-steps-heading">
+                                    <h4 id="commandSetStepsHeading" data-i18n="commandSets.steps">Steps</h4>
+                                    <button type="button" id="addInlineCommandStepBtn" class="btn btn-secondary btn-sm" data-i18n="commandSets.addFreeText">Add free text</button>
+                                </div>
+                                <div id="commandSetSteps" class="command-set-steps"></div>
+                            </section>
+                        </div>
+                        <div class="modal-footer command-set-editor-actions">
+                            <button type="button" id="cancelCommandSetBtn" class="btn btn-secondary" data-i18n="common.cancel">Cancel</button>
+                            <button type="submit" id="saveCommandSetBtn" class="btn btn-primary" data-i18n="common.save">Save</button>
+                        </div>
+                    </form>
+                </section>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal modal-wide modal-shell" id="jumpHostManagementModal" role="dialog" aria-modal="true" aria-labelledby="jumpHostManagementTitle" aria-hidden="true">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="jumpHostManagementTitle" data-i18n="jumphosts.manage">Manage Jump Hosts</h2>
+                <button type="button" class="close" id="closeJumpHostModal" aria-label="Close" data-i18n-aria-label="common.close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="key-upload-section">
+                    <h3 data-i18n="jumphosts.addNew">Add Jump Host</h3>
+                    <form id="jumpHostForm">
+                        <div class="form-group">
+                            <label for="jhNameInput" data-i18n="jumphosts.name">Name</label>
+                            <input type="text" id="jhNameInput" class="form-control" placeholder="Office Bastion" required>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group flex-2">
+                                <label for="jhHostInput" data-i18n="connection.host">Host</label>
+                                <input type="text" id="jhHostInput" class="form-control" placeholder="bastion.example.com" required>
+                            </div>
+                            <div class="form-group flex-1">
+                                <label for="jhPortInput" data-i18n="connection.port">Port</label>
+                                <input type="number" id="jhPortInput" class="form-control" value="22">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="jhUsernameInput" data-i18n="auth.username">Username</label>
+                            <input type="text" id="jhUsernameInput" class="form-control" placeholder="bastion_user" required>
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n="connection.authMethod">Authentication Method</label>
+                            <div class="auth-type-selector">
+                                <label class="radio-label"><input type="radio" name="jhAuthType" value="password" checked> <span data-i18n="auth.password">Password</span></label>
+                                <label class="radio-label"><input type="radio" name="jhAuthType" value="key"> <span data-i18n="connection.sshKey">SSH Key</span></label>
+                            </div>
+                        </div>
+                        <div class="form-group hidden" id="jhKeyGroup">
+                            <label for="jhKeySelect" data-i18n="connection.sshKey">SSH Key</label>
+                            <select id="jhKeySelect" class="form-control">
+                                <option value="" data-i18n="connection.selectSSHKey">-- Select SSH Key --</option>
+                            </select>
+                        </div>
+                        <p class="field-hint" data-i18n="jumphosts.noPasswordHint">Passwords are never stored — you enter them when connecting.</p>
+                        <button type="submit" class="btn btn-primary"><span data-i18n="jumphosts.add">Add Jump Host</span></button>
+                    </form>
+                </div>
+                <div class="keys-list-section">
+                    <h3 data-i18n="jumphosts.saved">Saved Jump Hosts</h3>
+                    <div id="jumpHostsList" class="keys-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal modal-shell" id="fileTransferModal" role="dialog" aria-modal="true" aria-labelledby="fileTransferTitle" aria-hidden="true">
+        <div class="modal-content">
+            <div class="modal-header">
+                <!-- NAMING IS LOAD-BEARING (Entry 40, review round 6).
+                     This modal is the BROWSER-to-server tooling: it uploads a local
+                     file to one session and downloads a remote file to the browser.
+                     It cannot express a second SSH host, so it must never carry the
+                     name "File Transfer" — that name belongs exclusively to the
+                     global dual-end server-to-server surface (#fileTransferOpenBtn ->
+                     #sftpFileManager). Keyed to files.uploadDownload in all six
+                     locales; asserted by tests/browser/file_transfer_contract.mjs. -->
+                <h2 id="fileTransferTitle" data-i18n="files.uploadDownload">Upload / Download</h2>
+                <button type="button" class="close" id="closeFileTransferModal" aria-label="Close" data-i18n-aria-label="common.close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="transfer-section">
+                    <h3 data-i18n="files.uploadToServer">Upload File to Server</h3>
+                    <form id="uploadForm">
+                        <div class="form-group">
+                            <label for="uploadSessionSelect" data-i18n="files.selectSession">Select Session</label>
+                            <select id="uploadSessionSelect" class="form-control" required>
+                                <option value="" data-i18n="files.selectActiveSession">-- Select Active Session --</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="uploadFileInput" data-i18n="files.localFile">Local File</label>
+                            <input type="file" id="uploadFileInput" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="uploadRemotePathInput" data-i18n="files.remotePath">Remote Path</label>
+                            <input type="text" id="uploadRemotePathInput" class="form-control" placeholder="/home/user/file.txt" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary"><span data-i18n="files.upload">Upload</span> <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-arrow-up"></use></svg></button>
+                    </form>
+                    <div class="progress-container hidden" id="uploadProgress">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="uploadProgressFill"></div>
+                        </div>
+                        <div class="progress-text" id="uploadProgressText">0%</div>
+                    </div>
+                </div>
+
+                <div class="transfer-section">
+                    <h3 data-i18n="files.downloadFromServer">Download File from Server</h3>
+                    <form id="downloadForm">
+                        <div class="form-group">
+                            <label for="downloadSessionSelect" data-i18n="files.selectSession">Select Session</label>
+                            <select id="downloadSessionSelect" class="form-control" required>
+                                <option value="" data-i18n="files.selectActiveSession">-- Select Active Session --</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="downloadRemotePathInput" data-i18n="files.remotePath">Remote Path</label>
+                            <input type="text" id="downloadRemotePathInput" class="form-control" placeholder="/home/user/file.txt" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary"><span data-i18n="files.download">Download</span> <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-download"></use></svg></button>
+                    </form>
+                    <div class="progress-container hidden" id="downloadProgress">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="downloadProgressFill"></div>
+                        </div>
+                        <div class="progress-text" id="downloadProgressText">0%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="notification-container" id="notificationContainer" role="status" aria-live="polite" aria-atomic="true"></div>
+
+    <div class="modal modal-shell" id="commandFormModal" role="dialog" aria-modal="true" aria-labelledby="commandFormTitle" aria-hidden="true">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="commandFormTitle" data-i18n="commands.addCommand">Add New Command</h2>
+                <button type="button" class="close" id="closeCommandFormModal" aria-label="Close" data-i18n-aria-label="common.close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="commandForm">
+                    <div class="form-group">
+                        <label for="commandFormName"><span data-i18n="commands.name">Name</span> *</label>
+                        <input type="text" id="commandFormName" class="form-control" data-i18n-placeholder="commands.namePlaceholder" placeholder="e.g., Update System" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="commandFormCommand"><span data-i18n="commands.command">Command</span> *</label>
+                        <textarea id="commandFormCommand" class="form-control" rows="3" maxlength="4096" data-i18n-placeholder="commands.commandPlaceholder" placeholder="e.g., apt update" required></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="commandFormParams"><span data-i18n="commands.parameters">Parameters</span> (<span data-i18n="common.optional">Optional</span>)</label>
+                        <input type="text" id="commandFormParams" class="form-control" data-i18n-placeholder="commands.parametersPlaceholder" placeholder="e.g., -y">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="commandFormDescription"><span data-i18n="commands.description">Description</span> *</label>
+                        <textarea id="commandFormDescription" class="form-control" rows="3" data-i18n-placeholder="commands.descriptionPlaceholder" placeholder="e.g., Update package repository lists" required></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="commandFormCategory" data-i18n="commands.category">Category</label>
+                        <select id="commandFormCategory" class="form-control">
+                            <option value="custom" data-i18n="commands.categoryCustom">Custom</option>
+                            <option value="system" data-i18n="commands.categorySystem">System</option>
+                            <option value="network" data-i18n="commands.categoryNetwork">Network</option>
+                            <option value="files" data-i18n="commands.categoryFiles">Files</option>
+                            <option value="docker" data-i18n="commands.categoryDocker">Docker</option>
+                            <option value="database" data-i18n="commands.categoryDatabase">Database</option>
+                            <option value="git" data-i18n="commands.categoryGit">Git</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label data-i18n="commands.operatingSystems">Operating Systems *</label>
+                        <div class="checkbox-group">
+                            <label><input type="checkbox" name="commandOs" value="all" id="osAll"> <span data-i18n="commands.osAll">All</span></label>
+                            <label><input type="checkbox" name="commandOs" value="linux"> Linux</label>
+                            <label><input type="checkbox" name="commandOs" value="macos"> macOS</label>
+                            <label><input type="checkbox" name="commandOs" value="bsd"> BSD</label>
+                            <label><input type="checkbox" name="commandOs" value="windows"> Windows</label>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" id="cancelCommandFormBtn">
+                            <span data-i18n="common.cancel">Cancel</span>
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <span data-i18n="common.save">Save</span> <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-circle-check"></use></svg>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal modal-small modal-shell" id="commandPaletteModal" role="dialog" aria-modal="true" aria-labelledby="commandPaletteTitle" aria-hidden="true">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="commandPaletteTitle" data-i18n="palette.title">Command Palette</h2>
+                <button type="button" class="close" id="closeCommandPaletteModal" aria-label="Close command palette" data-i18n-aria-label="common.close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="commandPaletteInput" class="form-control" data-i18n-placeholder="palette.placeholder" placeholder="Type a command..." autocomplete="off">
+                <div class="palette-list" id="commandPaletteList"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal modal-small modal-shell" id="shortcutsModal" role="dialog" aria-modal="true" aria-labelledby="shortcutsTitle" aria-hidden="true">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="shortcutsTitle" data-i18n="shortcuts.title">Keyboard Shortcuts</h2>
+                <button type="button" class="close" id="closeShortcutsModal" aria-label="Close shortcuts" data-i18n-aria-label="common.close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="shortcuts-list" id="shortcutsList"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Orphaned tmux sessions (owner ruling 2026-09-18): SSHDeck-prefixed
+         tmux sessions on the host that no saved session of any user points
+         at. Listed and closed only on explicit request, never automatically. -->
+    <div class="modal modal-small modal-shell" id="tmuxOrphansModal" role="dialog" aria-modal="true" aria-labelledby="tmuxOrphansTitle" aria-hidden="true">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="tmuxOrphansTitle" data-i18n="orphans.title">Orphaned tmux sessions</h2>
+                <button type="button" class="close" id="closeTmuxOrphansModal" aria-label="Close" data-i18n-aria-label="common.close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="tmuxOrphansStatus" class="form-hint" aria-live="polite"></p>
+                <div class="shortcuts-list" id="tmuxOrphansList"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal modal-shell" id="dropUploadModal" role="dialog" aria-modal="true" aria-labelledby="dropUploadTitle" aria-hidden="true">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="dropUploadTitle" data-i18n="dropUpload.title">Upload File</h2>
+                <button type="button" class="close" id="closeDropUploadModal" aria-label="Close upload dialog" data-i18n-aria-label="common.close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="dropUploadForm">
+                    <div class="form-group">
+                        <label for="dropUploadFileName" data-i18n="files.localFile">File</label>
+                        <input type="text" id="dropUploadFileName" class="form-control" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label for="dropUploadPath" data-i18n="files.remotePath">Remote Path</label>
+                        <input type="text" id="dropUploadPath" class="form-control" placeholder="./file.txt" required>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" id="cancelDropUploadBtn" data-i18n="common.cancel">Cancel</button>
+                        <button type="submit" class="btn btn-primary" data-i18n="files.upload">Upload</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal modal-shell" id="paneAssignmentModal" role="dialog" aria-modal="true" aria-labelledby="paneAssignmentTitle" aria-hidden="true">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="paneAssignmentTitle" data-i18n="panes.assignTitle">Assign Sessions to Panes</h2>
+                <button type="button" class="close" id="closePaneAssignmentModal" aria-label="Close" data-i18n-aria-label="common.close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="pane-assignment-info">
+                    <p data-i18n="panes.assignInfo">Select which sessions to display in each pane. You can assign existing sessions or create new connections.</p>
+                </div>
+                <div id="panePreview" class="pane-preview" aria-hidden="true"></div>
+                <div id="paneAssignmentList" class="pane-assignment-list"></div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelPaneAssignment" data-i18n="common.cancel">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="applyPaneAssignment" data-i18n="common.apply">Apply</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal modal-xlarge" id="filePreviewModal" role="dialog" aria-modal="true" aria-labelledby="filePreviewTitle" aria-hidden="true">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="preview-header-info">
+                    <h2 id="filePreviewTitle" data-i18n="preview.title">File Preview</h2>
+                    <span class="preview-filename" id="previewFilename"></span>
+                    <span class="preview-size" id="previewSize"></span>
+                </div>
+                <div class="preview-header-actions">
+                    <button class="btn btn-icon" id="previewCopyBtn" title="Copy to clipboard" data-i18n-title="preview.copy" aria-label="Copy to clipboard" data-i18n-aria-label="preview.copy">
+                        <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-copy"></use></svg>
+                    </button>
+                    <button class="btn btn-icon" id="previewDownloadBtn" title="Download file" data-i18n-title="preview.download" aria-label="Download file" data-i18n-aria-label="preview.download">
+                        <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-download"></use></svg>
+                    </button>
+                    <button class="btn btn-icon hidden" id="previewEditBtn" title="Edit file" data-i18n-title="editor.edit" aria-label="Edit file" data-i18n-aria-label="editor.edit">
+                        <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-pencil"></use></svg>
+                    </button>
+                    <button class="btn btn-icon" id="previewRefreshBtn" title="Refresh" data-i18n-title="preview.refresh" aria-label="Refresh" data-i18n-aria-label="preview.refresh">
+                        <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-refresh-cw"></use></svg>
+                    </button>
+                    <button type="button" class="close" id="closeFilePreviewModal" aria-label="Close" data-i18n-aria-label="common.close">&times;</button>
+                </div>
+            </div>
+            <div class="modal-body preview-modal-body">
+                <div class="preview-loading hidden" id="previewLoading">
+                    <div class="spinner"></div>
+                    <span data-i18n="preview.loading">Loading preview...</span>
+                </div>
+                <div class="preview-error hidden" id="previewError">
+                    <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-circle-alert"></use></svg>
+                    <span id="previewErrorMessage"></span>
+                </div>
+                <div class="preview-binary hidden" id="previewBinary">
+                    <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-file"></use></svg>
+                    <p data-i18n="preview.binaryUnavailable">Binary file - cannot display preview</p>
+                    <button class="btn btn-primary" id="previewBinaryDownload" data-i18n="preview.downloadFile">Download File</button>
+                </div>
+                <div class="preview-image hidden" id="previewImage">
+                    <img id="previewImageElement" alt="Image preview" />
+                </div>
+                <div class="preview-content" id="previewContent">
+                    <div class="preview-line-numbers" id="previewLineNumbers"></div>
+                    <pre><code id="previewCode"></code></pre>
+                </div>
+                <div class="preview-truncated hidden" id="previewTruncated">
+                    <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-info"></use></svg>
+                    <span>File truncated - showing first <span id="previewTruncatedSize"></span> of <span id="previewTotalSize"></span></span>
+                </div>
+                <div class="file-editor hidden" id="fileEditor">
+                    <div class="editor-toolbar">
+                        <button class="btn btn-primary" id="editorSaveBtn" data-i18n="editor.save">Save</button>
+                        <button class="btn btn-secondary" id="editorCancelBtn" data-i18n="editor.cancel">Cancel</button>
+                        <span class="editor-status" id="editorStatus"></span>
+                    </div>
+                    <textarea class="editor-content" id="editorContent" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" wrap="off"></textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Session lifecycle overlay: a permanent ROOT OVERLAY HOST, a direct body
+         child. Not inside .header, not inside .main-content/#workspace, not in
+         .session-tabs-row or #mobileInputBar. Plan v5 section 3 keeps the touch
+         session row carrying only the strip and the composer dock carrying no
+         second menu.
+
+         Both nearer homes were measured and rejected:
+           * .header parent  — ranks correctly in portrait (its z-index:1000
+             context contains the sheet), but the header is display:none while
+             the soft keyboard is open, which collapses this whole subtree to a
+             0x0 rect and makes the sheet unopenable there.
+           * #workspace parent — survives that, but .main-content
+             sets isolation:isolate with z-index:1, forming a stacking context
+             that clamps the sheet's z-index:2000 below the sibling fixed
+             .header (z-index:1000); #touchActionRow then intercepts real
+             clicks on the sheet.
+         A body child sits in the ROOT stacking context (body is position:
+         relative with z-index:auto, and nothing on html/body isolates), so
+         z-index:2000 outranks .header's 1000 with no change to .main-content,
+         .header, isolation, global z-order, theme or cache pins. It never
+         relocates.
+
+         It consumes no layout space and intercepts nothing while closed: the
+         control is display:contents on touch (so it generates no box), the
+         trigger is display:none there, and the sheet is [hidden] -> display:
+         none. Open, the sheet is position:fixed and therefore out of flow. -->
+    <div id="sessionActionsControl" class="session-actions-control">
+        <button id="sessionActionsBtn" class="session-actions-btn" type="button"
+                aria-label="Session actions" data-i18n-aria-label="session.actions"
+                aria-haspopup="dialog" aria-controls="sessionActionsSheet"
+                aria-expanded="false" disabled>
+            <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-menu"></use></svg>
+        </button>
+        <section id="sessionActionsSheet" class="session-actions-sheet"
+                 role="dialog" aria-labelledby="sessionActionsTitle"
+                 aria-hidden="true" hidden inert>
+            <h2 id="sessionActionsTitle" class="visually-hidden"
+                data-i18n="session.actions">Session actions</h2>
+            <!-- S5 / mockup line 184: the sheet opens with a heading naming the
+                 selected session and telling the user how it got selected:
+                 <div class="tw5-menu-heading"><div><strong>staging</strong>
+                   <small>Đã chọn · chạm lại hoặc nhấn giữ</small></div>
+                   <span class="tw5-dot"></span></div>
+                 The name and the dot's state are written by
+                 SessionManager.setLifecycleActionTarget, the sole writer of the
+                 target, so the heading can never name a different session from
+                 the one the four rows below act on. -->
+            <div class="session-actions-heading">
+                <div>
+                    <strong id="sessionActionsHeadingName"></strong>
+                    <small id="sessionActionsHeadingDetail"
+                           data-i18n="session.selectedHint">Selected · tap again or long-press</small>
+                </div>
+                <span id="sessionActionsHeadingDot" class="status-dot" aria-hidden="true"></span>
+            </div>
+            <button id="sessionActionRename" class="session-action-item" type="button" data-lifecycle-action="rename"
+                    disabled>
+                <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-pencil"></use></svg>
+                <span data-i18n="session.rename">Rename session</span>
+            </button>
+            <button id="sessionActionReconnect" class="session-action-item" type="button" data-lifecycle-action="reconnect"
+                    disabled>
+                <!-- plug-zap, not refresh-cw: mockup line 184 gives Reconnect
+                     plug-zap and keeps refresh-cw for the toolbar's own
+                     reconnect. Reset below already took rotate-ccw for the same
+                     "these three must not share a glyph" reason. -->
+                <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-plug-zap"></use></svg>
+                <span data-i18n="session.reconnect">Reconnect</span>
+            </button>
+            <button id="sessionActionReset" class="session-action-item" type="button" data-lifecycle-action="reset"
+                    disabled>
+                <!-- rotate-ccw, not refresh-cw: Reset and Reconnect sit adjacent in
+                     this menu and the old sprite drew both with the same glyph.
+                     Reset rewinds the session, Reconnect re-establishes it. -->
+                <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-rotate-ccw"></use></svg>
+                <span data-i18n="session.reset">Reset</span>
+            </button>
+            <button id="sessionActionAssign" class="session-action-item" type="button" data-lifecycle-action="assign"
+                    disabled>
+                <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-panels-top-left"></use></svg>
+                <span data-i18n="session.assignPane">Assign to a pane…</span>
+            </button>
+            <button id="sessionActionOrphans" class="session-action-item" type="button" data-lifecycle-action="orphans"
+                    disabled>
+                <!-- Enabled only for a LIVE tmux session: the sweep lists and
+                     kills over that session's own transport. -->
+                <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-trash-2"></use></svg>
+                <span data-i18n="session.orphans">Clean up orphaned tmux…</span>
+            </button>
+            <button id="sessionActionClose" class="session-action-item session-action-close" type="button" data-lifecycle-action="close"
+                    disabled>
+                <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-x"></use></svg>
+                <span data-i18n="session.close">Close session</span>
+            </button>
+        </section>
+    </div>
+
+    <!-- S5 confirm dialog. Mockup line 186:
+           <section class="tw5-confirm" role="dialog" aria-modal="true"
+             aria-label="Xác nhận Reset"><div class="tw5-confirm-icon">
+             <i data-lucide="rotate-ccw"/></div><strong>Tạo phiên staging mới?</strong>
+             <p>Phiên hiện tại sẽ đóng. Profile và ghi chú vẫn được giữ.</p>
+             <div><button class="tw5-control" data-state="session-actions">Hủy</button>
+             <button class="tw5-control tw5-danger-control">Khởi tạo mới</button></div></section>
+         This replaces window.confirm() in requestResetSession. The native
+         dialog cannot be themed (it ignores all ten themes), cannot be reached
+         by the browser suites, and on a touch shell is dismissed by the same
+         tap that opened the sheet -- so Reset was effectively unconfirmable
+         there. Kept OUTSIDE the modal stack for the same reason
+         #sessionActionsControl is: an ancestor transform would re-anchor its
+         position:fixed.
+
+         EVERY VARIABLE PART IS EMPTY IN THE MARKUP, deliberately.
+
+         Reconnect, Reset and Close all share this one dialog, and the body,
+         accept label, icon and danger class used to be hardcoded here to
+         RESET's copy. Measured on the deployed build
+         (tests/browser/defect2_action_semantics_probe.mjs): all three actions
+         showed "The current connection closes and a fresh session starts
+         without reattaching tmux", the accept button read "Start fresh", the
+         icon was rotate-ccw and the button carried the danger class -- so
+         Reconnect told the user it would DISCARD their tmux session, and Close
+         told them a fresh session would start. Three different actions, one
+         piece of copy, and the copy was wrong for two of them.
+
+         openSessionConfirm() now writes all five, and resets every one on each
+         open so no part of a previous action's dialog can survive into the
+         next. There is nothing to inherit from here, so a caller that forgets a
+         field gets a visibly empty dialog rather than a plausible-looking lie
+         about a different action. -->
+    <div id="sessionConfirmBackdrop" class="session-confirm-backdrop" hidden></div>
+    <section id="sessionConfirm" class="session-confirm" role="dialog"
+             aria-modal="true" aria-labelledby="sessionConfirmTitle"
+             aria-describedby="sessionConfirmBody" hidden inert>
+        <div class="session-confirm-icon" aria-hidden="true">
+            <svg class="icon" aria-hidden="true"><use id="sessionConfirmIcon" href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-circle-alert"></use></svg>
+        </div>
+        <strong id="sessionConfirmTitle"></strong>
+        <p id="sessionConfirmBody"></p>
+        <div class="session-confirm-actions">
+            <button id="sessionConfirmCancel" type="button"
+                    data-i18n="common.cancel">Cancel</button>
+            <button id="sessionConfirmAccept" type="button"></button>
+        </div>
+    </section>
+
+    <script src="{{ url_for('static', filename='vendor/xterm/xterm.js') }}?v=6"></script>
+    <script src="{{ url_for('static', filename='vendor/xterm/xterm-addon-fit.js') }}?v=6"></script>
+    <script src="{{ url_for('static', filename='vendor/xterm/xterm-addon-unicode11.js') }}?v=1"></script>
+    <script src="{{ url_for('static', filename='vendor/xterm/xterm-addon-search.js') }}?v=6"></script>
+    <script src="{{ url_for('static', filename='vendor/highlight/highlight.min.js') }}?v=1"></script>
+    <script src="{{ url_for('static', filename='vendor/socketio/socket.io.min.js') }}?v=1"></script>
+
+    <!-- The reader's strings. English is the fallback every key falls back to,
+         so it is always here; the reader's own language is the ONE extra file
+         the server adds, chosen from the `lang` cookie (app/__init__.py,
+         reader_language) so nothing flashes in English first. Written as one
+         literal line per language rather than a computed path: the browser
+         gates render this template with a plain substitution that cannot
+         evaluate Jinja expressions, and a computed src would reach them as an
+         empty one. -->
+    <script src="{{ url_for('static', filename='js/i18n/en.js') }}?v=1"></script>
+{% if lang == 'vi' %}    <script src="{{ url_for('static', filename='js/i18n/vi.js') }}?v=1"></script>
+{% elif lang == 'de' %}    <script src="{{ url_for('static', filename='js/i18n/de.js') }}?v=1"></script>
+{% elif lang == 'fr' %}    <script src="{{ url_for('static', filename='js/i18n/fr.js') }}?v=1"></script>
+{% elif lang == 'es' %}    <script src="{{ url_for('static', filename='js/i18n/es.js') }}?v=1"></script>
+{% elif lang == 'zh' %}    <script src="{{ url_for('static', filename='js/i18n/zh.js') }}?v=1"></script>
+{% endif %}    <script src="{{ url_for('static', filename='js/i18n.js') }}?v=52" data-i18n-version="1"></script>
+
+    <script src="{{ url_for('static', filename='js/command-set-utils.js') }}?v=1"></script>
+    <script src="{{ url_for('static', filename='js/profile-launcher-utils.js') }}?v=1"></script>
+    <script src="{{ url_for('static', filename='js/command-workspace.js') }}?v=4"></script>
+
+    <script src="{{ url_for('static', filename='js/terminal-manager.js') }}?v=93"></script>
+    <script src="{{ url_for('static', filename='js/session-manager.js') }}?v=69"></script>
+    <script src="{{ url_for('static', filename='js/broadcast-input.js') }}?v=9"></script>
+    <script src="{{ url_for('static', filename='js/profile-manager.js') }}?v=4"></script>
+    <script src="{{ url_for('static', filename='js/jump-host-manager.js') }}?v=4"></script>
+    <script src="{{ url_for('static', filename='js/command-library.js') }}?v=11"></script>
+    <script src="{{ url_for('static', filename='js/command-set-manager.js') }}?v=2"></script>
+    <script src="{{ url_for('static', filename='js/connection-command-manager.js') }}?v=2"></script>
+    <script src="{{ url_for('static', filename='js/file-transfer.js') }}?v=2"></script>
+    <script src="{{ url_for('static', filename='js/browser-filesystem.js') }}?v=2"></script>
+    <script src="{{ url_for('static', filename='js/sftp-file-manager.js') }}?v=16"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=94"></script>
+    <script src="{{ url_for('static', filename='js/header-menus.js') }}?v=13"></script>
+    <!-- After header-menus.js: it owns #mobileMoreBtn's listeners, and this
+         module MOVES that button into the touch action row. Binding first means
+         the listener travels with the node. -->
+    <script src="{{ url_for('static', filename='js/touch-action-row.js') }}?v=9"></script>
+    <script>
+        const flashedMessages = {{ get_flashed_messages(with_categories=true) | tojson }};
+        flashedMessages.forEach(([category, message]) => {
+            if (!window.showNotification) {
+                return;
+            }
+            const type = category === 'error' ? 'error' : (category === 'success' ? 'success' : 'info');
+            showNotification(message, type);
+        });
+    </script>
+
+</body>
+</html>

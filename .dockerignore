@@ -1,0 +1,82 @@
+# Git
+.git/
+.github/
+.gitignore
+
+# Virtual environment
+venv/
+env/
+ENV/
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment and secrets - CRITICAL
+.env
+.env.local
+.env.production
+
+# User data directory - contains sensitive data
+data/
+
+# AI assistant files & internal docs (must never end up in the public image)
+CLAUDE.md
+AGENTS.md
+.claude/
+plans/
+handoff/
+DECISIONS.md
+DEPLOY.md
+S36_FIX_SUMMARY.txt
+
+# Local one-off browser probes are not application assets.
+dbg_*.mjs
+
+# Knowledge graph (local dev artifact; nothing builds or publishes it)
+graphify-out/
+
+# Logs
+*.log
+logs/
+
+# Node / frontend tooling (vendored assets live in static/vendor/ and are
+# already committed; node_modules is only needed to regenerate them).
+node_modules/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Documentation (not needed in container)
+README.md
+docs/
+
+# Test files
+tests/
+test_*.py
+*_test.py
+
+# Backup files
+*.bak
+*.backup
+*.orig

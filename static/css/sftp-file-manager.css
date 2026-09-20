@@ -1,0 +1,2175 @@
+
+#sftpFileManager .modal-content {
+    width: 95%;
+    max-width: 1400px;
+    height: 90vh;
+    max-height: none;
+    display: flex;
+    flex-direction: column;
+}
+
+#sftpFileManager .modal-header h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#sftpFileManager .modal-header h2 .icon {
+    width: 24px;
+    height: 24px;
+    color: var(--accent-primary);
+}
+
+#sftpFileManager .modal-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    overflow: hidden;
+    gap: 12px;
+}
+
+#fmQuickConnectModal .fm-qc-modal {
+    max-width: 450px;
+}
+
+.fm-qc-divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: 16px 0;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.fm-qc-divider::before,
+.fm-qc-divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.fm-qc-divider span {
+    padding: 0 12px;
+}
+
+#fmQuickConnectModal .form-control {
+    width: 100%;
+}
+
+#fmQuickConnectModal .form-row {
+    display: flex;
+    gap: 12px;
+}
+
+#fmQuickConnectModal .flex-1 {
+    flex: 1;
+}
+
+#fmQuickConnectModal .flex-2 {
+    flex: 2;
+}
+
+#fmQuickConnectModal .input-wrapper.with-toggle {
+    position: relative;
+}
+
+#fmQuickConnectModal .input-wrapper.with-toggle input {
+    padding-right: 40px;
+}
+
+#fmQuickConnectModal .password-toggle {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#fmQuickConnectModal .password-toggle:hover {
+    color: var(--text-primary);
+}
+
+#fmQuickConnectModal .password-toggle .icon {
+    width: 18px;
+    height: 18px;
+}
+
+#fmQuickConnectModal .btn-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+#fmQuickConnectModal .btn-spinner.hidden {
+    display: none;
+}
+
+.fm-toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.fm-toolbar-left,
+.fm-toolbar-right {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.fm-toolbar-center {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin: 0 auto;
+}
+
+.fm-toolbar .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    font-size: 13px;
+}
+
+.fm-toolbar .btn .icon {
+    width: 18px;
+    height: 18px;
+}
+
+.fm-toolbar .btn .btn-text {
+    display: inline;
+}
+
+@media (max-width: 1100px) {
+    .fm-toolbar .btn .btn-text {
+        display: none;
+    }
+    .fm-toolbar .btn {
+        padding: 8px;
+    }
+}
+
+.fm-panes {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.fm-pane {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-tertiary);
+    border: 2px solid var(--border-color);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: border-color 0.2s ease;
+}
+
+.fm-pane.active {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px var(--accent-primary-glow);
+}
+
+.fm-pane.drop-target {
+    border-color: var(--success-color);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--success-color) 20%, transparent);
+    background: color-mix(in srgb, var(--success-color) 5%, transparent);
+}
+
+.fm-pane.drop-target::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: color-mix(in srgb, var(--success-color) 10%, transparent);
+    pointer-events: none;
+    z-index: 10;
+}
+
+.fm-pane.drop-target[data-pane="left"]::after,
+.fm-pane.drop-target[data-pane="right"]::after {
+    content: 'Drop to transfer';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--success-color);
+    color: white;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    z-index: 20;
+    pointer-events: none;
+    box-shadow: var(--shadow-lg);
+}
+
+/* Text only: no emoji anywhere in the shell (Entry 22.2). A CSS
+   `content` string cannot reference the sprite, and the sibling drop label at
+   line 214 is already plain text, so this matches it rather than inventing a
+   pseudo-element glyph. */
+.fm-pane.drop-target.ssh::after {
+    content: 'Drop here (SSH Server)';
+    background: var(--success-color, #48bb78);
+}
+
+.fm-pane-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.fm-pane-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.fm-nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.fm-nav-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+.fm-nav-btn:active {
+    background: var(--bg-active);
+}
+
+.fm-nav-btn .icon {
+    width: 18px;
+    height: 18px;
+}
+
+.fm-breadcrumb {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.fm-source-select {
+    flex: 1;
+    padding: 8px 12px;
+    font-size: 13px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.fm-source-select:hover {
+    border-color: var(--border-hover);
+}
+
+.fm-source-select:focus {
+    border-color: var(--accent-primary);
+    outline: none;
+    box-shadow: 0 0 0 2px var(--accent-primary-glow);
+}
+
+.fm-source-select option {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    padding: 8px;
+}
+
+.fm-source-select optgroup {
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-style: normal;
+}
+
+.fm-host-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 12px;
+    margin-left: 8px;
+}
+
+.fm-host-badge.browser-local {
+    background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
+    color: var(--accent-primary);
+}
+
+.fm-host-badge.ssh {
+    background: color-mix(in srgb, var(--success-color) 15%, transparent);
+    color: var(--success-color);
+}
+
+.fm-host-badge.quick-connect {
+    background: color-mix(in srgb, var(--warning-color) 15%, transparent);
+    color: var(--warning-color);
+}
+
+.fm-host-badge-icon {
+    font-size: 14px;
+}
+
+.fm-path-input {
+    flex: 1;
+    padding: 6px 10px;
+    font-size: 13px;
+    font-family: var(--font-mono);
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+}
+
+.fm-path-input:focus {
+    border-color: var(--accent-primary);
+    outline: none;
+    box-shadow: 0 0 0 2px var(--accent-primary-glow);
+}
+
+.fm-pane-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.fm-pane-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 14px;
+}
+
+.fm-pane-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.fm-file-list {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 8px;
+}
+
+.fm-file-item {
+    display: grid;
+    grid-template-columns: 24px 1fr auto;
+    gap: 10px;
+    align-items: center;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+    border: 1px solid transparent;
+}
+
+.fm-file-item:hover {
+    background: var(--bg-hover);
+}
+
+.fm-file-item.selected {
+    background: var(--accent-primary-glow);
+    border-color: var(--accent-primary);
+}
+
+.fm-file-item.dragging {
+    opacity: 0.5;
+    transform: scale(0.98);
+}
+
+.fm-file-item.cut {
+    opacity: 0.5;
+}
+
+.fm-file-icon.icon {
+    width: 24px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+.fm-file-icon.folder {
+    color: var(--warning-color, #ffc107);
+}
+
+.fm-file-icon.icon.file {
+    color: var(--text-secondary);
+    height: 18px;
+}
+
+.fm-file-icon.icon.parent {
+    color: var(--accent-primary);
+    height: 18px;
+}
+
+.fm-file-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.fm-file-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.fm-file-item.directory .fm-file-name {
+    font-weight: 600;
+}
+
+.fm-file-item.directory:hover {
+    background: color-mix(in srgb, var(--warning-color) 10%, transparent);
+    border-color: color-mix(in srgb, var(--warning-color) 30%, transparent);
+}
+
+.fm-file-item.directory:hover .fm-file-icon.folder {
+    transform: scale(1.1);
+    transition: transform 0.15s ease;
+}
+
+.fm-file-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+/* P3 / mockup line 182: the row's trailing slot is a chevron-right, not a size
+   column -- the mockup states a row as <strong>name</strong><small>kind</small>
+   plus one affordance glyph. The size moved INTO the meta line, so it is still
+   shown and the 70px right column that pushed long names into an ellipsis at
+   255px is gone. The .fm-file-size rule is DELETED with the element.
+
+   The spacer keeps files aligned with folders: only a directory is navigable,
+   so only a directory gets the chevron, but a missing third grid cell would
+   shift every file row's meta text. */
+.fm-file-chevron.icon,
+.fm-file-chevron-spacer {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    color: var(--text-muted);
+}
+
+.fm-pane-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 14px;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.fm-pane-status {
+    display: flex;
+    gap: 16px;
+}
+
+.fm-pane-status span {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.fm-drop-zone {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 40px 20px;
+    border: 2px dashed var(--border-color);
+    border-radius: 8px;
+    margin: 12px;
+    text-align: center;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.fm-drop-zone:hover,
+.fm-drop-zone.drag-over {
+    border-color: var(--accent-primary);
+    background: var(--accent-primary-glow);
+}
+
+.fm-drop-zone-icon {
+    font-size: 48px;
+    color: var(--text-muted);
+}
+
+.fm-drop-zone-text {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.fm-drop-zone-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.fm-select-folder-btn {
+    margin-top: 12px;
+    padding: 10px 24px;
+    font-size: 14px;
+}
+
+.fm-prompt-select {
+    background: var(--bg-tertiary);
+}
+
+.fm-prompt-select:hover {
+    background: var(--bg-hover);
+}
+
+.fm-queue {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    max-height: 180px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.fm-queue.collapsed {
+    max-height: 44px;
+}
+
+.fm-queue-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+}
+
+.fm-queue-header:hover {
+    background: var(--bg-hover);
+}
+
+.fm-queue-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.fm-queue-badge {
+    background: var(--accent-primary);
+    color: var(--accent-on-text, #ffffff);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+    min-width: 20px;
+    text-align: center;
+}
+
+.fm-queue-toggle.icon {
+    width: 12px;
+    height: 12px;
+    color: var(--text-secondary);
+}
+
+.fm-queue-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.fm-transfer-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    margin-bottom: 6px;
+}
+
+.fm-transfer-item:last-child {
+    margin-bottom: 0;
+}
+
+.fm-transfer-icon {
+    font-size: 16px;
+    width: 24px;
+    text-align: center;
+}
+
+.fm-transfer-icon.upload {
+    color: var(--success-color);
+}
+
+.fm-transfer-icon.download {
+    color: var(--accent-primary);
+}
+
+.fm-transfer-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.fm-transfer-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.fm-transfer-progress-bar {
+    height: 4px;
+    background: var(--bg-tertiary);
+    border-radius: 2px;
+    margin-top: 6px;
+    overflow: hidden;
+}
+
+.fm-transfer-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+.fm-transfer-status {
+    font-size: 12px;
+    color: var(--text-secondary);
+    min-width: 60px;
+    text-align: right;
+}
+
+.fm-transfer-status.complete {
+    color: var(--success-color);
+}
+
+.fm-transfer-status.error {
+    color: var(--error-color);
+}
+
+.fm-transfer-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.fm-transfer-btn {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.fm-transfer-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.fm-transfer-btn.cancel:hover {
+    color: var(--error-color);
+}
+
+.fm-context-menu {
+    position: fixed;
+    background: var(--bg-modal);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: var(--shadow-lg);
+    min-width: 180px;
+    z-index: 20000;
+    padding: 6px 0;
+    animation: contextMenuFadeIn 0.15s ease;
+}
+
+@keyframes contextMenuFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.fm-context-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    font-size: 13px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.fm-context-item:hover {
+    background: var(--bg-hover);
+}
+
+.fm-context-item.danger {
+    color: var(--error-color);
+}
+
+.fm-context-item.danger:hover {
+    background: color-mix(in srgb, var(--error-color) 10%, transparent);
+}
+
+.fm-context-item.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.fm-context-icon.icon {
+    width: 18px;
+    height: 18px;
+}
+
+.fm-context-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: 6px 0;
+}
+
+.fm-conflict-dialog {
+    position: fixed;
+    inset: 0;
+    background: color-mix(in srgb, black 70%, transparent);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 25000;
+}
+
+.fm-conflict-content {
+    background: var(--bg-modal);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 450px;
+    width: 90%;
+    box-shadow: var(--shadow-lg);
+}
+
+.fm-conflict-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.fm-conflict-title-icon {
+    color: var(--warning-color);
+    font-size: 24px;
+}
+
+.fm-conflict-message {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+    line-height: 1.5;
+}
+
+.fm-conflict-filename {
+    font-family: var(--font-mono);
+    color: var(--accent-primary);
+    font-weight: 600;
+    word-break: break-all;
+}
+
+.fm-conflict-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.fm-conflict-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    background: var(--bg-secondary);
+    border: 2px solid transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.fm-conflict-option:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-hover);
+}
+
+.fm-conflict-option.selected {
+    border-color: var(--accent-primary);
+    background: var(--accent-primary-glow);
+}
+
+.fm-conflict-option input[type="radio"] {
+    accent-color: var(--accent-primary);
+}
+
+.fm-conflict-option-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.fm-conflict-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+}
+
+.fm-conflict-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.fm-quick-connect-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.fm-quick-connect-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 12px;
+}
+
+.fm-quick-connect-row.full {
+    grid-template-columns: 1fr;
+}
+
+.fm-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.fm-form-group label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.fm-form-group input,
+.fm-form-group select {
+    padding: 10px 12px;
+    font-size: 14px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    transition: all 0.2s ease;
+}
+
+.fm-form-group input:focus,
+.fm-form-group select:focus {
+    border-color: var(--accent-primary);
+    outline: none;
+    box-shadow: 0 0 0 2px var(--accent-primary-glow);
+}
+
+.fm-form-group input::placeholder {
+    color: var(--text-muted);
+}
+
+.fm-auth-toggle {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.fm-auth-toggle-btn {
+    flex: 1;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.fm-auth-toggle-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-hover);
+}
+
+.fm-auth-toggle-btn.active {
+    background: var(--accent-primary-glow);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.fm-auth-section {
+    display: none;
+}
+
+.fm-auth-section.active {
+    display: block;
+}
+
+.fm-quick-connect-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 8px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+}
+
+.fm-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    gap: 12px;
+}
+
+.fm-loading-spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--border-color);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.fm-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    color: var(--text-secondary);
+    text-align: center;
+    gap: 12px;
+}
+
+.fm-error-icon {
+    font-size: 48px;
+    color: var(--error-color, #e74c3c);
+}
+
+.fm-error-text {
+    font-size: 14px;
+    color: var(--error-color, #e74c3c);
+    max-width: 300px;
+}
+
+.fm-error-retry {
+    margin-top: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.fm-error-retry .icon {
+    width: 16px;
+    height: 16px;
+}
+
+.fm-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+    text-align: center;
+    gap: 12px;
+}
+
+.fm-empty-icon {
+    font-size: 48px;
+    opacity: 0.4;
+    color: var(--text-muted);
+}
+
+.fm-empty-text {
+    font-size: 14px;
+}
+
+.fm-prompt {
+    gap: 16px;
+}
+
+.fm-prompt .fm-select-folder-btn {
+    margin-top: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.fm-prompt .fm-select-folder-btn .icon {
+    width: 18px;
+    height: 18px;
+}
+
+.fm-prompt-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+.fm-drag-ghost {
+    position: fixed;
+    pointer-events: none;
+    z-index: 30000;
+    padding: 10px 14px;
+    background: var(--bg-modal);
+    border: 1px solid var(--accent-primary);
+    border-radius: 6px;
+    box-shadow: var(--shadow-lg);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    opacity: 0.95;
+}
+
+.fm-drag-ghost-icon {
+    font-size: 16px;
+}
+
+.fm-drag-ghost-count {
+    background: var(--accent-primary);
+    color: var(--accent-on-text, #ffffff);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 8px;
+    margin-left: 4px;
+}
+
+.fm-rename-input {
+    width: 100%;
+    padding: 4px 8px;
+    font-size: 13px;
+    font-family: inherit;
+    background: var(--bg-primary);
+    border: 2px solid var(--accent-primary);
+    border-radius: 4px;
+    color: var(--text-primary);
+    outline: none;
+}
+
+/* Narrow-but-TALL surfaces stack the two ends vertically. The height condition
+ * is load-bearing: `max-width: 900px` alone also matched a landscape phone
+ * (844x390), where stacking two panes and turning the toolbar into a column
+ * inside 390px of height left each pane 4px tall and pushed thirteen controls
+ * outside the viewport -- the surface was unusable in that orientation. Short
+ * viewports keep the side-by-side columns and the row toolbar defined above.
+ *
+ * 620px is the floor at which two stacked panes plus header, toolbar, path rows
+ * and the queue still leave each pane a usable height; an iPad portrait (1112)
+ * clears it comfortably, a landscape phone (390) does not. */
+@media (max-width: 900px) and (min-height: 620px) {
+    .fm-panes {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr 1fr;
+    }
+
+    #sftpFileManager .modal-content {
+        width: 98%;
+        height: 95vh;
+    }
+
+    /* A COLUMN toolbar cost 166px of vertical budget on iPad portrait (three
+     * stacked full-width groups), which left the two stacked panes so short that
+     * only ONE file row was visible in each -- the user could see the list existed
+     * but could not browse it. One wrapping row does the same job in ~44px. */
+    .fm-toolbar {
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        row-gap: 6px;
+    }
+
+    .fm-toolbar-left,
+    .fm-toolbar-right {
+        justify-content: center;
+    }
+
+    .fm-session-select {
+        max-width: none;
+    }
+}
+
+@media (max-width: 767px) {
+    #sftpFileManager .modal-content {
+        width: 100%;
+        height: 100vh;
+        height: 100dvh;
+        margin: 0;
+        border-radius: 0;
+        max-height: none;
+        display: flex;
+        flex-direction: column;
+    }
+
+    #sftpFileManager .modal-header {
+        padding: 12px 16px;
+        padding-top: max(12px, env(safe-area-inset-top));
+        flex-shrink: 0;
+        position: sticky;
+        top: 0;
+        background: var(--bg-secondary);
+        z-index: 10;
+    }
+
+    #sftpFileManager .modal-header .close {
+        min-width: 44px;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+    }
+
+    #sftpFileManager .modal-body {
+        padding: 8px;
+        padding-bottom: max(8px, env(safe-area-inset-bottom));
+        gap: 8px;
+        flex: 1;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .fm-toolbar .btn {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 10px 12px;
+    }
+
+    .fm-file-item {
+        min-height: 48px;
+        padding: 10px 12px;
+    }
+
+    .fm-context-menu {
+        display: none !important;
+    }
+
+    .fm-action-sheet {
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        flex-direction: column;
+        background: var(--bg-secondary);
+        border-top: 1px solid var(--border-color);
+        padding: 8px;
+        padding-bottom: env(safe-area-inset-bottom, 8px);
+        z-index: 1100;
+        transform: translateY(100%);
+        transition: transform 0.3s ease;
+        border-radius: 16px 16px 0 0;
+    }
+
+    .fm-action-sheet.visible {
+        transform: translateY(0);
+    }
+
+    .fm-action-sheet-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        border: none;
+        background: transparent;
+        color: var(--text-primary);
+        font-size: 15px;
+        cursor: pointer;
+        border-radius: 8px;
+        min-height: 48px;
+    }
+
+    .fm-action-sheet-item:active {
+        background: var(--bg-hover);
+    }
+
+    .fm-action-sheet-item.danger {
+        color: var(--error-color);
+    }
+
+    .fm-action-sheet-cancel {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid var(--border-color);
+    }
+
+    .fm-nav-btn {
+        min-width: 40px;
+        min-height: 40px;
+    }
+
+    .fm-queue {
+        max-height: 120px;
+    }
+
+    .fm-queue-item {
+        padding: 8px;
+    }
+}
+
+@media (max-width: 600px) {
+
+    /* The size column is gone entirely (see above), so there is nothing left
+       to hide at 600px; the chevron slot is 16px and stays at every width. */
+
+    .fm-pane-header {
+        flex-wrap: wrap;
+    }
+
+    .fm-path-input {
+        order: 3;
+        width: 100%;
+        margin-top: 8px;
+    }
+}
+
+/* ── Source / Destination tabs ──────────────────────────────────────────────
+ *
+ * Hidden by default: on a wide surface both panes are visible, so a switcher
+ * would be a control with nothing to do. The phone transfer-mode rules further
+ * down turn them on. These base rules give them their APPEARANCE, so the tabs
+ * look like tabs wherever they are shown rather than inheriting bare <button>
+ * styling — they previously had no styling at all beyond a min-height, which is
+ * why they read as two unlabelled boxes.
+ *
+ * Every colour is a token, so all ten themes follow automatically and none of
+ * them is hard-coded here.
+ */
+.fm-pane-tabs {
+    display: none;
+    gap: 4px;
+    padding: 4px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.fm-pane-tab {
+    /* Equal halves whatever the label length: Source/Destination and
+     * switcher jump between locales. */
+    flex: 1 1 0;
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 10px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm, 6px);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.2;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.fm-pane-tab .icon {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+}
+
+.fm-pane-tab:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+/* The selected end of the transfer has to be unmistakable: the panes look
+ * identical, so this is the only thing telling the user whether they are
+ * looking at the source or the destination. */
+.fm-pane-tab.active {
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+    font-weight: 600;
+    box-shadow: inset 0 -2px 0 0 var(--accent-primary);
+}
+
+.fm-pane-tab:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: -2px;
+}
+
+.fm-mobile-upload {
+    display: none;
+}
+
+.fm-action-sheet {
+    display: none;
+}
+
+.fm-mobile-mode .fm-panes {
+    display: block !important;
+}
+
+/* ── Short viewports (landscape phone) ──────────────────────────────────────
+ *
+ * At 844x390 the modal's own chrome consumed 200px of a 390px viewport (header
+ * 85 + toolbar 62 + tab strip 53), leaving `.fm-panes` ZERO height: the pane
+ * collapsed to 4px and its upload/path controls rendered below the fold, outside
+ * the viewport. Amendment v5 §8 requires a POSITIVE workspace in phone landscape
+ * (it measures ~162px in the mockup), so this reclaims the vertical budget the
+ * chrome was taking.
+ *
+ * What is NOT traded away: every touch target keeps its 44px floor (the tabs and
+ * Transfer are how both ends are reached at all), and both ends stay reachable.
+ * The savings come from padding, gaps and the header/footer decoration, which
+ * cost height without carrying function. */
+/* Pointer-AGNOSTIC, deliberately. isMobile() gates on height alone
+ * (`innerHeight < 620`) regardless of pointer type, so a fine-pointer window
+ * dragged short would otherwise get the JS single-pane tab layout without this
+ * compact CSS — the same collapsed pane, on a desktop. The two tiers must share
+ * one condition or they disagree. */
+@media (max-height: 619px) {
+    #sftpFileManager .modal-content {
+        height: 100dvh;
+        max-height: 100dvh;
+    }
+
+    /*
+     * RECLAIM, ROUND 3.
+     *
+     * Measured at 844x390 with 44px rows, the in-flight case was 44px short: pane
+     * 141px, list 45px, ONE usable row. The 44px must come from chrome that is not
+     * a touch target, so the three reclaims below are:
+     *   modal header   53 -> ~44  (title line only; its close button keeps 44px)
+     *   toolbar        62 -> ~48  (vertical padding only; .fm-toolbar-left stays 44)
+     *   pane tabs      49 -> ~44  (the tab buttons themselves stay 44px)
+     * plus the pane sub-heading and empty queue already collapsed further down.
+     * Nothing here shrinks a tappable area; every reduction is padding or a line
+     * box around controls that keep their own floor.
+     */
+    #sftpFileManager .modal-header {
+        padding-top: 2px;
+        padding-bottom: 2px;
+        min-height: 0;
+    }
+
+    #sftpFileManager .modal-header h2 {
+        font-size: 15px;
+        line-height: 1.2;
+        margin: 0;
+    }
+
+    #sftpFileManager .modal-body {
+        /* Horizontal padding kept (edge breathing room the eye needs); vertical
+           padding and the inter-row gap trimmed. Three stacked gaps at 6px plus
+           2x6px of vertical padding cost 30px of pure whitespace on a tier that is
+           44px short of two touch-sized rows. */
+        padding: 2px 6px;
+        gap: 3px;
+        /* The body itself must not scroll: the pane's file list is the scroller,
+           so a body scroll would hide the tab strip that switches ends. */
+        overflow: hidden;
+    }
+
+    /* Toolbar back to a single row: the column form stacked three groups.
+       Its vertical padding is trimmed to the minimum that still clears the 44px
+       button row inside it (.fm-toolbar-left), so the strip costs ~48px instead
+       of 62px while every button inside keeps its full touch target. */
+    #sftpFileManager .fm-toolbar {
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: nowrap;
+        gap: 6px;
+        padding-top: 2px;
+        padding-bottom: 2px;
+        overflow-x: auto;
+    }
+
+    #sftpFileManager .fm-toolbar .btn-text {
+        display: none;
+    }
+
+    .fm-pane-tabs {
+        /* Zero padding, not 2px: the tab BUTTONS keep their own 44px floor (see
+           below), so the strip's own padding is pure chrome and is the cheapest
+           5px available. The switcher is how the other transfer end is reached at
+           all, so it never shrinks away and never loses its targets. */
+        padding: 0;
+        gap: 2px;
+        flex: 0 0 auto;
+    }
+
+    /* Stated explicitly so the reclaim above can never eat the target itself. */
+    .fm-pane-tabs .fm-pane-tab {
+        min-height: 44px;
+    }
+
+    /*
+     * VERTICAL BUDGET.
+     *
+     * A 121px pane height was NOT enough, and the metric hid it: the pane's own
+     * children did not fit inside it. The pane header (65px) plus the
+     * upload/new-folder action row (62px) already exceeded 125px, so the PATH ROW
+     * and the FILE LIST were pushed below the fold. The surface rendered a
+     * session selector and a "Files · tiny" header and nothing else -- the user
+     * could not browse or select a file, so nothing could be transferred. That is
+     * a functional failure, not a cosmetic one, and overflow=0 did not catch it
+     * because the spilled children were inside a clipping ancestor.
+     *
+     * The fix allocates the budget explicitly, in priority order:
+     *   1. tab strip        -- fixed, 44px targets  (reach the other end)
+     *   2. pane header      -- compact, single line (which host + which dir)
+     *   3. path row         -- fixed, never shrinks (navigate)
+     *   4. FILE LIST        -- takes ALL remaining space, scrolls (browse/select)
+     *   5. everything else  -- removed on this tier (see below)
+     *
+     * Removed here, deliberately: the per-pane
+     * upload/new-folder row, the browser-upload dock and the empty queue body.
+     * None belongs to the server-to-server browse/select/transfer path, which is
+     * primary. Both transfer ENDS are preserved -- the tabs still switch between
+     * them and the Transfer action stays operable.
+     */
+    #sftpFileManager .fm-panes {
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+
+    .fm-mobile-mode.fm-transfer-mode #fmLeftPane.active,
+    .fm-mobile-mode.fm-transfer-mode #fmRightPane.active {
+        display: flex !important;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+        /* The 2px accent border plus 10px radius cost usable height twice over. */
+        border-width: 1px;
+    }
+
+    /* 2. Compact, single-line pane header. It was allowed to wrap, which is how
+          65px happened; the host name and path stay legible on one line. */
+    #sftpFileManager .fm-pane-header {
+        flex: 0 0 auto;
+        flex-wrap: nowrap;
+        gap: 6px;
+        /* Vertical padding to zero: the selector inside keeps its own 44px floor
+           (below), so this padding is chrome around a control that is already at
+           its target size. Worth 8px on a tier that is 44px short. */
+        padding: 0 6px;
+        min-height: 0;
+    }
+
+    #sftpFileManager .fm-panel-head {
+        flex: 0 0 auto;
+        padding: 2px 6px;
+        min-height: 0;
+    }
+
+    /* The session selector keeps a real touch target: it is how an end is chosen. */
+    #sftpFileManager .fm-source-select {
+        min-height: 44px;
+    }
+
+    /* 3. Path/navigation row: fixed, always visible, never squeezed to nothing.
+          The element is .fm-pane-nav (up / home / path input / refresh). */
+    #sftpFileManager .fm-pane-nav {
+        flex: 0 0 auto;
+        padding: 2px 4px;
+        gap: 4px;
+        min-height: 0;
+    }
+
+    #sftpFileManager .fm-pane-nav .fm-nav-btn {
+        /* Kept tappable: these are the navigation controls on the tier where the
+           file list is the only way to reach a file. */
+        min-width: 36px;
+        min-height: 36px;
+    }
+
+    /* 4. The file list gets everything left, and is the only scroller. min-height
+          is what forces the flex parent to actually give it room instead of
+          collapsing it to its content box. */
+    /* 4. The file list takes what is left inside the pane, and is the only
+     * scroller.
+     *
+     * It must SHRINK to its pane, not exceed it. `flex: 1 0 auto` with an 80px
+     * floor made the list 160px tall inside a 158px pane, so its rows rendered
+     * past the pane's own clip and fell out of view -- the two-rows failure again,
+     * this time caused by the fix. `flex: 1 1 0` plus `min-height: 0` lets the
+     * flex algorithm size it to the space that actually exists; the pane's own
+     * min-height (below) is what guarantees that space is enough for two rows. */
+    #sftpFileManager .fm-file-list {
+        flex: 1 1 0;
+        min-height: 0;
+        /* The list's own 8px inset is 16px of vertical whitespace wrapped around
+           the rows -- more than a third of a row. Horizontal inset kept. */
+        padding: 0 8px;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* 5. Chrome that does not serve browse/select/transfer on this tier. */
+    .fm-mobile-mode.fm-transfer-mode #fmLeftPane.active .fm-pane-footer,
+    .fm-mobile-mode.fm-transfer-mode #fmRightPane.active .fm-pane-footer,
+    .fm-mobile-mode.fm-transfer-mode #fmLeftPane.active .fm-file-actions,
+    .fm-mobile-mode.fm-transfer-mode #fmRightPane.active .fm-file-actions,
+    .fm-mobile-mode.fm-transfer-mode .fm-mobile-upload {
+        display: none !important;
+    }
+
+    /* The queue keeps its header row -- so an in-flight transfer is still
+       announced and the badge stays visible -- while its body is capped so it
+       cannot take the file list's space. Measured: an EMPTY queue was occupying
+       106px of a 390px viewport (34px header + a 58px "No transfers"
+       placeholder), which is most of what the file list needed. */
+    #sftpFileManager #fmQueue {
+        flex: 0 0 auto;
+        overflow: hidden;
+    }
+
+    /*
+     * An EMPTY queue consumes ZERO height here, header included. Capping the body
+     * was not enough: the header plus borders still took 54px of a 390px viewport,
+     * which was the difference between one usable file row and two. There is
+     * nothing to announce when the queue is empty, so it collapses entirely.
+     *
+     * It REAPPEARS in full the moment a transfer exists -- `.has-transfers` is set
+     * by renderTransferQueue -- so progress, status and Cancel are never hidden
+     * from a user who started something. Asserted both ways in the eye gate
+     * (empty height === 0, in-flight height > 0).
+     */
+    #sftpFileManager #fmQueue {
+        display: none;
+    }
+
+    #sftpFileManager #fmQueue.has-transfers {
+        display: flex;
+        flex-direction: column;
+        flex: 0 0 auto;
+        overflow: hidden;
+    }
+
+    /*
+     * An in-flight queue must ANNOUNCE itself without evicting the file list.
+     * Unconstrained it took 91px and pushed the rows back out -- fixing the empty
+     * case only to break the in-flight one. It gets a hard ceiling and the list
+     * keeps its own floor, so both survive: a single-line status row plus its
+     * progress bar is all the feedback the tier needs, and the full queue remains
+     * reachable by rotating to portrait.
+     */
+    #sftpFileManager #fmQueue.has-transfers {
+        max-height: 56px;
+    }
+
+    #sftpFileManager #fmQueue.has-transfers #fmQueueList {
+        max-height: 30px;
+        overflow-y: auto;
+    }
+
+    #sftpFileManager #fmQueue.has-transfers .fm-transfer-item {
+        padding: 2px 6px;
+        gap: 4px;
+        min-height: 0;
+    }
+
+    /* The queue header stays a single compact line. */
+    #sftpFileManager #fmQueue.has-transfers #fmQueueHeader {
+        padding: 2px 6px;
+        min-height: 0;
+    }
+
+    /*
+     * A FILE ROW IS A TOUCH TARGET. 44px FLOOR, NOT NEGOTIABLE.
+     *
+     * Ruled: this block previously set min-height:36px and
+     * argued that a list row is "a scrollable line item, not a control". That
+     * reasoning is WRONG and is retracted here. On this surface a row is what the
+     * user taps to SELECT the file they are about to transfer -- it is the primary
+     * control of the whole browse/select path -- so it keeps the same 44px floor as
+     * every other touch target. Shrinking hit targets to win vertical space is not
+     * an available move; the ~26px comes from secondary chrome instead (see the
+     * reclaim rules above and below: the modal header, the toolbar, the pane
+     * sub-heading, and the empty queue collapsing to zero).
+     *
+     * The metadata line stays hidden: that removes a second TEXT LINE from inside
+     * the row, which is what lets a 44px row hold its name legibly on one line.
+     * It reduces information density, not the tappable area.
+     */
+    #sftpFileManager .fm-file-item {
+        padding: 4px 8px;
+        gap: 6px;
+        min-height: 44px;
+        border-radius: 4px;
+    }
+
+    #sftpFileManager .fm-file-meta {
+        display: none;
+    }
+
+    /* The pane's "Files · host" sub-heading duplicates what the session selector
+       directly above it already says, and cost 34px between the selector and the
+       path row. The selector remains, so the user still knows which host. */
+    .fm-mobile-mode.fm-transfer-mode #fmLeftPane.active .fm-panel-head,
+    .fm-mobile-mode.fm-transfer-mode #fmRightPane.active .fm-panel-head {
+        display: none;
+    }
+}
+
+.fm-mobile-mode #fmLeftPane {
+    display: none !important;
+}
+
+.fm-mobile-mode #fmRightPane {
+    display: flex !important;
+    flex-direction: column;
+    height: 100%;
+}
+
+.fm-mobile-mode .fm-pane-tabs {
+    display: none !important;
+}
+
+.fm-mobile-mode .fm-toolbar-center #fmTransfer {
+    display: none !important;
+}
+
+/* ── Server-to-server transfer mode (owner ruling, Entry 40) ─────
+ *
+ * The dual-pane surface exists to copy between TWO SSH hosts. On a phone the
+ * rules above collapse it to the right pane and hide #fmTransfer, which removes
+ * the surface's only reason to exist on that tier. In transfer mode the phone
+ * keeps single-pane SIZING but regains both capabilities:
+ *   - the pane tabs become the Source/Destination switcher,
+ *   - whichever pane is .active is the one shown,
+ *   - Transfer and the Transfer action-sheet row are operable again.
+ * These selectors carry an extra class over the .fm-mobile-mode rules they
+ * correct, so they win on specificity as well as !important.
+ */
+.fm-mobile-mode.fm-transfer-mode .fm-pane-tabs {
+    display: flex !important;
+}
+
+.fm-mobile-mode.fm-transfer-mode #fmLeftPane,
+.fm-mobile-mode.fm-transfer-mode #fmRightPane {
+    display: none !important;
+}
+
+.fm-mobile-mode.fm-transfer-mode #fmLeftPane.active,
+.fm-mobile-mode.fm-transfer-mode #fmRightPane.active {
+    display: flex !important;
+    flex-direction: column;
+    height: 100%;
+}
+
+.fm-mobile-mode.fm-transfer-mode .fm-toolbar-center #fmTransfer {
+    display: inline-flex !important;
+    min-height: 44px;
+}
+
+.fm-mobile-mode.fm-transfer-mode .fm-action-sheet-item[data-action="transfer"] {
+    display: flex !important;
+}
+
+/* The tabs are the phone's host switcher in transfer mode, so they must meet
+ * the same 44px touch floor the rest of the touch shell holds to. */
+.fm-transfer-mode .fm-pane-tab {
+    min-height: 44px;
+}
+
+.fm-mobile-mode .fm-mobile-upload {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    background: var(--accent-primary);
+    border: none;
+    border-radius: 10px;
+    color: var(--accent-on-text, #ffffff);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    min-height: 52px;
+    box-shadow: 0 2px 8px var(--accent-primary-glow);
+}
+
+.fm-mobile-mode .fm-action-sheet-item[data-action="transfer"] {
+    display: none !important;
+}
+
+@media (max-width: 767px) {
+
+    .fm-toolbar {
+        flex-direction: row;
+        flex-wrap: nowrap;
+        padding: 6px 8px;
+        gap: 4px;
+        justify-content: center;
+        overflow-x: auto;
+    }
+
+    .fm-toolbar-left,
+    .fm-toolbar-center,
+    .fm-toolbar-right {
+        flex: 0 0 auto;
+        justify-content: center;
+        gap: 4px;
+    }
+
+    .fm-toolbar .btn .btn-text {
+        display: none;
+    }
+
+    .fm-toolbar .btn {
+        padding: 8px;
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    .fm-panes {
+        display: block !important;
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    /* One-pane-at-a-time is the MODAL's phone layout: it has two panes and a
+       tab strip to pick between them, so the inactive one is hidden. Written
+       unscoped, the same `display:none !important` also caught the v5 inline
+       inspector's single #fmInlinePane -- which is never "active" in the modal
+       sense -- collapsing #sftpPanel to a 1px border line on every phone. The
+       panel has exactly one pane and no tab strip, so it must not opt in. */
+    #sftpFileManager .fm-pane {
+        display: none !important;
+        height: 100%;
+        overflow: hidden;
+    }
+
+    #sftpFileManager .fm-pane.active {
+        display: flex !important;
+        flex-direction: column;
+        height: 100%;
+    }
+
+    .fm-pane .fm-file-list {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .fm-pane-tabs {
+        display: none !important;
+    }
+
+    .fm-toolbar-center #fmTransfer {
+        display: none !important;
+    }
+
+    .fm-pane-header {
+        padding: 8px;
+    }
+
+    .fm-source-select {
+        width: 100%;
+        min-height: 44px;
+        font-size: 14px;
+    }
+
+    .fm-pane-nav {
+        padding: 8px;
+        gap: 4px;
+    }
+
+    .fm-nav-btn {
+        min-width: 40px;
+        min-height: 40px;
+        padding: 8px;
+    }
+
+    .fm-path-input {
+        font-size: 14px;
+        min-height: 40px;
+    }
+
+    .fm-mobile-upload {
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        width: 100%;
+        padding: 14px 16px;
+        margin-bottom: 8px;
+        background: var(--accent-primary);
+        border: none;
+        border-radius: 10px;
+        color: var(--accent-on-text, #ffffff);
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        min-height: 52px;
+        box-shadow: 0 2px 8px var(--accent-primary-glow);
+        transition: all 0.2s ease;
+    }
+
+    .fm-mobile-upload:active {
+        background: var(--accent-secondary);
+        transform: scale(0.98);
+    }
+
+    .fm-mobile-upload .icon {
+        width: 22px;
+        height: 22px;
+    }
+
+    .fm-action-sheet-item[data-action="transfer"] {
+        display: none !important;
+    }
+
+    .fm-action-sheet {
+        display: flex !important;
+        transform: translateY(100%);
+    }
+
+    .fm-action-sheet.visible {
+        transform: translateY(0);
+    }
+
+    .fm-queue {
+        max-height: 100px;
+    }
+
+    .fm-queue-header {
+        padding: 8px 12px;
+    }
+}
+
+.fm-file-list::-webkit-scrollbar,
+.fm-queue-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.fm-file-list::-webkit-scrollbar-track,
+.fm-queue-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.fm-file-list::-webkit-scrollbar-thumb,
+.fm-queue-list::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+}
+
+.fm-file-list::-webkit-scrollbar-thumb:hover,
+.fm-queue-list::-webkit-scrollbar-thumb:hover {
+    background: var(--border-hover);
+}
+
+/* P3 -- SFTP panel head and file actions ====================================
+
+   Spec 292: .tw5-panel-head { display:flex; align-items:center;
+                               justify-content:space-between; gap:8px;
+                               padding:9px; border-bottom:1px solid var(--tw-border); }
+   Spec 293: .tw5-panel-head>div { display:grid; gap:2px; }
+   Spec 294: .tw5-panel-head small { color:var(--tw-muted); }
+   Spec 300: .tw5-file-actions { display:flex; gap:5px; padding:9px; }
+
+   This file loads AFTER deck.css (index.html:33), so the --tw-* bridge is
+   already declared on body and is read here directly. Writing these rules into
+   deck.css instead would put them BEFORE this file in the cascade, where the
+   existing .fm-* rules below would win at equal specificity. */
+.fm-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 9px;
+    border-bottom: 1px solid var(--tw-border);
+}
+
+.fm-panel-head > div {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.fm-panel-title {
+    color: var(--tw-text);
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* The path is a read-out here; the editable input in .fm-pane-nav below is
+   still the way to type a destination. Clipped from the LEFT (direction:rtl on
+   an ltr-marked span) so a deep path keeps its leaf visible, which is the part
+   that identifies where you are. */
+.fm-panel-path {
+    color: var(--tw-muted);
+    font-size: 11px;
+    direction: rtl;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.fm-file-actions {
+    display: flex;
+    gap: 5px;
+    padding: 9px;
+}
+
+.fm-file-actions .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-height: 32px;
+    padding: 5px 8px;
+    font-size: 13px;
+}
+
+.fm-file-actions .fm-icon-action {
+    width: 32px;
+    padding-inline: 0;
+    flex: 0 0 32px;
+}
+
+.fm-file-actions .icon {
+    width: 16px;
+    height: 16px;
+}
+
+/* Priority axis 1: the mockup's 32px is a fine-pointer size. */
+@media (pointer: coarse) {
+    .fm-file-actions .btn {
+        min-height: 44px;
+    }
+
+    .fm-file-actions .fm-icon-action {
+        width: 44px;
+        flex: 0 0 44px;
+    }
+}
+
+/* ── v5 compact SFTP inspector panel (#sftpPanel) ─────────────────────────────
+   Spec line 290: display:none by default; opened by openInline() adding
+   .sftp-panel-open.
+
+   Desktop (fine pointer): occupies the third auxiliary column in .workspace,
+   same slot as .notepad-panel and .command-rail.  min(34%,340px) from the
+   spec is already covered by --notepad-width; min-width matches the other
+   panels (255px via deck.css) and style.css's grid-column:2 sharing rule.
+
+   iPad (coarse, ≥768px): position:absolute right overlay, spec line 355.
+   Phone (coarse, ≤767px): position:absolute bottom sheet, spec line 356.
+
+   The close button reuses .btn-icon sizing; the pane footer with counts is
+   display:none on narrow phone to save height.
+   ──────────────────────────────────────────────────────────────────────────── */
+.sftp-panel {
+    display: none;
+    flex-direction: column;
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 255px;
+    background: var(--tw-surface, var(--bg-secondary));
+    border-left: 1px solid var(--tw-border, var(--border-color));
+    overflow: hidden;
+}
+
+.sftp-panel.sftp-panel-open {
+    display: flex;
+}
+
+/* Close button inside the fm-panel-head uses the icon-button pattern. */
+.sftp-inline-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm, 5px);
+    background: transparent;
+    color: var(--tw-muted, var(--text-secondary));
+    cursor: pointer;
+}
+
+.sftp-inline-close:hover,
+.sftp-inline-close:focus-visible {
+    background: var(--tw-hover, var(--bg-hover));
+    color: var(--tw-text, var(--text-primary));
+    outline: 2px solid var(--tw-accent, var(--accent-primary));
+    outline-offset: 2px;
+}
+
+.sftp-inline-close .icon {
+    width: 16px;
+    height: 16px;
+}
+
+/* Coarse ≥768px (iPad portrait and landscape): right-side overlay, spec 355.
+   Mirrors .notepad-panel and .command-rail touch positioning in style.css. */
+@media (pointer: coarse) and (hover: none) and (min-width: 768px) {
+    .sftp-panel.sftp-panel-open {
+        grid-column: 1;
+        grid-row: auto;
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 7;
+        width: min(42%, 340px);
+        min-width: 250px;
+        border-left: 1px solid var(--tw-border, var(--border-color));
+        border-top: none;
+        border-radius: 0;
+    }
+
+    .sftp-inline-close {
+        min-width: 44px;
+        min-height: 44px;
+        width: 44px;
+        height: 44px;
+    }
+}
+
+/* Coarse ≤767px (phone): bottom sheet, spec line 356.
+   Mirrors .notepad-panel bottom-sheet rules in style.css. */
+@media (pointer: coarse) and (hover: none) and (max-width: 767px) {
+    .sftp-panel.sftp-panel-open {
+        grid-column: 1;
+        grid-row: auto;
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        top: auto;
+        z-index: 7;
+        width: auto;
+        min-width: 0;
+        max-height: 54%;
+        border-left: none;
+        border-top: 1px solid var(--tw-border, var(--border-color));
+        border-radius: 12px 12px 0 0;
+    }
+
+    .sftp-inline-close {
+        min-width: 44px;
+        min-height: 44px;
+        width: 44px;
+        height: 44px;
+    }
+
+    /* Status footer wastes height on phone; hide it. */
+    .sftp-panel .fm-pane-footer {
+        display: none;
+    }
+}

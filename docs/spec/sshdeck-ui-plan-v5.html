@@ -1,0 +1,469 @@
+<div id="sshdeck-ui-plan-v5">
+  <div class="viz-controls" aria-label="Thiết bị và giao diện">
+    <label class="form-label" for="tw5Viewport">Thiết bị
+      <select class="form-select" id="tw5Viewport">
+        <option value="desktop">Desktop 1440 × 900</option>
+        <option value="desktop-compact">Desktop 1024 × 768</option>
+        <option value="ipad">iPad dọc 834 × 1194</option>
+        <option value="ipad-landscape">iPad ngang 1194 × 834</option>
+        <option value="phone">Phone 390 × 844</option>
+        <option value="phone-small">Phone 359 × 780</option>
+        <option value="phone-landscape">Phone ngang 926 × 428</option>
+      </select>
+    </label>
+    <label class="form-label" for="tw5Theme">Theme
+      <select class="form-select" id="tw5Theme">
+        <option value="glass">Glass Ops</option>
+        <option value="paper">Paper Ops</option>
+        <option value="cyberpunk">Cyberpunk Neon</option>
+        <option value="obsidian">Obsidian</option>
+      </select>
+    </label>
+  </div>
+  <div class="viz-controls" aria-label="Tên và trạng thái demo">
+    <label class="form-label" for="tw5Name">Tên thử nghiệm
+      <select class="form-select" id="tw5Name">
+        <option value="SSHDeck">SSHDeck — đề xuất</option>
+        <option value="SSHHub">SSHHub</option>
+        <option value="SSHPane">SSHPane</option>
+      </select>
+    </label>
+    <label class="form-label" for="tw5State">Chức năng / trạng thái
+      <select class="form-select" id="tw5State">
+        <option value="terminal">Terminal bình thường</option>
+        <option value="layout">Dropdown bố cục theo thiết bị</option>
+        <option value="split-2">Chia 2 terminal</option>
+        <option value="split-3">Chia 3 terminal</option>
+        <option value="split-4">Chia 4 terminal</option>
+        <option value="split-6">Chia 6 terminal</option>
+        <option value="broadcast">Broadcast — gửi tất cả</option>
+        <option value="global-menu">Menu toàn cục</option>
+        <option value="session-actions">Session ngắt kết nối</option>
+        <option value="notes">Ghi chú</option>
+        <option value="library">Thư viện lệnh</option>
+        <option value="sftp">SFTP</option>
+        <option value="input-stream">Gõ thường — streaming</option>
+        <option value="input-paste">Paste — giữ để chỉnh</option>
+        <option value="input-ime">Telex / IME</option>
+        <option value="input-multiline">Composer nhiều dòng</option>
+        <option value="keypad-1">Keypad trang 1</option>
+        <option value="keypad-2">Keypad trang 2</option>
+        <option value="keyboard">Bàn phím hệ thống</option>
+        <option value="scroll">Đang ở chế độ cuộn</option>
+        <option value="search">Tìm trong terminal</option>
+        <option value="confirm">Xác nhận Reset</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="tw5-behavior text-small" role="status" aria-live="polite"></div>
+
+  <section class="tw5-product tw5-viewport-desktop tw5-theme-glass tw5-state-terminal" aria-label="Bản xem trước ứng dụng terminal">
+    <div class="tw5-window">
+      <header class="tw5-desktop-header">
+        <div class="tw5-global-wrap">
+          <div class="tw5-global-row">
+            <div class="tw5-brand"><span class="tw5-logo"><i data-lucide="square-terminal" aria-hidden="true"></i></span><strong class="tw5-brand-name">SSHDeck</strong></div>
+            <nav class="tw5-global-nav" aria-label="Điều hướng toàn cục">
+              <button class="tw5-control tw5-primary" type="button"><i data-lucide="plus" aria-hidden="true"></i><span>Kết nối mới</span></button>
+              <button class="tw5-control" type="button" data-state="sftp"><i data-lucide="folder-open" aria-hidden="true"></i><span>Tệp</span></button>
+              <button class="tw5-control" type="button" data-state="library"><i data-lucide="library" aria-hidden="true"></i><span>Lệnh</span></button>
+              <button class="tw5-account" type="button" data-state="global-menu" aria-label="Tài khoản và cài đặt"><span>NH</span><i data-lucide="chevron-down" aria-hidden="true"></i></button>
+            </nav>
+          </div>
+          <section class="tw5-global-menu tw5-desktop-global-menu" aria-label="Menu tài khoản">
+            <div class="tw5-menu-account"><span>NH</span><div><strong>Nguyễn Hoàng</strong><small>Chủ dự án</small></div></div>
+            <button type="button"><i data-lucide="contact-round" aria-hidden="true"></i><span>Profiles</span><small>Host đã lưu</small></button>
+            <button type="button"><i data-lucide="palette" aria-hidden="true"></i><span>Theme</span><small>Glass Ops</small></button>
+            <button type="button"><i data-lucide="languages" aria-hidden="true"></i><span>Ngôn ngữ</span><small>Tiếng Việt</small></button>
+            <button type="button"><i data-lucide="key-round" aria-hidden="true"></i><span>SSH keys & Jump hosts</span></button>
+            <button type="button"><i data-lucide="settings" aria-hidden="true"></i><span>Cài đặt</span></button>
+          </section>
+        </div>
+
+        <div class="tw5-workspace-wrap">
+          <div class="tw5-workspace-row">
+            <div class="tw5-session-strip" aria-label="Danh sách kết nối">
+              <button class="tw5-session tw5-session-active" type="button"><span class="tw5-dot tw5-online"></span><span><strong>tiny</strong><small>root · 34 ms</small></span></button>
+              <button class="tw5-session" type="button"><span class="tw5-dot tw5-online"></span><span><strong>goclaw</strong><small>root · 52 ms</small></span></button>
+              <button class="tw5-session tw5-offline-session" type="button" data-state="session-actions"><span class="tw5-dot"></span><span><strong>staging</strong><small>Đã ngắt</small></span></button>
+            </div>
+            <div class="tw5-context-tools" aria-label="Công cụ terminal">
+              <button class="tw5-tool-button tw5-layout-trigger" type="button" data-state="layout" aria-label="Bố cục" data-tooltip="Bố cục"><i data-lucide="panels-top-left" aria-hidden="true"></i><i data-lucide="chevron-down" aria-hidden="true"></i></button>
+              <button class="tw5-tool-button tw5-broadcast-trigger" type="button" data-state="broadcast" aria-pressed="false" aria-label="Broadcast" data-tooltip="Broadcast"><i data-lucide="radio-tower" aria-hidden="true"></i></button>
+              <button class="tw5-tool-button" type="button" aria-label="Lưu transcript" data-tooltip="Lưu transcript"><i data-lucide="file-down" aria-hidden="true"></i></button>
+              <button class="tw5-tool-button" type="button" aria-label="Kết nối lại" data-tooltip="Kết nối lại"><i data-lucide="refresh-cw" aria-hidden="true"></i></button>
+              <button class="tw5-tool-button" type="button" data-state="notes" aria-label="Ghi chú" data-tooltip="Ghi chú"><i data-lucide="notebook-pen" aria-hidden="true"></i></button>
+            </div>
+          </div>
+          <section class="tw5-layout-menu tw5-desktop-layout-menu" aria-label="Chọn bố cục terminal">
+            <div class="tw5-menu-heading"><div><strong>Bố cục terminal</strong><small class="tw5-layout-policy">Desktop · đầy đủ 1–6 pane</small></div><span class="tw5-count-badge">1–6</span></div>
+            <div class="tw5-layout-grid">
+              <button type="button" data-layout="1" data-state="terminal"><span class="tw5-preview tw5-one"><i></i></span><span>1 pane</span></button>
+              <button type="button" data-layout="2" data-state="split-2"><span class="tw5-preview tw5-two-cols"><i></i><i></i></span><span>2 dọc</span></button>
+              <button type="button" data-layout="2" data-state="split-2"><span class="tw5-preview tw5-two-rows"><i></i><i></i></span><span>2 ngang</span></button>
+              <button type="button" data-layout="3" data-state="split-3"><span class="tw5-preview tw5-three"><i></i><i></i><i></i></span><span>3 pane</span></button>
+              <button type="button" data-layout="4" data-state="split-4"><span class="tw5-preview tw5-four"><i></i><i></i><i></i><i></i></span><span>4 pane</span></button>
+              <button type="button" data-layout="4" data-state="split-4"><span class="tw5-preview tw5-four-main"><i></i><i></i><i></i><i></i></span><span>4 + chính</span></button>
+              <button type="button" data-layout="5" data-state="split-6"><span class="tw5-preview tw5-five"><i></i><i></i><i></i><i></i><i></i></span><span>5 pane</span></button>
+              <button type="button" data-layout="6" data-state="split-6"><span class="tw5-preview tw5-six"><i></i><i></i><i></i><i></i><i></i><i></i></span><span>6 pane</span></button>
+            </div>
+          </section>
+        </div>
+      </header>
+
+      <header class="tw5-touch-header">
+        <div class="tw5-touch-global-wrap">
+          <div class="tw5-touch-global-row">
+            <div class="tw5-brand"><span class="tw5-logo"><i data-lucide="square-terminal" aria-hidden="true"></i></span><strong class="tw5-brand-name">SSHDeck</strong></div>
+            <div class="tw5-touch-tools" aria-label="Công cụ terminal cảm ứng">
+              <button class="tw5-tool-button tw5-touch-layout-trigger" type="button" data-state="layout" aria-label="Bố cục" data-tooltip="Bố cục"><i data-lucide="panels-top-left" aria-hidden="true"></i></button>
+              <button class="tw5-tool-button tw5-broadcast-trigger" type="button" data-state="broadcast" aria-pressed="false" aria-label="Broadcast" data-tooltip="Broadcast"><i data-lucide="radio-tower" aria-hidden="true"></i></button>
+              <button class="tw5-tool-button" type="button" aria-label="Lưu transcript" data-tooltip="Lưu transcript"><i data-lucide="file-down" aria-hidden="true"></i></button>
+              <button class="tw5-tool-button" type="button" aria-label="Kết nối lại" data-tooltip="Kết nối lại"><i data-lucide="refresh-cw" aria-hidden="true"></i></button>
+              <button class="tw5-tool-button" type="button" data-state="notes" aria-label="Ghi chú" data-tooltip="Ghi chú"><i data-lucide="notebook-pen" aria-hidden="true"></i></button>
+              <button class="tw5-tool-button tw5-touch-menu-trigger" type="button" data-state="global-menu" aria-label="Menu toàn cục" data-tooltip="Menu toàn cục"><i data-lucide="menu" aria-hidden="true"></i></button>
+            </div>
+          </div>
+          <section class="tw5-global-menu tw5-touch-global-menu" aria-label="Menu toàn cục">
+            <div class="tw5-menu-account"><span>NH</span><div><strong>Nguyễn Hoàng</strong><small>Chủ dự án</small></div></div>
+            <button type="button"><i data-lucide="plus" aria-hidden="true"></i><span>Kết nối mới</span></button>
+            <button type="button" data-state="sftp"><i data-lucide="folder-open" aria-hidden="true"></i><span>Tệp</span></button>
+            <button type="button" data-state="library"><i data-lucide="library" aria-hidden="true"></i><span>Thư viện lệnh</span></button>
+            <button type="button"><i data-lucide="contact-round" aria-hidden="true"></i><span>Profiles</span></button>
+            <button type="button"><i data-lucide="settings" aria-hidden="true"></i><span>Cài đặt</span></button>
+          </section>
+          <section class="tw5-layout-menu tw5-touch-layout-menu" aria-label="Chọn bố cục terminal trên cảm ứng">
+            <div class="tw5-menu-heading"><div><strong>Bố cục terminal</strong><small class="tw5-layout-policy">Tối đa theo kích thước màn hình</small></div><span class="tw5-count-badge">1–4</span></div>
+            <div class="tw5-layout-grid">
+              <button type="button" data-layout="1" data-state="terminal"><span class="tw5-preview tw5-one"><i></i></span><span>1 pane</span></button>
+              <button type="button" data-layout="2" data-state="split-2"><span class="tw5-preview tw5-two-cols"><i></i><i></i></span><span>2 dọc</span></button>
+              <button type="button" data-layout="2" data-state="split-2"><span class="tw5-preview tw5-two-rows"><i></i><i></i></span><span>2 ngang</span></button>
+              <button type="button" data-layout="3" data-state="split-3"><span class="tw5-preview tw5-three"><i></i><i></i><i></i></span><span>3 pane</span></button>
+              <button type="button" data-layout="4" data-state="split-4"><span class="tw5-preview tw5-four"><i></i><i></i><i></i><i></i></span><span>4 pane</span></button>
+            </div>
+          </section>
+        </div>
+        <div class="tw5-touch-session-wrap">
+          <div class="tw5-touch-session-row">
+            <div class="tw5-session-strip" aria-label="Danh sách kết nối cảm ứng">
+              <button class="tw5-session tw5-session-active" type="button"><span class="tw5-dot tw5-online"></span><span><strong>tiny</strong><small>root</small></span></button>
+              <button class="tw5-session" type="button"><span class="tw5-dot tw5-online"></span><span><strong>goclaw</strong><small>root</small></span></button>
+              <button class="tw5-session tw5-offline-session" type="button" data-state="session-actions"><span class="tw5-dot"></span><span><strong>staging</strong><small>Đã ngắt</small></span></button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div class="tw5-workspace">
+        <main class="tw5-terminals" aria-label="Terminal workspace">
+          <section class="tw5-terminal tw5-terminal-primary" aria-label="Terminal tiny">
+            <div class="tw5-pane-label"><span>tiny</span><span>1</span></div>
+            <div class="tw5-line tw5-dim">Last login: Tue Aug 04 09:18:22 from 100.99.0.12</div>
+            <div class="tw5-line"><span class="tw5-prompt">root@tiny</span><span class="tw5-path">:~#</span> docker ps --filter name=sshdeck</div>
+            <div class="tw5-line tw5-dim">CONTAINER ID&nbsp;&nbsp;IMAGE&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;STATUS</div>
+            <div class="tw5-line">c2cc53c2db71&nbsp;&nbsp;sshdeck:preview&nbsp;&nbsp;Up 2 hours</div>
+            <div class="tw5-line"><span class="tw5-prompt">root@tiny</span><span class="tw5-path">:~#</span> systemctl is-active docker</div>
+            <div class="tw5-line">active</div>
+            <div class="tw5-line"><span class="tw5-prompt">root@tiny</span><span class="tw5-path">:~#</span> <span class="tw5-cursor"></span></div>
+          </section>
+          <section class="tw5-terminal tw5-terminal-extra" aria-label="Terminal goclaw"><div class="tw5-pane-label"><span>goclaw</span><span>2</span></div><div class="tw5-line"><span class="tw5-prompt">root@goclaw</span><span class="tw5-path">:~#</span> uptime</div><div class="tw5-line">up 18 days, load average: 0.08</div><div class="tw5-line"><span class="tw5-prompt">root@goclaw</span><span class="tw5-path">:~#</span> <span class="tw5-cursor"></span></div></section>
+          <section class="tw5-terminal tw5-terminal-extra" aria-label="Terminal staging"><div class="tw5-pane-label"><span>staging</span><span>3</span></div><div class="tw5-line"><span class="tw5-prompt">deploy@staging</span><span class="tw5-path">:~$</span> journalctl -u sshdeck -f</div><div class="tw5-line tw5-dim">Started terminal service.</div></section>
+          <section class="tw5-terminal tw5-terminal-extra" aria-label="Terminal logs"><div class="tw5-pane-label"><span>logs</span><span>4</span></div><div class="tw5-line">socket connected</div><div class="tw5-line">pty resized 91 × 36</div></section>
+          <section class="tw5-terminal tw5-terminal-extra" aria-label="Terminal database"><div class="tw5-pane-label"><span>db</span><span>5</span></div><div class="tw5-line"><span class="tw5-prompt">postgres@db</span><span class="tw5-path">:~$</span> psql</div></section>
+          <section class="tw5-terminal tw5-terminal-extra" aria-label="Terminal worker"><div class="tw5-pane-label"><span>worker</span><span>6</span></div><div class="tw5-line"><span class="tw5-prompt">root@worker</span><span class="tw5-path">:~#</span> htop</div></section>
+        </main>
+
+        <aside class="tw5-inspector tw5-notes" aria-label="Ghi chú"><div class="tw5-panel-head"><div><strong>Ghi chú phiên</strong><small>Tự lưu · tiny</small></div><button class="tw5-icon-control" type="button" data-state="terminal" aria-label="Đóng"><i data-lucide="x" aria-hidden="true"></i></button></div><textarea aria-label="Nội dung ghi chú">Kiểm tra container sau deploy
+docker ps --filter name=sshdeck
+
+Theo dõi log trước khi bàn giao.</textarea></aside>
+        <aside class="tw5-inspector tw5-library" aria-label="Thư viện lệnh"><div class="tw5-panel-head"><div><strong>Thư viện lệnh</strong><small>Chèn để sửa trước khi chạy</small></div><button class="tw5-icon-control" type="button" data-state="terminal" aria-label="Đóng"><i data-lucide="x" aria-hidden="true"></i></button></div><label class="tw5-search"><i data-lucide="search" aria-hidden="true"></i><input type="search" aria-label="Tìm lệnh" placeholder="Tìm lệnh…"></label><button class="tw5-list-row" type="button"><span><strong>Trạng thái dịch vụ</strong><code>systemctl status</code></span><i data-lucide="corner-down-left" aria-hidden="true"></i></button><button class="tw5-list-row" type="button"><span><strong>Theo dõi log</strong><code>journalctl -u · -f</code></span><i data-lucide="corner-down-left" aria-hidden="true"></i></button></aside>
+        <aside class="tw5-inspector tw5-sftp" aria-label="SFTP"><div class="tw5-panel-head"><div><strong>Tệp · tiny</strong><small>/opt/sshdeck</small></div><button class="tw5-icon-control" type="button" data-state="terminal" aria-label="Đóng"><i data-lucide="x" aria-hidden="true"></i></button></div><div class="tw5-file-actions"><button class="tw5-control" type="button"><i data-lucide="upload" aria-hidden="true"></i><span>Tải lên</span></button><button class="tw5-icon-control" type="button" aria-label="Thư mục mới"><i data-lucide="folder-plus" aria-hidden="true"></i></button></div><button class="tw5-list-row" type="button"><span><strong>static</strong><small>Thư mục</small></span><i data-lucide="chevron-right" aria-hidden="true"></i></button><button class="tw5-list-row" type="button"><span><strong>templates</strong><small>Thư mục</small></span><i data-lucide="chevron-right" aria-hidden="true"></i></button></aside>
+
+        <section class="tw5-session-actions" aria-label="Tác vụ kết nối staging"><div class="tw5-menu-heading"><div><strong>staging</strong><small>Đã chọn · chạm lại hoặc nhấn giữ</small></div><span class="tw5-dot"></span></div><button type="button"><i data-lucide="pencil" aria-hidden="true"></i><span>Đổi tên</span></button><button type="button"><i data-lucide="plug-zap" aria-hidden="true"></i><span>Kết nối lại</span></button><button type="button" data-state="confirm"><i data-lucide="rotate-ccw" aria-hidden="true"></i><span>Khởi tạo phiên mới</span></button><button class="tw5-danger" type="button"><i data-lucide="x" aria-hidden="true"></i><span>Đóng kết nối</span></button></section>
+        <section class="tw5-terminal-search" aria-label="Tìm trong terminal"><i data-lucide="search" aria-hidden="true"></i><input type="search" value="sshdeck" aria-label="Từ khóa"><span>2 / 5</span><button class="tw5-icon-control" type="button" aria-label="Trước"><i data-lucide="chevron-up" aria-hidden="true"></i></button><button class="tw5-icon-control" type="button" aria-label="Sau"><i data-lucide="chevron-down" aria-hidden="true"></i></button><button class="tw5-icon-control" type="button" data-state="terminal" aria-label="Đóng"><i data-lucide="x" aria-hidden="true"></i></button></section>
+        <section class="tw5-confirm" role="dialog" aria-modal="true" aria-label="Xác nhận Reset"><div class="tw5-confirm-icon"><i data-lucide="rotate-ccw" aria-hidden="true"></i></div><strong>Tạo phiên staging mới?</strong><p>Phiên hiện tại sẽ đóng. Profile và ghi chú vẫn được giữ.</p><div><button class="tw5-control" type="button" data-state="session-actions">Hủy</button><button class="tw5-control tw5-danger-control" type="button">Khởi tạo mới</button></div></section>
+      </div>
+
+      <div class="tw5-statusbar"><span><span class="tw5-dot tw5-online"></span>Đã kết nối · 34 ms</span><span>UTF-8 · <b class="tw5-terminal-size">132 × 46</b></span></div>
+
+      <div class="tw5-composer-dock" aria-label="Composer dùng chung">
+        <button class="tw5-target-chip" type="button" aria-label="Đích Broadcast: tất cả 3 phiên"><i data-lucide="radio-tower" aria-hidden="true"></i><span>Tất cả 3</span><i data-lucide="chevron-down" aria-hidden="true"></i></button>
+        <div class="tw5-composer"><textarea rows="1" aria-label="Nhập lệnh" placeholder="Lệnh hoặc văn bản…"></textarea><small>Dán sẽ chờ Gửi</small></div>
+                <button class="tw5-icon-control tw5-keypad-trigger" type="button" data-state="keypad-1" aria-label="Keypad"><i data-lucide="keyboard" aria-hidden="true"></i></button>
+        <button class="tw5-control tw5-exit-scroll tw5-responsive-label" type="button" aria-label="Thoát chế độ cuộn"><i data-lucide="arrow-down-to-line" aria-hidden="true"></i><span>Thoát cuộn</span></button>
+        <button class="tw5-control tw5-send" type="button" aria-label="Gửi"><i data-lucide="send" aria-hidden="true"></i><span class="tw5-send-label">Gửi tất cả</span></button>
+      </div>
+
+      <section class="tw5-keypad" aria-label="Keypad terminal"><div class="tw5-keypad-head"><strong>Phím terminal</strong><span class="tw5-keypad-page">Trang 1 / 2</span><button class="tw5-icon-control" type="button" data-state="terminal" aria-label="Đóng keypad"><i data-lucide="chevron-down" aria-hidden="true"></i></button></div><div class="tw5-key-grid tw5-key-one"><button type="button"><i data-lucide="arrow-left" aria-hidden="true"></i></button><button type="button"><i data-lucide="arrow-up" aria-hidden="true"></i></button><button type="button"><i data-lucide="arrow-down" aria-hidden="true"></i></button><button type="button"><i data-lucide="arrow-right" aria-hidden="true"></i></button><button type="button">Esc</button><button type="button">Tab</button><button type="button">⇧ Tab</button><button type="button" data-state="keypad-2">Tiếp ›</button></div><div class="tw5-key-grid tw5-key-two"><button type="button">Home</button><button type="button">PgUp</button><button type="button">PgDn</button><button type="button">End</button><button type="button">Ctrl</button><button type="button">Alt</button><button type="button">Del</button><button type="button" data-state="keypad-1">‹ Trước</button></div></section>
+
+      <div class="tw5-system-keyboard" aria-label="Bàn phím hệ thống minh họa"><div><span>Q</span><span>W</span><span>E</span><span>R</span><span>T</span><span>Y</span><span>U</span><span>I</span><span>O</span><span>P</span></div><div><span>A</span><span>S</span><span>D</span><span>F</span><span>G</span><span>H</span><span>J</span><span>K</span><span>L</span></div><div><span>Z</span><span>X</span><span>C</span><span>V</span><span>B</span><span>N</span><span>M</span></div></div>
+    </div>
+  </section>
+</div>
+
+<style>
+#sshdeck-ui-plan-v5 { width:100%; }
+#sshdeck-ui-plan-v5 .viz-controls { margin-bottom:8px; align-items:end; }
+#sshdeck-ui-plan-v5 .form-label { min-width:220px; }
+#sshdeck-ui-plan-v5 .tw5-behavior { margin:0 0 10px; color:var(--muted-foreground); }
+#sshdeck-ui-plan-v5 .tw5-product {
+  --tw-shell:#090b0e; --tw-bar:#101419; --tw-surface:#171c22; --tw-hover:#212832; --tw-terminal:#1b222a;
+  --tw-text:#e6edf3; --tw-terminal-text:#e6edf3; --tw-muted:#9aa7b4; --tw-border:rgba(230,237,243,.12);
+  --tw-accent:#65aaf7; --tw-accent-text:#07111c; --tw-accent-soft:rgba(101,170,247,.14); --tw-success:#48c176;
+  --tw-danger:#ff6b73; --tw-warning:#e6b34a; width:100%; color:var(--tw-text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+#sshdeck-ui-plan-v5 .tw5-theme-paper { --tw-shell:#f7f1e7;--tw-bar:#eee6da;--tw-surface:#e6dccd;--tw-hover:#d9ccbb;--tw-terminal:#ede5d9;--tw-text:#2c2722;--tw-terminal-text:#2c2722;--tw-muted:#655c52;--tw-border:#cfc1af;--tw-accent:#a75b36;--tw-accent-text:#fff8f1;--tw-accent-soft:rgba(167,91,54,.14);--tw-success:#4d7c49;--tw-danger:#a43d36;--tw-warning:#8a651f; }
+#sshdeck-ui-plan-v5 .tw5-theme-cyberpunk { --tw-shell:#0c0713;--tw-bar:#120b1d;--tw-surface:#1b1128;--tw-hover:#29193a;--tw-terminal:#170e24;--tw-text:#fff2ff;--tw-terminal-text:#fff2ff;--tw-muted:#d2b5df;--tw-border:#4c2a67;--tw-accent:#e04ff4;--tw-accent-text:#17031d;--tw-accent-soft:rgba(224,79,244,.16);--tw-success:#31d2a0;--tw-danger:#ff758f;--tw-warning:#f6ca52; }
+#sshdeck-ui-plan-v5 .tw5-theme-obsidian { --tw-shell:#000;--tw-bar:#080808;--tw-surface:#121212;--tw-hover:#202020;--tw-terminal:#000;--tw-text:#fff;--tw-terminal-text:#fff;--tw-muted:#b6b6b6;--tw-border:#2c2c2c;--tw-accent:#fff;--tw-accent-text:#000;--tw-accent-soft:rgba(255,255,255,.12);--tw-success:#65df8d;--tw-danger:#ff7070;--tw-warning:#ecca5a; }
+#sshdeck-ui-plan-v5 .tw5-window { position:relative; display:flex; flex-direction:column; width:100%; aspect-ratio:16/9; overflow:hidden; border:1px solid var(--tw-border); border-radius:12px; background:var(--tw-shell); box-shadow:0 18px 42px color-mix(in srgb,var(--tw-shell) 48%,transparent); }
+#sshdeck-ui-plan-v5 strong { font-weight:500; }
+#sshdeck-ui-plan-v5 button,#sshdeck-ui-plan-v5 input,#sshdeck-ui-plan-v5 textarea { font:inherit; }
+#sshdeck-ui-plan-v5 button { color:inherit; cursor:pointer; }
+#sshdeck-ui-plan-v5 .tw5-desktop-header,#sshdeck-ui-plan-v5 .tw5-touch-header { position:relative; z-index:20; flex:0 0 auto; background:var(--tw-bar); border-bottom:1px solid var(--tw-border); overflow:visible; }
+#sshdeck-ui-plan-v5 .tw5-touch-header { display:none; }
+#sshdeck-ui-plan-v5 .tw5-global-wrap,#sshdeck-ui-plan-v5 .tw5-workspace-wrap,#sshdeck-ui-plan-v5 .tw5-touch-global-wrap,#sshdeck-ui-plan-v5 .tw5-touch-session-wrap { position:relative; }
+#sshdeck-ui-plan-v5 .tw5-global-row,#sshdeck-ui-plan-v5 .tw5-workspace-row,#sshdeck-ui-plan-v5 .tw5-touch-global-row,#sshdeck-ui-plan-v5 .tw5-touch-session-row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:5px 8px; }
+#sshdeck-ui-plan-v5 .tw5-global-row { height:44px; box-sizing:border-box; }
+#sshdeck-ui-plan-v5 .tw5-workspace-row { height:40px; box-sizing:border-box; padding-block:3px; border-top:1px solid var(--tw-border); }
+#sshdeck-ui-plan-v5 .tw5-brand,#sshdeck-ui-plan-v5 .tw5-global-nav,#sshdeck-ui-plan-v5 .tw5-context-tools { display:flex; align-items:center; gap:5px; min-width:0; }
+#sshdeck-ui-plan-v5 .tw5-brand { gap:7px; flex:0 0 auto; }
+#sshdeck-ui-plan-v5 .tw5-logo { display:grid; place-items:center; width:28px; height:28px; border-radius:7px; color:var(--tw-accent); background:var(--tw-accent-soft); }
+#sshdeck-ui-plan-v5 .tw5-brand-name { white-space:nowrap; }
+#sshdeck-ui-plan-v5 .tw5-control,#sshdeck-ui-plan-v5 .tw5-icon-control,#sshdeck-ui-plan-v5 .tw5-account { display:inline-flex; align-items:center; justify-content:center; gap:5px; min-height:32px; padding:5px 8px; border:1px solid var(--tw-border); border-radius:7px; background:transparent; white-space:nowrap; }
+#sshdeck-ui-plan-v5 .tw5-control span,#sshdeck-ui-plan-v5 .tw5-account span { white-space:nowrap; }
+#sshdeck-ui-plan-v5 .tw5-control:hover,#sshdeck-ui-plan-v5 .tw5-icon-control:hover,#sshdeck-ui-plan-v5 .tw5-account:hover { background:var(--tw-hover); }
+#sshdeck-ui-plan-v5 .tw5-primary,#sshdeck-ui-plan-v5 .tw5-send { color:var(--tw-accent-text); border-color:var(--tw-accent); background:var(--tw-accent); }
+#sshdeck-ui-plan-v5 .tw5-icon-control { width:32px; padding-inline:0; flex:0 0 32px; }
+#sshdeck-ui-plan-v5 .tw5-account { padding:2px 5px 2px 3px; }
+#sshdeck-ui-plan-v5 .tw5-account>span,#sshdeck-ui-plan-v5 .tw5-menu-account>span { display:grid; place-items:center; width:26px; height:26px; border-radius:50%; color:var(--tw-accent-text); background:var(--tw-accent); }
+#sshdeck-ui-plan-v5 .tw5-session-strip { display:flex; align-items:center; gap:3px; flex:1 1 auto; min-width:0; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain; touch-action:pan-x; scrollbar-width:none; }
+#sshdeck-ui-plan-v5 .tw5-session-strip::-webkit-scrollbar { display:none; }
+#sshdeck-ui-plan-v5 .tw5-session { position:relative; display:flex; align-items:center; gap:6px; flex:0 0 auto; min-width:92px; height:30px; min-height:30px; padding:1px 7px; border:1px solid transparent; border-radius:7px; background:transparent; text-align:left; }
+#sshdeck-ui-plan-v5 .tw5-session>span:nth-child(2) { display:grid; min-width:0; }
+#sshdeck-ui-plan-v5 .tw5-session strong,#sshdeck-ui-plan-v5 .tw5-session small { line-height:14px; }
+#sshdeck-ui-plan-v5 .tw5-session small { color:var(--tw-muted); white-space:nowrap; }
+#sshdeck-ui-plan-v5 .tw5-session-active { border-color:var(--tw-accent); background:var(--tw-accent-soft); }
+#sshdeck-ui-plan-v5 .tw5-offline-session { border-color:var(--tw-border); }
+#sshdeck-ui-plan-v5 .tw5-dot { display:inline-block; width:7px; height:7px; flex:0 0 7px; border-radius:50%; background:var(--tw-danger); }
+#sshdeck-ui-plan-v5 .tw5-online { background:var(--tw-success); }
+#sshdeck-ui-plan-v5 .tw5-workspace { position:relative; display:flex; flex:1 1 auto; min-height:0; overflow:hidden; }
+#sshdeck-ui-plan-v5 .tw5-terminals { display:grid; grid-template:minmax(0,1fr)/minmax(0,1fr); flex:1 1 auto; min-width:0; min-height:0; background:var(--tw-terminal); }
+#sshdeck-ui-plan-v5 .tw5-terminal { position:relative; min-width:0; min-height:0; padding:14px; overflow:hidden; border:0 solid var(--tw-border); color:var(--tw-terminal-text); background:var(--tw-terminal); font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+#sshdeck-ui-plan-v5 .tw5-terminal-extra { display:none; }
+#sshdeck-ui-plan-v5 .tw5-pane-label { display:none; position:absolute; top:6px; right:7px; align-items:center; gap:5px; color:var(--tw-muted); }
+#sshdeck-ui-plan-v5 .tw5-pane-label span:last-child { display:grid; place-items:center; width:19px; height:19px; border-radius:5px; color:var(--tw-accent-text); background:var(--tw-accent); }
+#sshdeck-ui-plan-v5 .tw5-line { margin-bottom:5px; white-space:pre-wrap; overflow-wrap:anywhere; }
+#sshdeck-ui-plan-v5 .tw5-dim { color:var(--tw-muted); }
+#sshdeck-ui-plan-v5 .tw5-prompt { color:var(--tw-success); }
+#sshdeck-ui-plan-v5 .tw5-path { color:var(--tw-accent); }
+#sshdeck-ui-plan-v5 .tw5-cursor { display:inline-block; width:8px; height:1em; vertical-align:text-bottom; background:currentColor; }
+#sshdeck-ui-plan-v5 .tw5-statusbar { display:flex; align-items:center; justify-content:space-between; gap:8px; flex:0 0 auto; min-height:22px; padding:3px 8px; border-top:1px solid var(--tw-border); color:var(--tw-muted); background:var(--tw-bar); }
+#sshdeck-ui-plan-v5 .tw5-statusbar>span { display:flex; align-items:center; gap:5px; white-space:nowrap; }
+#sshdeck-ui-plan-v5 .tw5-global-menu,#sshdeck-ui-plan-v5 .tw5-layout-menu,#sshdeck-ui-plan-v5 .tw5-session-actions,#sshdeck-ui-plan-v5 .tw5-terminal-search,#sshdeck-ui-plan-v5 .tw5-confirm { display:none; position:absolute; z-index:30; border:1px solid var(--tw-border); border-radius:10px; background:var(--tw-surface); box-shadow:0 16px 36px color-mix(in srgb,var(--tw-shell) 70%,transparent); }
+#sshdeck-ui-plan-v5 .tw5-desktop-global-menu { top:calc(100% + 1px); right:8px; width:min(310px,calc(100% - 16px)); padding:5px; }
+#sshdeck-ui-plan-v5 .tw5-desktop-layout-menu { top:calc(100% + 1px); right:8px; width:min(390px,calc(100% - 16px)); }
+#sshdeck-ui-plan-v5 .tw5-touch-global-menu { top:calc(100% + 1px); right:6px; width:min(300px,calc(100% - 12px)); padding:5px; }
+#sshdeck-ui-plan-v5 .tw5-touch-layout-menu { top:calc(100% + 1px); right:6px; width:min(360px,calc(100% - 12px)); }
+#sshdeck-ui-plan-v5 .tw5-state-global-menu .tw5-desktop-global-menu,#sshdeck-ui-plan-v5 .tw5-state-global-menu .tw5-touch-global-menu,#sshdeck-ui-plan-v5 .tw5-state-layout .tw5-desktop-layout-menu,#sshdeck-ui-plan-v5 .tw5-state-layout .tw5-touch-layout-menu { display:block; }
+#sshdeck-ui-plan-v5 .tw5-menu-account { display:flex; align-items:center; gap:8px; padding:7px; border-bottom:1px solid var(--tw-border); }
+#sshdeck-ui-plan-v5 .tw5-menu-account>span { width:33px; height:33px; }
+#sshdeck-ui-plan-v5 .tw5-menu-account>div { display:grid; }
+#sshdeck-ui-plan-v5 .tw5-menu-account small,#sshdeck-ui-plan-v5 .tw5-global-menu button small { color:var(--tw-muted); }
+#sshdeck-ui-plan-v5 .tw5-global-menu>button,#sshdeck-ui-plan-v5 .tw5-session-actions>button { display:flex; align-items:center; gap:8px; width:100%; min-height:40px; padding:6px 8px; border:0; border-radius:7px; background:transparent; text-align:left; white-space:nowrap; }
+#sshdeck-ui-plan-v5 .tw5-global-menu>button small { margin-left:auto; white-space:nowrap; }
+#sshdeck-ui-plan-v5 .tw5-global-menu>button:hover,#sshdeck-ui-plan-v5 .tw5-session-actions>button:hover { background:var(--tw-hover); }
+#sshdeck-ui-plan-v5 .tw5-menu-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:9px; border-bottom:1px solid var(--tw-border); }
+#sshdeck-ui-plan-v5 .tw5-menu-heading>div { display:grid; gap:2px; }
+#sshdeck-ui-plan-v5 .tw5-menu-heading small { color:var(--tw-muted); white-space:nowrap; }
+#sshdeck-ui-plan-v5 .tw5-count-badge { padding:3px 6px; border-radius:6px; color:var(--tw-accent); background:var(--tw-accent-soft); white-space:nowrap; }
+#sshdeck-ui-plan-v5 .tw5-layout-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; padding:6px; }
+#sshdeck-ui-plan-v5 .tw5-layout-grid>button { display:grid; gap:4px; justify-items:stretch; padding:6px; border:1px solid transparent; border-radius:7px; background:transparent; white-space:nowrap; }
+#sshdeck-ui-plan-v5 .tw5-layout-grid>button:hover { border-color:var(--tw-accent); background:var(--tw-accent-soft); }
+#sshdeck-ui-plan-v5 .tw5-layout-grid>button.is-unavailable { display:none; }
+#sshdeck-ui-plan-v5 .tw5-preview { display:grid; height:38px; gap:2px; padding:3px; border:1px solid var(--tw-border); border-radius:5px; background:var(--tw-bar); }
+#sshdeck-ui-plan-v5 .tw5-preview i { min-width:0; min-height:0; border-radius:2px; background:var(--tw-accent-soft); }
+#sshdeck-ui-plan-v5 .tw5-one{grid-template:1fr/1fr}#sshdeck-ui-plan-v5 .tw5-two-cols{grid-template:1fr/repeat(2,1fr)}#sshdeck-ui-plan-v5 .tw5-two-rows{grid-template:repeat(2,1fr)/1fr}#sshdeck-ui-plan-v5 .tw5-three{grid-template:repeat(2,1fr)/repeat(2,1fr)}
+#sshdeck-ui-plan-v5 .tw5-three i:first-child{grid-row:1/3}#sshdeck-ui-plan-v5 .tw5-four{grid-template:repeat(2,1fr)/repeat(2,1fr)}#sshdeck-ui-plan-v5 .tw5-four-main{grid-template:repeat(3,1fr)/repeat(2,1fr)}
+#sshdeck-ui-plan-v5 .tw5-four-main i:first-child{grid-row:1/4}#sshdeck-ui-plan-v5 .tw5-five{grid-template:repeat(4,1fr)/repeat(2,1fr)}#sshdeck-ui-plan-v5 .tw5-five i:first-child{grid-row:1/5}#sshdeck-ui-plan-v5 .tw5-six{grid-template:repeat(2,1fr)/repeat(3,1fr)}
+#sshdeck-ui-plan-v5 .tw5-inspector { display:none; flex:0 0 min(34%,340px); min-width:255px; flex-direction:column; border-left:1px solid var(--tw-border); background:var(--tw-surface); }
+#sshdeck-ui-plan-v5 .tw5-state-notes .tw5-notes,#sshdeck-ui-plan-v5 .tw5-state-library .tw5-library,#sshdeck-ui-plan-v5 .tw5-state-sftp .tw5-sftp { display:flex; }
+#sshdeck-ui-plan-v5 .tw5-panel-head { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:9px; border-bottom:1px solid var(--tw-border); }
+#sshdeck-ui-plan-v5 .tw5-panel-head>div,#sshdeck-ui-plan-v5 .tw5-list-row>span { display:grid; gap:2px; }
+#sshdeck-ui-plan-v5 .tw5-panel-head small,#sshdeck-ui-plan-v5 .tw5-list-row small { color:var(--tw-muted); }
+#sshdeck-ui-plan-v5 .tw5-notes textarea { flex:1; min-height:0; margin:9px; padding:9px; resize:none; border:1px solid var(--tw-border); border-radius:7px; color:var(--tw-terminal-text); background:var(--tw-terminal); font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+#sshdeck-ui-plan-v5 .tw5-search { display:flex; align-items:center; gap:6px; margin:9px; padding:6px 7px; border:1px solid var(--tw-border); border-radius:7px; background:var(--tw-bar); }
+#sshdeck-ui-plan-v5 .tw5-search input,#sshdeck-ui-plan-v5 .tw5-terminal-search input { width:100%; min-width:0; border:0; outline:0; color:var(--tw-text); background:transparent; }
+#sshdeck-ui-plan-v5 .tw5-list-row { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; min-height:46px; padding:7px 9px; border:0; border-top:1px solid var(--tw-border); background:transparent; text-align:left; }
+#sshdeck-ui-plan-v5 .tw5-list-row code { color:var(--tw-muted); }
+#sshdeck-ui-plan-v5 .tw5-file-actions { display:flex; gap:5px; padding:9px; }
+#sshdeck-ui-plan-v5 .tw5-state-session-actions .tw5-session-actions { display:grid; top:7px; left:36%; min-width:235px; padding:5px; }
+#sshdeck-ui-plan-v5 .tw5-state-session-actions .tw5-offline-session { outline:2px solid var(--tw-accent); outline-offset:-2px; background:var(--tw-accent-soft); }
+#sshdeck-ui-plan-v5 .tw5-danger { color:var(--tw-danger); }
+#sshdeck-ui-plan-v5 .tw5-state-search .tw5-terminal-search { display:flex; align-items:center; gap:4px; top:7px; right:7px; width:min(410px,calc(100% - 14px)); padding:4px 5px; }
+#sshdeck-ui-plan-v5 .tw5-terminal-search span { color:var(--tw-muted); white-space:nowrap; }
+#sshdeck-ui-plan-v5 .tw5-state-confirm .tw5-confirm { display:grid; justify-items:center; gap:7px; top:50%; left:50%; width:min(350px,calc(100% - 22px)); padding:17px; transform:translate(-50%,-50%); text-align:center; }
+#sshdeck-ui-plan-v5 .tw5-confirm-icon { display:grid; place-items:center; width:40px; height:40px; border-radius:50%; color:var(--tw-warning); background:color-mix(in srgb,var(--tw-warning) 14%,transparent); }
+#sshdeck-ui-plan-v5 .tw5-confirm p { margin:0; color:var(--tw-muted); }
+#sshdeck-ui-plan-v5 .tw5-confirm>div:last-child { display:flex; gap:6px; }
+#sshdeck-ui-plan-v5 .tw5-danger-control { color:var(--tw-shell); border-color:var(--tw-danger); background:var(--tw-danger); }
+#sshdeck-ui-plan-v5 .tw5-state-broadcast .tw5-broadcast-trigger { color:var(--tw-warning); border-color:var(--tw-warning); background:color-mix(in srgb,var(--tw-warning) 13%,transparent); }
+#sshdeck-ui-plan-v5 .tw5-composer-dock,#sshdeck-ui-plan-v5 .tw5-keypad,#sshdeck-ui-plan-v5 .tw5-system-keyboard { display:none; }
+#sshdeck-ui-plan-v5 .tw5-state-split-2 .tw5-terminals{grid-template:1fr/repeat(2,minmax(0,1fr))}#sshdeck-ui-plan-v5 .tw5-state-split-3 .tw5-terminals{grid-template:repeat(2,minmax(0,1fr))/repeat(2,minmax(0,1fr))}#sshdeck-ui-plan-v5 .tw5-state-split-3 .tw5-terminal-primary{grid-row:1/3}#sshdeck-ui-plan-v5 .tw5-state-split-4 .tw5-terminals{grid-template:repeat(2,minmax(0,1fr))/repeat(2,minmax(0,1fr))}#sshdeck-ui-plan-v5 .tw5-state-split-6 .tw5-terminals{grid-template:repeat(2,minmax(0,1fr))/repeat(3,minmax(0,1fr))}
+#sshdeck-ui-plan-v5 .tw5-state-split-2 .tw5-terminal:nth-child(-n+2),#sshdeck-ui-plan-v5 .tw5-state-split-3 .tw5-terminal:nth-child(-n+3),#sshdeck-ui-plan-v5 .tw5-state-split-4 .tw5-terminal:nth-child(-n+4),#sshdeck-ui-plan-v5 .tw5-state-split-6 .tw5-terminal:nth-child(-n+6){display:block;border-right-width:1px;border-bottom-width:1px}
+#sshdeck-ui-plan-v5 .tw5-state-split-2 .tw5-pane-label,#sshdeck-ui-plan-v5 .tw5-state-split-3 .tw5-pane-label,#sshdeck-ui-plan-v5 .tw5-state-split-4 .tw5-pane-label,#sshdeck-ui-plan-v5 .tw5-state-split-6 .tw5-pane-label{display:flex}
+#sshdeck-ui-plan-v5 .tw5-viewport-desktop-compact .tw5-window { aspect-ratio:4/3; }
+#sshdeck-ui-plan-v5 .tw5-viewport-desktop-compact .tw5-responsive-label>span { display:none; }
+#sshdeck-ui-plan-v5 .tw5-viewport-desktop-compact .tw5-global-nav .tw5-control>span { display:none; }
+
+#sshdeck-ui-plan-v5 .tw5-viewport-ipad,#sshdeck-ui-plan-v5 .tw5-viewport-ipad-landscape,#sshdeck-ui-plan-v5 .tw5-viewport-phone,#sshdeck-ui-plan-v5 .tw5-viewport-phone-small,#sshdeck-ui-plan-v5 .tw5-viewport-phone-landscape { margin-inline:auto; }
+#sshdeck-ui-plan-v5 .tw5-viewport-ipad{max-width:520px}#sshdeck-ui-plan-v5 .tw5-viewport-ipad .tw5-window{aspect-ratio:834/1194}#sshdeck-ui-plan-v5 .tw5-viewport-ipad-landscape{max-width:1194px}#sshdeck-ui-plan-v5 .tw5-viewport-ipad-landscape .tw5-window{aspect-ratio:1194/834}#sshdeck-ui-plan-v5 .tw5-viewport-phone{max-width:390px}#sshdeck-ui-plan-v5 .tw5-viewport-phone .tw5-window{aspect-ratio:390/844}#sshdeck-ui-plan-v5 .tw5-viewport-phone-small{max-width:359px}#sshdeck-ui-plan-v5 .tw5-viewport-phone-small .tw5-window{aspect-ratio:359/780}#sshdeck-ui-plan-v5 .tw5-viewport-phone-landscape{max-width:926px}#sshdeck-ui-plan-v5 .tw5-viewport-phone-landscape .tw5-window{aspect-ratio:926/428}
+#sshdeck-ui-plan-v5 .tw5-viewport-ipad .tw5-desktop-header,#sshdeck-ui-plan-v5 .tw5-viewport-ipad-landscape .tw5-desktop-header,#sshdeck-ui-plan-v5 .tw5-viewport-phone .tw5-desktop-header,#sshdeck-ui-plan-v5 .tw5-viewport-phone-small .tw5-desktop-header,#sshdeck-ui-plan-v5 .tw5-viewport-phone-landscape .tw5-desktop-header { display:none; }
+#sshdeck-ui-plan-v5 .tw5-viewport-ipad .tw5-touch-header,#sshdeck-ui-plan-v5 .tw5-viewport-ipad-landscape .tw5-touch-header,#sshdeck-ui-plan-v5 .tw5-viewport-phone .tw5-touch-header,#sshdeck-ui-plan-v5 .tw5-viewport-phone-small .tw5-touch-header,#sshdeck-ui-plan-v5 .tw5-viewport-phone-landscape .tw5-touch-header { display:block; }
+#sshdeck-ui-plan-v5 .tw5-touch-global-row { height:44px; box-sizing:border-box; padding-block:4px; }
+#sshdeck-ui-plan-v5 .tw5-touch-session-row { height:44px; box-sizing:border-box; padding-block:6px; border-top:1px solid var(--tw-border); }
+#sshdeck-ui-plan-v5 .tw5-touch-session-row .tw5-session { min-width:86px; height:30px; min-height:30px; padding-block:1px; }
+#sshdeck-ui-plan-v5 .tw5-touch-session-row .tw5-session::before { content:""; position:absolute; inset-block:-7px; inset-inline:0; }
+
+#sshdeck-ui-plan-v5 .tw5-viewport-ipad .tw5-responsive-label>span,#sshdeck-ui-plan-v5 .tw5-viewport-phone .tw5-responsive-label>span,#sshdeck-ui-plan-v5 .tw5-viewport-phone-small .tw5-responsive-label>span { display:none; }
+#sshdeck-ui-plan-v5 .tw5-viewport-ipad .tw5-responsive-label,#sshdeck-ui-plan-v5 .tw5-viewport-phone .tw5-responsive-label,#sshdeck-ui-plan-v5 .tw5-viewport-phone-small .tw5-responsive-label { width:42px; padding-inline:0; }
+#sshdeck-ui-plan-v5 .tw5-viewport-ipad .tw5-composer-dock,#sshdeck-ui-plan-v5 .tw5-viewport-ipad-landscape .tw5-composer-dock,#sshdeck-ui-plan-v5 .tw5-viewport-phone .tw5-composer-dock,#sshdeck-ui-plan-v5 .tw5-viewport-phone-small .tw5-composer-dock,#sshdeck-ui-plan-v5 .tw5-viewport-phone-landscape .tw5-composer-dock { display:flex; }
+#sshdeck-ui-plan-v5 .tw5-composer-dock { align-items:end; gap:4px; flex:0 0 auto; padding:4px max(5px,env(safe-area-inset-right)) calc(4px + env(safe-area-inset-bottom)) max(5px,env(safe-area-inset-left)); border-top:1px solid var(--tw-border); background:var(--tw-bar); }
+#sshdeck-ui-plan-v5 .tw5-composer-dock .tw5-control,#sshdeck-ui-plan-v5 .tw5-composer-dock .tw5-icon-control { min-height:42px; }
+#sshdeck-ui-plan-v5 .tw5-composer { position:relative; display:flex; flex:1 1 auto; min-width:0; }
+#sshdeck-ui-plan-v5 .tw5-composer textarea { width:100%; min-width:0; min-height:42px; max-height:86px; padding:6px 7px 16px; resize:none; border:1px solid var(--tw-border); border-radius:7px; color:var(--tw-terminal-text); background:var(--tw-terminal); font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+#sshdeck-ui-plan-v5 .tw5-composer small { position:absolute; right:7px; bottom:2px; left:7px; overflow:hidden; color:var(--tw-muted); white-space:nowrap; text-overflow:ellipsis; pointer-events:none; }
+#sshdeck-ui-plan-v5 .tw5-exit-scroll { display:none; }
+#sshdeck-ui-plan-v5 .tw5-state-scroll .tw5-exit-scroll { display:inline-flex; }
+#sshdeck-ui-plan-v5 .tw5-viewport-phone .tw5-exit-scroll>span,#sshdeck-ui-plan-v5 .tw5-viewport-phone-small .tw5-exit-scroll>span,#sshdeck-ui-plan-v5 .tw5-viewport-ipad .tw5-exit-scroll>span { display:none; }
+#sshdeck-ui-plan-v5 .tw5-viewport-phone .tw5-exit-scroll,#sshdeck-ui-plan-v5 .tw5-viewport-phone-small .tw5-exit-scroll,#sshdeck-ui-plan-v5 .tw5-viewport-ipad .tw5-exit-scroll { width:42px; padding-inline:0; }
+#sshdeck-ui-plan-v5 .tw5-state-input-multiline .tw5-composer textarea { min-height:74px; }
+#sshdeck-ui-plan-v5 .tw5-keypad { flex:0 0 auto; padding:5px; border-top:1px solid var(--tw-border); background:var(--tw-surface); }
+#sshdeck-ui-plan-v5 .tw5-state-keypad-1 .tw5-keypad,#sshdeck-ui-plan-v5 .tw5-state-keypad-2 .tw5-keypad { display:block; }
+#sshdeck-ui-plan-v5 .tw5-keypad-head { display:flex; align-items:center; justify-content:space-between; gap:7px; padding-bottom:5px; }
+#sshdeck-ui-plan-v5 .tw5-keypad-page { margin-left:auto; color:var(--tw-muted); white-space:nowrap; }
+#sshdeck-ui-plan-v5 .tw5-key-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; }
+#sshdeck-ui-plan-v5 .tw5-key-grid button { min-height:39px; border:1px solid var(--tw-border); border-radius:7px; background:var(--tw-bar); white-space:nowrap; }
+#sshdeck-ui-plan-v5 .tw5-key-two { display:none; }
+#sshdeck-ui-plan-v5 .tw5-state-keypad-2 .tw5-key-one { display:none; }
+#sshdeck-ui-plan-v5 .tw5-state-keypad-2 .tw5-key-two { display:grid; }
+#sshdeck-ui-plan-v5 .tw5-system-keyboard { flex:0 0 auto; gap:4px; padding:6px 4px 9px; background:color-mix(in srgb,var(--tw-surface) 86%,var(--tw-muted)); }
+#sshdeck-ui-plan-v5 .tw5-state-keyboard .tw5-system-keyboard { display:grid; }
+#sshdeck-ui-plan-v5 .tw5-system-keyboard>div { display:flex; justify-content:center; gap:3px; }
+#sshdeck-ui-plan-v5 .tw5-system-keyboard span { display:grid; place-items:center; width:8.5%; min-height:29px; border-radius:5px; color:var(--tw-text); background:var(--tw-bar); }
+#sshdeck-ui-plan-v5 .tw5-state-notes.tw5-viewport-ipad .tw5-notes,#sshdeck-ui-plan-v5 .tw5-state-library.tw5-viewport-ipad .tw5-library,#sshdeck-ui-plan-v5 .tw5-state-sftp.tw5-viewport-ipad .tw5-sftp,#sshdeck-ui-plan-v5 .tw5-state-notes.tw5-viewport-ipad-landscape .tw5-notes,#sshdeck-ui-plan-v5 .tw5-state-library.tw5-viewport-ipad-landscape .tw5-library,#sshdeck-ui-plan-v5 .tw5-state-sftp.tw5-viewport-ipad-landscape .tw5-sftp { position:absolute; top:0; right:0; bottom:0; z-index:7; width:min(42%,340px); min-width:250px; }
+#sshdeck-ui-plan-v5 .tw5-state-notes.tw5-viewport-phone .tw5-notes,#sshdeck-ui-plan-v5 .tw5-state-library.tw5-viewport-phone .tw5-library,#sshdeck-ui-plan-v5 .tw5-state-sftp.tw5-viewport-phone .tw5-sftp,#sshdeck-ui-plan-v5 .tw5-state-notes.tw5-viewport-phone-small .tw5-notes,#sshdeck-ui-plan-v5 .tw5-state-library.tw5-viewport-phone-small .tw5-library,#sshdeck-ui-plan-v5 .tw5-state-sftp.tw5-viewport-phone-small .tw5-sftp { position:absolute; right:0; bottom:0; left:0; z-index:7; min-width:0; max-height:54%; border-top:1px solid var(--tw-border); border-left:0; border-radius:12px 12px 0 0; }
+#sshdeck-ui-plan-v5 .tw5-viewport-phone .tw5-statusbar,#sshdeck-ui-plan-v5 .tw5-viewport-phone-small .tw5-statusbar { display:none; }
+
+#sshdeck-ui-plan-v5 .tw5-viewport-phone-landscape .tw5-touch-session-row { height:40px; padding-block:4px; }
+#sshdeck-ui-plan-v5 .tw5-viewport-phone-landscape .tw5-touch-session-row .tw5-session::before { inset-block:-5px; }
+#sshdeck-ui-plan-v5 .tw5-viewport-phone-landscape .tw5-terminal { padding:9px; }
+#sshdeck-ui-plan-v5 .tw5-viewport-phone-landscape .tw5-composer-dock { padding-block:3px; }
+#sshdeck-ui-plan-v5 .tw5-viewport-phone-landscape .tw5-statusbar { display:none; }
+#sshdeck-ui-plan-v5 .tw5-viewport-phone-landscape.tw5-state-layout .tw5-touch-layout-menu { top:calc(100% + 1px); }
+
+#sshdeck-ui-plan-v5 .tw5-tool-button { display:inline-flex; align-items:center; justify-content:center; gap:1px; width:32px; height:32px; flex:0 0 32px; padding:0; border:1px solid var(--tw-border); border-radius:7px; color:var(--tw-text); background:transparent; white-space:nowrap; }
+#sshdeck-ui-plan-v5 .tw5-tool-button:hover { background:var(--tw-hover); }
+#sshdeck-ui-plan-v5 .tw5-context-tools { flex:0 0 auto; gap:3px; }
+#sshdeck-ui-plan-v5 .tw5-context-tools .tw5-layout-trigger { width:40px; flex-basis:40px; }
+#sshdeck-ui-plan-v5 .tw5-touch-tools { display:flex; align-items:center; gap:3px; flex:0 0 auto; }
+#sshdeck-ui-plan-v5 .tw5-touch-tools .tw5-tool-button { width:42px; height:42px; flex-basis:42px; border-color:transparent; }
+#sshdeck-ui-plan-v5 .tw5-target-chip { display:none; align-items:center; justify-content:center; gap:4px; min-height:42px; padding:5px 7px; border:1px solid var(--tw-warning); border-radius:7px; color:var(--tw-warning); background:color-mix(in srgb,var(--tw-warning) 12%,transparent); white-space:nowrap; }
+#sshdeck-ui-plan-v5 .tw5-state-broadcast .tw5-target-chip { display:inline-flex; }
+#sshdeck-ui-plan-v5 .tw5-state-broadcast.tw5-viewport-desktop .tw5-composer-dock,#sshdeck-ui-plan-v5 .tw5-state-broadcast.tw5-viewport-desktop-compact .tw5-composer-dock { display:flex; }
+#sshdeck-ui-plan-v5 .tw5-send-label { display:none; white-space:nowrap; }
+#sshdeck-ui-plan-v5 .tw5-state-broadcast.tw5-viewport-desktop .tw5-send-label,#sshdeck-ui-plan-v5 .tw5-state-broadcast.tw5-viewport-desktop-compact .tw5-send-label { display:inline; }
+#sshdeck-ui-plan-v5 .tw5-viewport-desktop .tw5-keypad-trigger,#sshdeck-ui-plan-v5 .tw5-viewport-desktop-compact .tw5-keypad-trigger { display:none; }
+#sshdeck-ui-plan-v5 .tw5-viewport-phone-small .tw5-brand-name { display:none; }
+@media(max-width:620px){
+  #sshdeck-ui-plan-v5 .viz-controls{align-items:stretch}
+  #sshdeck-ui-plan-v5 .form-label{min-width:100%}
+  #sshdeck-ui-plan-v5 .tw5-window{border-radius:9px}
+  #sshdeck-ui-plan-v5 .tw5-layout-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+</style>
+
+<script>
+(() => {
+  const root = document.getElementById('sshdeck-ui-plan-v5');
+  const product = root.querySelector('.tw5-product');
+  const viewport = root.querySelector('#tw5Viewport');
+  const theme = root.querySelector('#tw5Theme');
+  const name = root.querySelector('#tw5Name');
+  const state = root.querySelector('#tw5State');
+  const behavior = root.querySelector('.tw5-behavior');
+  const composer = root.querySelector('.tw5-composer textarea');
+  const helper = root.querySelector('.tw5-composer small');
+  const viewportValues = ['desktop','desktop-compact','ipad','ipad-landscape','phone','phone-small','phone-landscape'];
+  const themeValues = ['glass','paper','cyberpunk','obsidian'];
+  const stateValues = Array.from(state.options, option => option.value);
+  const limits = {desktop:6,'desktop-compact':6,ipad:4,'ipad-landscape':4,phone:2,'phone-small':2,'phone-landscape':2};
+  const policies = {desktop:'Desktop · đầy đủ 1–6 pane','desktop-compact':'Desktop · đầy đủ 1–6 pane',ipad:'iPad dọc · tối đa 4 pane','ipad-landscape':'iPad ngang · tối đa 4 pane',phone:'Điện thoại · tối đa 2 pane','phone-small':'Điện thoại · tối đa 2 pane','phone-landscape':'Điện thoại ngang · tối đa 2 pane'};
+  const sizes = {desktop:'132 × 46','desktop-compact':'91 × 38',ipad:'72 × 56','ipad-landscape':'102 × 36',phone:'44 × 39','phone-small':'40 × 35','phone-landscape':'82 × 18'};
+  const notes = {
+    terminal:'Chip kết nối cao 30px và được căn giữa trong row 44px, tạo khoảng thở rõ với hai đường viền; touch header giữ đủ sáu action.',
+    layout:'Dropdown bám ngay dưới nút Bố cục và tự lọc: desktop 1–6, iPad 1–4, điện thoại 1–2.',
+    'split-2':'Hai pane khả dụng trên mọi thiết bị; mỗi pane fit PTY độc lập.',
+    'split-3':'Ba pane chỉ khả dụng từ iPad trở lên; điện thoại tự giới hạn về hai pane.',
+    'split-4':'Bốn pane là mức tối đa trên iPad; điện thoại tự giới hạn về hai pane.',
+    'split-6':'Sáu pane chỉ khả dụng trên desktop; iPad tự giới hạn về bốn, điện thoại về hai.',
+    broadcast:'Broadcast dùng chính composer chung trên desktop, iPad và mobile; bật lên sẽ thêm target Tất cả 3 vào cùng thanh nhập.',
+    'global-menu':'Menu bám đúng trigger; touch vẫn chỉ có một menu toàn cục.',
+    'session-actions':'Chip ngắt kết nối vẫn chọn được; chạm lại hoặc nhấn giữ để mở tác vụ.',
+    notes:'Ghi chú là icon trực tiếp trên touch header và desktop toolbar, không chiếm chiều ngang session strip.',
+    library:'Thư viện lệnh chèn để sửa trước khi chạy; không tạo composer trên desktop.',
+    sftp:'SFTP dùng inspector trên desktop/iPad và sheet trên phone.',
+    'input-stream':'Gõ thường stream; composer cảm ứng giữ đúng chiều cao và helper một dòng.',
+    'input-paste':'Paste/drop giữ local để chỉnh, chỉ gửi khi bấm Gửi.',
+    'input-ime':'Telex/IME không phát partial bytes trong composition.',
+    'input-multiline':'Composer tự giãn đến cap; text và helper không làm nút chức năng xuống dòng.',
+    'keypad-1':'Keypad nằm sau dock như bàn phím, co terminal lên thay vì phủ terminal.',
+    'keypad-2':'Trang 2 giữ Home, End, PgUp, PgDn, Ctrl, Alt và Del.',
+    keyboard:'Composer bám trên bàn phím hệ thống và terminal fit theo visualViewport.',
+    scroll:'Nút Thoát cuộn chỉ xuất hiện trong chế độ cuộn; phone/iPad dọc dùng icon, màn hình rộng mới hiện nhãn.',
+    search:'Thanh tìm kiếm bám góc workspace, không lệch khỏi terminal.',
+    confirm:'Reset tạo phiên mới và luôn có xác nhận; Reconnect giữ phiên hiện tại.'
+  };
+  const inputStates = {
+    'input-stream':['systemctl status sshdeck','Đang stream · đã đồng bộ'],
+    'input-paste':[['docker compose pull','docker compose up -d'].join(String.fromCharCode(10)),'Đã dán · chỉnh rồi Gửi'],
+    'input-ime':['kiểm tra trạng thái dịch vụ','Đang ghép chữ · chưa gửi'],
+    'input-multiline':[['cd /opt/sshdeck','docker compose pull','docker compose up -d'].join(String.fromCharCode(10)),'3 dòng · Dán sẽ chờ Gửi']
+  };
+  const clampState = () => {
+    const cap = limits[viewport.value];
+    const requested = Number(state.value.replace('split-',''));
+    if (!requested || requested <= cap) return;
+    state.value = cap === 2 ? 'split-2' : 'split-4';
+  };
+  const apply = () => {
+    clampState();
+    viewportValues.forEach(value => product.classList.toggle(`tw5-viewport-${value}`, viewport.value === value));
+    themeValues.forEach(value => product.classList.toggle(`tw5-theme-${value}`, theme.value === value));
+    stateValues.forEach(value => product.classList.toggle(`tw5-state-${value}`, state.value === value));
+    root.querySelectorAll('.tw5-brand-name').forEach(label => { label.textContent = name.value; });
+    root.querySelector('.tw5-terminal-size').textContent = sizes[viewport.value];
+    root.querySelectorAll('.tw5-layout-policy').forEach(label => { label.textContent = policies[viewport.value]; });
+    root.querySelectorAll('.tw5-count-badge').forEach(label => { label.textContent = `1–${limits[viewport.value]}`; });
+    root.querySelectorAll('[data-layout]').forEach(button => button.classList.toggle('is-unavailable', Number(button.dataset.layout) > limits[viewport.value]));
+    const input = inputStates[state.value];
+    composer.value = input ? input[0] : '';
+    helper.textContent = input ? input[1] : 'Dán sẽ chờ Gửi';
+    root.querySelector('.tw5-keypad-page').textContent = state.value === 'keypad-2' ? 'Trang 2 / 2' : 'Trang 1 / 2';
+    root.querySelectorAll('.tw5-broadcast-trigger').forEach(button => button.setAttribute('aria-pressed', String(state.value === 'broadcast')));
+    behavior.textContent = notes[state.value];
+  };
+  viewport.addEventListener('change', apply);
+  theme.addEventListener('change', apply);
+  name.addEventListener('change', apply);
+  state.addEventListener('change', apply);
+  root.addEventListener('click', event => {
+    const trigger = event.target.closest('[data-state]');
+    if (!trigger || !root.contains(trigger)) return;
+    state.value = trigger.dataset.state;
+    apply();
+  });
+  apply();
+})();
+</script>

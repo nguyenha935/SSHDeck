@@ -1,0 +1,1274 @@
+/*
+ * SSHDeck auth pages — v5 design language.
+ *
+ * Loaded by all four auth pages (login.html, register.html,
+ * change_password.html, admin.html). It was reviewed at 7 viewports x 10
+ * themes before those templates switched to it, and that review gate is the
+ * reason for the INFERENCE tags below.
+ *
+ * AUTHORITY AND ITS LIMITS
+ * ------------------------
+ * The v5 mockup (docs/spec/sshdeck-ui-plan-v5.html) contains NO auth
+ * screen. Every layout decision here is therefore an inference from the
+ * mockup's shell vocabulary. Anything the mockup does cover is cited by
+ * line.
+ *
+ * TOKENS
+ * ------
+ * The mockup's own --tw-* names are mockup-local (scoped to
+ * #sshdeck-ui-plan-v5, mockup lines 212-219). The shipped app uses --bg-*,
+ * --text-*, --accent-*, defined in style.css :root (glass) plus nine
+ * body[data-theme] blocks at style.css:312-829. This file uses ONLY the
+ * shipped names, because that is what makes all 10 themes render. The mapping
+ * used throughout:
+ *
+ *     mockup --tw-surface  -> --bg-secondary / --bg-modal
+ *     mockup --tw-bar      -> --bg-tertiary
+ *     mockup --tw-border   -> --border-color
+ *     mockup --tw-text     -> --text-primary
+ *     mockup --tw-muted    -> --text-secondary / --text-muted
+ *     mockup --tw-accent   -> --accent-primary
+ *     mockup --tw-accent-text -> --accent-on-text
+ *     mockup --tw-accent-soft -> color-mix(--accent-primary 14%)
+ *                                (mockup line 214 defines accent-soft as the
+ *                                 accent at .14 alpha; color-mix reproduces
+ *                                 that from the theme token rather than
+ *                                 hardcoding a second colour)
+ *
+ * ZERO hardcoded colours. Every colour below is var or color-mix over a
+ * theme token. Greys, shadows and overlays included.
+ */
+
+/* ---------------------------------------------------------------------------
+ * Geometry constants, all traceable.
+ * ------------------------------------------------------------------------ */
+.a5 {
+    /* Mockup line 228 (.tw5-window): border-radius 12px on the outermost
+     * chrome surface. The auth card is the outermost chrome here. */
+    --a5-radius-card: 12px;
+    /* Mockup line 234 (.tw5-control): border-radius 7px on every control.
+     * Inputs and buttons are controls. */
+    --a5-radius-control: 7px;
+    /* Mockup line 272 (.tw5-global-menu): 10px on floating surfaces. */
+    --a5-radius-float: 10px;
+
+    /* Amendment v5 line 30: the global/action row is 44px, and the 44px touch
+     * floor is the project-wide minimum (Entry 1, Entry 3, Entry 7). Every
+     * interactive control in this file is >= 44px in BOTH axes on touch.
+     * The mockup's own 32px .tw5-control (line 234) is a DESKTOP density and
+     * Is deliberately NOT copied to fields the thumb must hit -- see. */
+    --a5-touch: 44px;
+
+    /* Mockup line 22 (.tw5-*-row): gap 8px, padding 5px 8px. The 8px rhythm
+     * is the mockup's own spacing unit and is reused rather than reinvented. */
+    --a5-gap: 8px;
+    --a5-gap-tight: 5px;
+
+    /* Mockup line 27 (.tw5-logo): 28x28 with border-radius 7px, accent on
+     * Accent-soft. The brand mark is scaled up for the auth page --. */
+    --a5-logo: 56px;
+
+    --a5-field-pad-x: 12px;
+    /* Icon gutter: 12px pad + 18px icon + 10px gap. Derived, not guessed. */
+    --a5-field-gutter: 40px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Page frame.
+ *
+ * The mockup's shell is a full-bleed dark surface (--tw-shell, line 212) with
+ * chrome bars floating on it. Inferred: the auth page is that same shell with
+ * ONE floating surface centred on it, instead of the bar/workspace stack.
+ * Rejecting this means the auth page gets its own background treatment.
+ * ------------------------------------------------------------------------ */
+.a5 {
+    box-sizing: border-box;
+    min-height: 100vh;
+    min-height: 100dvh;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    color: var(--tw-text);
+    /* No background here. deck-tokens.css paints body with --deck-canvas (the
+       shell fill on touch), which is the same stage index.html stands its
+       window on; a background on `.a5` would win by specificity and hide it. */
+    font-family: var(--font-sans);
+    /* Amendment v5 section 3: the touch shell must respect the safe area. */
+    padding: max(16px, env(safe-area-inset-top))
+             max(16px, env(safe-area-inset-right))
+             max(16px, env(safe-area-inset-bottom))
+             max(16px, env(safe-area-inset-left));
+}
+
+.a5 *,
+.a5 *::before,
+.a5 *::after { box-sizing: inherit; }
+
+/* ---------------------------------------------------------------------------
+ * Language selector placement.
+ *
+ * The mockup puts the language control INSIDE the global menu
+ * (data-lucide="languages"). The auth page has no global menu, so the control
+ * sits at the right of the card's own brand band -- the same place the shell
+ * keeps its header controls. It was a floating strip above the card until
+ *; the strip went with the band. Kept as a real 44px control so it
+ * does not become the one sub-floor target on the page.
+ * ------------------------------------------------------------------------ */
+.a5-lang {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--a5-gap-tight);
+    min-height: var(--a5-touch);
+    min-width: var(--a5-touch);
+    padding: 0 12px;
+    border: 1px solid var(--tw-border);
+    border-radius: var(--a5-radius-control);
+    background: transparent;
+    color: var(--tw-muted);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.a5-lang:hover { background: var(--tw-hover); color: var(--tw-text); }
+.a5-lang:focus-visible {
+    outline: 2px solid var(--tw-accent);
+    outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Card. Mockup line 228 geometry (12px radius, 1px border, surface fill).
+ * ------------------------------------------------------------------------ */
+.a5-main {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 0;
+}
+
+/*: the card is built like the app's own window (deck.css L1) --
+ * the SHELL plane inside a 1px border on the canvas, with a --tw-bar band
+ * across the top, which is exactly how index.html stacks its header on its
+ * workspace. Before this it was a --tw-bar slab on an unrelated gradient, and
+ * that is what read as a different product. No `overflow: hidden`: the
+ * language menu is absolutely positioned and would be clipped by it. */
+.a5-card {
+    width: 100%;
+    max-width: 460px;
+    border: 1px solid var(--tw-border);
+    border-radius: var(--a5-radius-card);
+    background: var(--tw-shell);
+    /* Mockup line 228: box-shadow uses color-mix over the shell colour rather
+     * than a literal black, which is why it survives the light themes
+     * (paper, arctic-ice, rose-gold) instead of turning into a smear. */
+    box-shadow: 0 18px 42px color-mix(in srgb, var(--tw-shell) 48%, transparent);
+}
+
+/* The band, and the body under it. */
+.a5-body {
+    padding: 24px;
+}
+
+/* [INF-3] Brand block.
+ *
+ * Mockup line 27 (.tw5-logo) is a 28x28 rounded square, accent glyph on
+ * accent-soft fill. Inferred: same treatment at 56px for the auth page, where
+ * the mark is the page's only identity anchor. The mockup's own brand pairing
+ * (logo + wordmark, mockup line 36 region) is preserved.
+ * The emoji marks the current pages use (login.html:28 the desktop glyph,
+ * change_password.html:20 the lock glyph) are replaced by the shipped sprite
+ * the same icons.svg the shell uses, so no new asset is introduced. */
+/* [INF-B2] The brand band,: a ROW across the top of the card
+ * (mark left, language right), the same shape as the shell's own header,
+ * replacing the centred column. The language control moves in here from the
+ * floating `.a5-utility`, which is gone. */
+.a5-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    background: var(--tw-bar);
+    border-bottom: 1px solid var(--tw-border);
+    border-radius: var(--a5-radius-card) var(--a5-radius-card) 0 0;
+}
+
+.a5-brand-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* [INF-B3] The mark fills its box. The delivered artwork is a full-frame
+ * rounded square that carries its own plate and corner radius, so the
+ * accent-soft tile the sprite glyph needed would be a second plate behind it.
+ * `color` is the ink: --tw-text gives the black mark on the one light theme
+ * and the white mark on the nine dark ones, which is the pair the owner
+ * delivered. */
+.a5-logo {
+    display: block;
+    flex: 0 0 auto;
+    width: var(--a5-logo);
+    height: var(--a5-logo);
+    color: var(--tw-text);
+}
+
+.a5-logo svg { width: 100%; height: 100%; display: block; }
+
+.a5-title {
+    margin: 0;
+    font-size: 22px;
+    /* Official mockup brand/title uses <strong> at weight 500 (line 221). */
+    font-weight: 500;
+    letter-spacing: -0.2px;
+    color: var(--tw-text);
+}
+
+.a5-subtitle {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--tw-muted);
+}
+
+/* ---------------------------------------------------------------------------
+ * Alerts. Mockup has no alert component; the accent-soft pattern (line 214)
+ * is reused over the semantic tokens so all 10 themes stay legible.
+ * ------------------------------------------------------------------------ */
+.a5-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+    border-radius: var(--a5-radius-control);
+    font-size: 13px;
+    font-weight: 500;
+    border: 1px solid transparent;
+}
+
+.a5-alert svg { width: 18px; height: 18px; flex: 0 0 18px; margin-top: 1px; }
+
+.a5-alert-error {
+    color: var(--tw-danger);
+    background: color-mix(in srgb, var(--tw-danger) 14%, transparent);
+    border-color: color-mix(in srgb, var(--tw-danger) 30%, transparent);
+}
+
+.a5-alert-success {
+    color: var(--tw-success);
+    background: color-mix(in srgb, var(--tw-success) 14%, transparent);
+    border-color: color-mix(in srgb, var(--tw-success) 30%, transparent);
+}
+
+.a5-alert-info {
+    color: var(--info-color);
+    background: color-mix(in srgb, var(--info-color) 14%, transparent);
+    border-color: color-mix(in srgb, var(--info-color) 30%, transparent);
+}
+
+/* ---------------------------------------------------------------------------
+ * Fields at 44px, not the mockup's 32px control height.
+ *
+ * Mockup line 234 sets .tw5-control to min-height 32px. That is a DESKTOP
+ * chrome density for controls clustered in a 44px bar. A form field is the
+ * primary touch target on a phone, and amendment line 30 plus Entries 1/3/7
+ * put the floor at 44px. Applying 32px here would ship a sub-floor target on
+ * the single most-tapped element in the product.
+ *
+ * So: 44px minimum on the field, the toggle and the submit. This is a
+ * deliberate, flagged departure from a mockup number in favour of the
+ * mockup's own 44px touch rule. Reject this and the fields go to 32px.
+ * ------------------------------------------------------------------------ */
+.a5-field { margin-bottom: 16px; }
+
+/*
+ * A field that carries a visible hint needs its own bottom margin, because the
+ * hint eats the separation the plain margin was sized for.
+ *
+ * Measured on register.html at 926x428 before this rule:
+ *   username input -> "Password" label        30px   (field to field)
+ *   password input -> "Minimum 8 characters"   6px   (hint to its own input)
+ *   hint           -> "Confirm Password"      12px   <-- less than half of 30
+ * The hint therefore sat nearly twice as close to the NEXT field's label as to
+ * the input it describes, so it read as a caption for "Confirm Password" --
+ * exactly the wrong field, and on the one page where a password rule matters.
+ *
+ * Fixed by relating the two spacings instead of inventing a number: the extra
+ * margin is the hint's own top margin plus its line box, so a hinted field ends
+ * Up with the same visual gap to the next label as an unhinted one.:has keeps
+ * it off the fields whose hint is the empty live-region div that auth.js fills
+ * in only on error -- those have no painted hint and must not gain a gap.
+ */
+.a5-field:has(> .a5-hint:not(:empty)) { margin-bottom: 30px; }
+
+.a5-label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--tw-text);
+}
+
+.a5-input-wrap { position: relative; display: block; }
+
+.a5-input {
+    width: 100%;
+    min-height: var(--a5-touch);
+    padding: 10px var(--a5-field-pad-x) 10px var(--a5-field-gutter);
+    border: 1px solid var(--tw-border);
+    border-radius: var(--a5-radius-control);
+    background: var(--tw-shell);
+    color: var(--tw-text);
+    font: inherit;
+    font-size: 14px;
+    /* 16px on touch would be the iOS zoom-guard, but the shell already sets a
+     * viewport that disallows the zoom; 14px matches the mockup's body scale. */
+}
+
+.a5-input::placeholder { color: var(--text-muted); }
+
+.a5-input:focus-visible,
+.a5-input:focus {
+    outline: none;
+    border-color: var(--tw-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--tw-accent) 22%, transparent);
+}
+
+/* The leading icon is decorative and must never eat the tap. */
+.a5-input-icon {
+    position: absolute;
+    left: var(--a5-field-pad-x);
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    pointer-events: none;
+    color: var(--text-muted);
+}
+
+/* Password reveal. 44x44, inside the field, and the input reserves room for
+ * it so the two never overlap -- the overlap is what makes a reveal button
+ * eat the last characters of a long password on a narrow phone. */
+.a5-input-wrap:has(.a5-toggle) .a5-input { padding-right: var(--a5-touch); }
+
+.a5-toggle {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    display: grid;
+    place-items: center;
+    width: var(--a5-touch);
+    height: var(--a5-touch);
+    border: 0;
+    background: transparent;
+    color: var(--tw-muted);
+    cursor: pointer;
+    border-radius: var(--a5-radius-control);
+}
+
+.a5-toggle svg { width: 18px; height: 18px; }
+.a5-toggle:hover { color: var(--tw-accent); }
+.a5-toggle:focus-visible {
+    outline: 2px solid var(--tw-accent);
+    outline-offset: -2px;
+}
+
+.a5-hint {
+    margin-top: 6px;
+    font-size: 12px;
+    min-height: 1em;
+    /*
+     * --text-secondary, NOT --text-muted.
+     *
+     * Measured WCAG AA failure: at 12px this is body text and needs 4.5:1
+     * against the card (--bg-secondary). With --text-muted it failed in six of
+     * the ten themes -- paper 3.14, noir 3.59, glass 4.11, retro 4.23,
+     * obsidian 4.27, solar 4.35 -- and only scraped past in the other four.
+     *
+     * --text-secondary is the tier intended for readable secondary copy and
+     * clears AA in ALL TEN themes: glass 6.13, retro 10.36, solar 11.25,
+     * paper 6.25, noir 9.01, arctic-ice 10.97, rose-gold 11.10,
+     * cyberpunk-neon 11.58, emerald-matrix 14.12, obsidian 9.92.
+     *
+     * Deliberately a change of WHICH TOKEN this element uses, not a change to
+     * any token's value: --text-muted is shared with the terminal shell, and
+     * amendment line 109 forbids editing tokens out of scope. --text-muted
+     * remains correct for its own purpose (placeholders, disabled chrome);
+     * it was simply the wrong tier for text the user must read.
+     */
+    color: var(--tw-muted);
+}
+
+/*
+ * Two empty live regions in a row reserve space TWICE.
+ *
+ * change_password.html:118-119 stacks #passwordMatchIndicator and
+ * #confirmPasswordHint -- both are permanent, both start empty, and both are
+ * required by the JS contract (auth.js writes the hint, the inline script writes
+ * the indicator). The min-height above is deliberate: it stops the form jumping
+ * when validation text appears. But paying it twice left a ~90px dead band
+ * between "Confirm New Password" and the Update button, measured on the
+ * 926x428 shot.
+ *
+ * Collapse only the SECOND of two adjacent empty hints. The first keeps its
+ * reserve, so the anti-jump behaviour is unchanged; the moment either one has
+ * text, :empty stops matching and it takes its normal box. Nothing is hidden --
+ * an element with content is never affected by this rule.
+ */
+.a5-hint:empty + .a5-hint:empty {
+    min-height: 0;
+    margin-top: 0;
+}
+
+.a5-hint-error { color: var(--tw-danger); }
+.a5-hint-success { color: var(--tw-success); }
+
+/* ---------------------------------------------------------------------------
+ * Checkbox row: the LABEL is the target, not the painted box.
+ *
+ * This is the same rule modal_narrow.mjs already enforces on the shell (its
+ * probe measures the label for a wrapped checkbox, because that is what a
+ * finger actually hits). A 13px painted input with a 44px label row satisfies
+ * the floor honestly; growing the painted box to 44px would not match any
+ * mockup surface.
+ * ------------------------------------------------------------------------ */
+.a5-check-row {
+    display: flex;
+    align-items: center;
+    min-height: var(--a5-touch);
+    margin-bottom: 16px;
+}
+
+.a5-check-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: var(--a5-touch);
+    padding-right: var(--a5-gap);
+    font-size: 13px;
+    color: var(--tw-text);
+    cursor: pointer;
+    user-select: none;
+}
+
+.a5-check-label input {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+    accent-color: var(--tw-accent);
+    cursor: pointer;
+}
+
+/* ---------------------------------------------------------------------------
+ * Buttons. Mockup line 234 radius 7px; accent fill + accent-text pairing from
+ * mockup line 214, which is what keeps the label readable on obsidian (white
+ * accent) and paper (dark-orange accent) alike.
+ * ------------------------------------------------------------------------ */
+.a5-submit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--a5-gap);
+    width: 100%;
+    min-height: var(--a5-touch);
+    padding: 0 16px;
+    border: 0;
+    border-radius: var(--a5-radius-control);
+    background: var(--tw-accent);
+    color: var(--accent-on-text);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.a5-submit svg { width: 18px; height: 18px; }
+.a5-submit:hover { background: color-mix(in srgb, var(--tw-accent) 88%, var(--tw-text)); }
+.a5-submit:focus-visible {
+    outline: 2px solid var(--tw-accent);
+    outline-offset: 2px;
+}
+
+.a5-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--a5-gap-tight);
+    min-height: var(--a5-touch);
+    min-width: var(--a5-touch);
+    padding: 0 14px;
+    border: 1px solid var(--tw-border);
+    border-radius: var(--a5-radius-control);
+    background: transparent;
+    color: var(--tw-text);
+    font: inherit;
+    font-size: 13px;
+    text-decoration: none;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.a5-btn svg { width: 16px; height: 16px; }
+.a5-btn:hover { background: var(--tw-hover); }
+.a5-btn:focus-visible {
+    outline: 2px solid var(--tw-accent);
+    outline-offset: 2px;
+}
+
+.a5-btn-danger { color: var(--tw-danger); }
+.a5-btn-danger:hover {
+    background: color-mix(in srgb, var(--tw-danger) 14%, transparent);
+}
+
+/* ---------------------------------------------------------------------------
+ * Footer links. 44px rows so the link is a real target on a phone.
+ * ------------------------------------------------------------------------ */
+/*
+ * THE LICENCE NOTICE.
+ *
+ * Not decoration. The PolyForm licence obliges anyone who passes SSHDeck on to
+ * carry the Required Notice with it, and the sign-in page is the one surface a
+ * hosted deployment has to show the public. So it is rendered at rest, in real
+ * text, in the theme's own muted ink -- quiet enough not to compete with the
+ * form, present enough that removing it is a deliberate edit.
+ *
+ * No colour literal: auth_pages_v5.mjs asserts this sheet carries none, and the
+ * notice has to read on all ten themes including the light one.
+ */
+.a5-notice {
+    margin: 10px 0 0;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--tw-muted);
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+
+.a5-notice-line {
+    display: block;
+    margin-top: 2px;
+}
+
+.a5-footer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--tw-border);
+    font-size: 13px;
+    color: var(--tw-muted);
+    text-align: center;
+}
+
+.a5-footer a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--a5-touch);
+    padding: 0 8px;
+    color: var(--tw-accent);
+    /*
+     * PERSISTENT underline, not `none` + underline-on-hover.
+     *
+     * Two independent reasons the affordance cannot rest on colour:
+     *
+     * 1. TOUCH. The previous rule put the underline only in `:hover`, and hover
+     *    does not exist on a touchscreen -- so on every phone, in every one of
+     *    the 10 themes, these links had no affordance at all. Touch is the
+     *    project's first stated priority, so that alone settles it.
+     *
+     * 2. OBSIDIAN. Mockup line 219 defines it as
+     *      --tw-accent:#fff  --tw-text:#fff  --tw-shell:#000
+     *    i.e. the accent is deliberately the SAME colour as primary text.
+     *    Measured in the shipped stylesheet, obsidian's --accent-primary and
+     *    --text-primary are both #ffffff, so a link cannot be told apart from
+     *    primary body copy by hue on that theme.
+     *
+     *    Measured, not assumed: .a5-footer itself uses --text-secondary
+     *    (#b8b8b8 in obsidian), so the link and the prose immediately around it
+     *    are 255 vs 184 -- close, but not identical. The accent==text collision
+     *    is real and is on --text-primary, which the card body uses.
+     *
+     * An underline carries no colour of its own, so it cannot break a palette
+     * and behaves identically across all 10 themes.
+     *
+     * The offset keeps the rule clear of the descenders in "Sign in here" and
+     * "Change Password" instead of striking through them.
+     */
+    text-decoration: underline;
+    text-decoration-thickness: max(1px, 0.06em);
+    text-underline-offset: max(2px, 0.14em);
+    font-weight: 600;
+}
+
+/* Hover thickens rather than toggling the underline on, so the link does not
+ * change geometry under the cursor. */
+.a5-footer a:hover { text-decoration-thickness: max(2px, 0.1em); }
+.a5-footer a:focus-visible {
+    outline: 2px solid var(--tw-accent);
+    outline-offset: 2px;
+    border-radius: var(--a5-radius-control);
+}
+
+/* ---------------------------------------------------------------------------
+ * Admin is a WIDE page, not a card.
+ *
+ * login/register/change_password are single-purpose forms and stay on the
+ * 460px card. Admin is a data table; forcing it into a 460px card would make
+ * every row scroll horizontally. Inferred: admin uses the mockup's bar +
+ * content composition (mockup line 22/23: a 44px row with brand left and
+ * controls right, then content beneath).
+ * ------------------------------------------------------------------------ */
+.a5-wide { max-width: 1100px; }
+
+/* [INF-B6] The admin window, built from the shell's own recipe (deck.css L1):
+ * a framed surface on the canvas, edge to edge on touch where 12px of a 359px
+ * screen cannot be spent on decoration. */
+.a5-window {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    width: calc(100% - 12px);
+    max-width: 1100px;
+    margin: 6px auto;
+    min-height: 0;
+    border: 1px solid var(--tw-border);
+    border-radius: var(--a5-radius-card);
+    background: var(--tw-shell);
+    box-shadow: 0 18px 42px color-mix(in srgb, var(--tw-shell) 48%, transparent);
+    overflow: hidden;
+}
+
+.a5:has(> .a5-window) {
+    padding: 0;
+}
+
+@media (pointer: coarse) and (hover: none), (max-width: 767px) {
+    .a5-window {
+        width: 100%;
+        margin: 0;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .a5:has(> .a5-window) {
+        padding: env(safe-area-inset-top) env(safe-area-inset-right)
+                 env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+}
+
+/* The window's header band, the same plane the shell's header uses. */
+.a5-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--a5-gap);
+    width: 100%;
+    flex: 0 0 auto;
+    /* Mockup line 23: the global row is exactly 44px. */
+    min-height: var(--a5-touch);
+    padding: 0 8px;
+    background: var(--tw-bar);
+    border-bottom: 1px solid var(--tw-border);
+}
+
+.a5-topbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+/* Mockup line 27 at its native 28px size, since this IS a chrome bar. The
+ * delivered mark carries its own plate, so no accent-soft tile behind it. */
+.a5-topbar-logo {
+    display: block;
+    width: 28px;
+    height: 28px;
+    flex: 0 0 28px;
+    color: var(--tw-text);
+}
+
+.a5-topbar-logo svg { width: 100%; height: 100%; display: block; }
+
+/* The product name, then what this page is -- the same reading order the shell
+ * header has. The separator is a rule rather than a glyph so it needs no
+ * locale. */
+.a5-topbar-wordmark {
+    font-family: var(--font-sans);
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--tw-text);
+    white-space: nowrap;
+}
+
+.a5-topbar-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    padding-left: 10px;
+    border-left: 1px solid var(--tw-border);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--tw-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.a5-topbar-actions { display: flex; align-items: center; gap: var(--a5-gap-tight); }
+
+.a5-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--tw-border);
+    border-radius: var(--a5-radius-card);
+    background: var(--tw-bar);
+}
+
+.a5-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+
+.a5-table th {
+    position: sticky;
+    top: 0;
+    padding: 12px 14px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--tw-muted);
+    background: var(--tw-surface);
+    border-bottom: 1px solid var(--tw-border);
+    white-space: nowrap;
+}
+
+.a5-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--tw-border);
+    color: var(--tw-text);
+    vertical-align: middle;
+}
+
+.a5-table tbody tr:last-child td { border-bottom: 0; }
+.a5-table tbody tr:hover { background: var(--tw-hover); }
+
+/* Every table row action stays a real 44px target. */
+.a5-table td .a5-btn { min-height: var(--a5-touch); }
+
+.a5-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--tw-accent);
+    background: var(--tw-accent-soft);
+    white-space: nowrap;
+}
+
+.a5-badge-muted {
+    color: var(--tw-muted);
+    background: var(--tw-surface);
+}
+
+/* The mark fills its box at every tier, so only the BOX is sized below. The
+ * rule is raised to `.a5` specificity because the root 18px svg default would
+ * otherwise win over the plain `.a5-logo svg` declaration. */
+.a5 .a5-logo svg { width: 100%; height: 100%; }
+
+/* ---------------------------------------------------------------------------
+ * Narrow-phone density.
+ *
+ * At 359px (the narrowest supported width, DESIGN.md section 2 / the
+ * phone-small viewport the browser suites already use) the card sheds its
+ * outer inset and side padding so the FIELDS keep their width. The 44px floor
+ * is never reduced -- padding gives way, targets do not.
+ * ------------------------------------------------------------------------ */
+@media (max-width: 480px) {
+    .a5 { padding-left: max(10px, env(safe-area-inset-left));
+          padding-right: max(10px, env(safe-area-inset-right)); }
+    .a5-card { border-radius: var(--a5-radius-card); }
+    .a5-logo { width: 48px; height: 48px; }
+    .a5-title { font-size: 20px; }
+    .a5-brand { padding: 12px 14px; gap: 10px; }
+    .a5-body { padding: 18px 16px; }
+}
+
+/* [INF-8] Phone landscape: vertical space is the scarce axis (amendment line
+ * 55 compresses the shell row to 40px for exactly this reason). The card
+ * scrolls rather than centring, and the brand block goes horizontal so the
+ * first field stays above the fold. Touch targets are untouched at 44px. */
+@media (max-height: 480px) and (orientation: landscape) {
+    .a5 { padding-top: 8px; padding-bottom: 8px; }
+    .a5-main { align-items: flex-start; }
+    /* The band is already a row; landscape only tightens it. */
+    .a5-brand { padding: 8px 16px; gap: var(--a5-gap); }
+    .a5-body { padding: 16px; }
+    .a5-logo { width: 40px; height: 40px; }
+    .a5-brand-text { display: flex; flex-direction: column; gap: 1px; }
+    .a5-field { margin-bottom: 12px; }
+    /* Paired with .a5-field:has(> .a5-hint:not(:empty)) above: this block sets a
+     * tighter base for the short landscape viewport, so the hinted variant must
+     * be restated here or the base 12px would win by source order and the hint
+     * would go back to crowding the next label. Same ratio as the desktop pair
+     * (12 base + hint margin + line box). */
+    .a5-field:has(> .a5-hint:not(:empty)) { margin-bottom: 26px; }
+}
+
+/* Respect the OS setting. The shell already does this; the auth pages must
+ * not be the one place that ignores it. */
+@media (prefers-reduced-motion: reduce) {
+    .a5 *, .a5 *::before, .a5 *::after {
+        transition: none !important;
+        animation: none !important;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+ * SHIPPED-ONLY ADDITIONS
+ *
+ * Everything above this line is the core stylesheet as it passed the original
+ * review. Below: rules added afterwards for the live dropdown, admin tabs and
+ * the server-rendered table, which the reviewed set did not yet need. Same
+ * rules apply -- zero hardcoded colours, 44px floor, mockup citations.
+ * ------------------------------------------------------------------------ */
+
+/* Sprite icons. currentColor is what lets one symbol serve all 10 themes.
+ *
+ * The width/height default is load-bearing, not tidiness. An <svg> with no
+ * intrinsic size and no CSS size falls back to the SVG default of 300x150 and
+ * paints straight over the card -- which is exactly what shipped in the first
+ * screenshot pass, because .a5-input-icon sized the wrapping <span> but never
+ * the <svg> inside it. Geometry assertions did not catch it: the CONTROLS were
+ * all still >=44px and the document never overflowed, so only a rendered pixel
+ * showed the bug. Sizing every .a5 svg at the root makes the failure mode
+ * unreachable rather than fixed one selector at a time.
+ */
+.a5 svg { fill: none; stroke: currentColor; stroke-width: 2;
+          stroke-linecap: round; stroke-linejoin: round;
+          width: 18px; height: 18px; flex: 0 0 auto; }
+.a5 .a5-icon { width: 18px; height: 18px; flex: 0 0 auto; }
+.a5 .a5-input-icon svg { width: 18px; height: 18px; }
+
+/*
+ * Re-assert the sizes that differ from the 18px default.
+ *
+ * These selectors already appear EARLIER in this file, and at equal
+ * specificity the later rule wins -- so the root default above silently shrank
+ * the 56px brand mark's glyph to 18px and grew the 16px button glyphs. Measured,
+ * not assumed: this is the fourth time in this project that CSS source order at
+ * equal specificity has produced a wrong result that reading the rule you just
+ * Wrote would not reveal. The `.a5` prefix raises
+ * specificity so intent wins regardless of order.
+ *
+ * The base 28px logo size is re-asserted in the RESPONSIVE OVERRIDES section
+ * further down, immediately before the media queries that shrink it -- putting
+ * it here instead would out-order those queries and defeat the shrink, which is
+ * the same trap one level deeper.
+ */
+.a5 .a5-topbar-logo svg { width: 16px; height: 16px; }
+.a5 .a5-btn svg { width: 16px; height: 16px; }
+
+/* Language menu. Mockup line 272: floating surfaces are 10px radius on the
+ * surface fill with a border. Mockup line 279 (.tw5-global-menu > button):
+ * full-width rows, 7px radius, transparent until hover. */
+.a5-lang-wrap { position: relative; }
+
+.a5-lang-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 30;
+    min-width: 200px;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 5px;
+    border: 1px solid var(--tw-border);
+    border-radius: var(--a5-radius-float);
+    background: var(--bg-modal, var(--tw-bar));
+    box-shadow: 0 16px 36px color-mix(in srgb, var(--tw-shell) 70%, transparent);
+}
+
+.a5-lang-menu.show { display: block; }
+
+.a5-lang-option {
+    display: flex;
+    align-items: center;
+    gap: var(--a5-gap);
+    width: 100%;
+    /* 44px, not the mockup's 40px menu row (line 279): a menu row on a phone is
+     * A primary tap target. Consistent with. */
+    min-height: var(--a5-touch);
+    padding: 6px 8px;
+    border: 0;
+    border-radius: var(--a5-radius-control);
+    background: transparent;
+    color: var(--tw-text);
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.a5-lang-option:hover { background: var(--tw-hover); }
+.a5-lang-option.active {
+    color: var(--tw-accent);
+    background: var(--tw-accent-soft);
+}
+.a5-lang-option:focus-visible {
+    outline: 2px solid var(--tw-accent);
+    outline-offset: -2px;
+}
+
+/* auth.js validation state hooks. It toggles these four classes; without rules
+ * for them the validation would run and show nothing. */
+.a5-input.is-valid { border-color: var(--tw-success); }
+.a5-input.is-invalid { border-color: var(--tw-danger); }
+.a5-hint.hint-error { color: var(--tw-danger); }
+.a5-hint.hint-success { color: var(--tw-success); }
+
+/* Flash categories Flask emits that are neither error nor success. */
+.a5-alert-warning {
+    color: var(--tw-warning);
+    background: color-mix(in srgb, var(--tw-warning) 14%, transparent);
+    border-color: color-mix(in srgb, var(--tw-warning) 30%, transparent);
+}
+.a5-alert-message,
+.a5-alert-info {
+    color: var(--info-color);
+    background: color-mix(in srgb, var(--info-color) 14%, transparent);
+    border-color: color-mix(in srgb, var(--info-color) 30%, transparent);
+}
+
+/* ---------------------------------------------------------------------------
+ * Admin: tabs, toolbar, pagination, modal. wide page.
+ * Mockup line 22/23: a 44px row, controls gapped 8px.
+ * ------------------------------------------------------------------------ */
+/* The second tier inside the window, on the same plane as the topbar. The row
+ * is 50px because the chips keep their 44px floor and need 3px of air. */
+.a5-tabs {
+    display: flex;
+    align-items: center;
+    gap: var(--a5-gap-tight);
+    width: 100%;
+    flex: 0 0 auto;
+    padding: 3px 8px;
+    background: var(--tw-bar);
+    border-bottom: 1px solid var(--tw-border);
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.a5-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--a5-gap-tight);
+    min-height: var(--a5-touch);
+    padding: 0 14px;
+    border: 1px solid transparent;
+    border-radius: var(--a5-radius-control);
+    background: transparent;
+    color: var(--tw-muted);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.a5-tab:hover { background: var(--tw-hover); color: var(--tw-text); }
+.a5-tab:focus-visible { outline: 2px solid var(--tw-accent); outline-offset: 2px; }
+.a5-tab.active {
+    color: var(--tw-accent);
+    background: var(--tw-accent-soft);
+    border-color: color-mix(in srgb, var(--tw-accent) 30%, transparent);
+}
+
+/* The window's scrolling body: the panels live here, the two bands above do
+ * not move. */
+.a5-window > main {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px;
+}
+
+.a5-panel { width: 100%; }
+.a5-panel.hidden { display: none; }
+
+.a5-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--a5-gap);
+    margin-bottom: var(--a5-gap);
+}
+
+/* A toolbar field is still a field: 44px. */
+.a5-toolbar .a5-input,
+.a5-toolbar .a5-select { min-height: var(--a5-touch); width: auto; min-width: 160px; padding-left: var(--a5-field-pad-x); }
+
+.a5-select {
+    min-height: var(--a5-touch);
+    padding: 0 var(--a5-field-pad-x);
+    border: 1px solid var(--tw-border);
+    border-radius: var(--a5-radius-control);
+    background: var(--tw-shell);
+    color: var(--tw-text);
+    font: inherit;
+    font-size: 14px;
+}
+
+.a5-btn-primary {
+    background: var(--tw-accent);
+    color: var(--accent-on-text);
+    border-color: transparent;
+    font-weight: 600;
+}
+.a5-btn-primary:hover { background: color-mix(in srgb, var(--tw-accent) 88%, var(--tw-text)); }
+
+.a5-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--a5-gap);
+    margin-top: var(--a5-gap);
+}
+
+.a5-page-info { font-size: 13px; color: var(--tw-muted); }
+.a5-muted { color: var(--tw-muted); }
+
+.a5-setting-row {
+    padding: 16px;
+    border: 1px solid var(--tw-border);
+    border-radius: var(--a5-radius-card);
+    background: var(--tw-bar);
+}
+
+.a5-setting-row p { margin: 8px 0 0; font-size: 13px; color: var(--tw-muted); }
+
+.a5-badge.level-ERROR {
+    color: var(--tw-danger);
+    background: color-mix(in srgb, var(--tw-danger) 14%, transparent);
+}
+.a5-badge.level-WARNING {
+    color: var(--tw-warning);
+    background: color-mix(in srgb, var(--tw-warning) 14%, transparent);
+}
+.a5-badge.level-INFO {
+    color: var(--info-color);
+    background: color-mix(in srgb, var(--info-color) 14%, transparent);
+}
+
+.a5-table td.a5-message {
+    max-width: 520px;
+    white-space: normal;
+    word-break: break-word;
+}
+
+/* Row actions wrap instead of forcing the row wider than the viewport. */
+.a5-row-actions { display: flex; flex-wrap: wrap; gap: var(--a5-gap-tight); }
+
+/* ---------------------------------------------------------------------------
+ *(a) HARD CONDITION: at phone widths the table REFLOWS TO STACKED
+ * CARDS. Horizontal scroll is forbidden here, not merely discouraged.
+ *
+ * `overflow-x:auto` on the wrapper would satisfy a "document does not overflow"
+ * check while still forcing a sideways drag on every row -- which is exactly
+ * the failure mode the condition exists to prevent, and exactly what a naive
+ * test would miss. So at <=700px the table stops being a table:
+ *
+ *   thead is removed from the a11y tree AND from layout, and each cell carries
+ *   its column name via data-label, which admin.js mirrors from the <th>.
+ *
+ * The 44px floor is untouched in the stacked form -- condition (b).
+ * ------------------------------------------------------------------------ */
+@media (max-width: 700px) {
+    .a5-table-wrap { overflow-x: visible; border: 0; background: transparent; }
+
+    .a5-table,
+    .a5-table tbody,
+    .a5-table tr,
+    .a5-table td { display: block; width: 100%; }
+
+    /* Not display:none -- a screen reader still benefits from the labels being
+     * associated, and the data-label carries them. This removes the header row
+     * from layout without leaving an empty box. */
+    .a5-table thead { position: absolute; width: 1px; height: 1px;
+                      overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+    .a5-table tr {
+        margin-bottom: var(--a5-gap);
+        border: 1px solid var(--tw-border);
+        border-radius: var(--a5-radius-card);
+        background: var(--tw-bar);
+        overflow: hidden;
+    }
+
+    .a5-table td {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--a5-gap);
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--tw-border);
+        text-align: right;
+    }
+
+    .a5-table td:last-child { border-bottom: 0; }
+
+    .a5-table td::before {
+        content: attr(data-label);
+        flex: 0 0 auto;
+        margin-right: var(--a5-gap);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--tw-muted);
+        text-align: left;
+        white-space: nowrap;
+    }
+
+    /* A cell with no label (the actions cell) gives its content the full width. */
+    .a5-table td[data-label=""]::before { content: none; }
+
+    .a5-row-actions { justify-content: flex-end; }
+    .a5-table td .a5-btn { min-height: var(--a5-touch); }
+
+    .a5-table td.a5-message { max-width: none; text-align: right; }
+
+    .a5-topbar, .a5-tabs { flex-wrap: wrap; }
+}
+
+/* ---------------------------------------------------------------------------
+ * Toast placement on .a5 pages.
+ *
+ * DEFECT (found by eye in the admin screenshot, then measured): the shared
+ * toast stack is `.notification-container { position: fixed; top: 24px;
+ * right: 24px; z-index: 11000 }` (style.css:4132-4141), and admin.html puts an
+ * interactive control -- the "Back to Terminal" link (admin.html:46-51) -- in
+ * that same corner in normal flow. They collide by construction.
+ *
+ * Measured overlap of the toast rect over the Back link rect, and whether
+ * Document.elementFromPoint at the LINK'S OWN CENTRE still returns the link:
+ *
+ *   1440x900    18x36 px overlap   link still clickable (partial cover)
+ *    834x1194  147x36 px overlap   link NOT clickable -- toast is the hit target
+ *    926x428   147x28 px overlap   link NOT clickable
+ *    390x844   147x36 px overlap   link NOT clickable
+ *
+ * So at every viewport below 1440 an error toast completely covers the only
+ * control that leaves the admin page. The toast is `pointer-events: auto`
+ * (style.css) which is CORRECT -- toasts must be dismissable -- so the fix does
+ * not touch the notification component or the terminal shell. It moves the
+ * stack down on .a5 pages only.
+ *
+ * The offset is derived, not guessed: .a5 has `padding-top: max(16px,
+ * env(safe-area-inset-top))` and .a5-topbar is exactly `min-height:
+ * var(--a5-touch)` (44px, amendment v5 line 30, measured 44 at 1440/834/926/
+ * 390/359 -- it never wraps to a second row), then one --a5-gap of clearance.
+ *
+ * Scoped with `body.a5` so the terminal shell keeps its own top-right toasts.
+ * ------------------------------------------------------------------------ */
+body.a5 .notification-container {
+    top: calc(max(16px, env(safe-area-inset-top)) + var(--a5-touch) + var(--a5-gap));
+}
+
+/* ---------------------------------------------------------------------------
+ * ...and one more row when the page has a tab strip under the topbar.
+ *
+ * SECOND DEFECT, found the same way: by eye in the re-rendered admin PNG after
+ * the cutover, then measured. The rule above clears the topbar, so "Back to
+ * Terminal" is reachable at every viewport -- but on admin the toast then
+ * landed on the tab row instead. At 390x844 it covered the Settings tab by
+ * 2394px^2 and at 359x800 by 3577px^2, and elementFromPoint at the tab's own
+ * centre returned the toast, so the tab was genuinely unclickable. Moving an
+ * occlusion is not fixing one.
+ *
+ * This is exactly the failure class AGENTS.md section 2 describes: every floor
+ * assertion stayed green because nothing is too small or overflowing -- the
+ * elements are merely stacked wrongly. Only looking at the image caught it.
+ *
+ * Why only 390/359: .a5-tabs is `width:100%`, so the strip spans the full row
+ * and its right end sits under the toast's left edge. On wider viewports the
+ * three tabs end well before the toast begins, which is why 1440/834/926 all
+ * measure 0px overlap and stay clickable.
+ *
+ * Still derived, not guessed: one --a5-touch for the tab row (the tabs are
+ * 44px touch targets) plus one --a5-gap, which is exactly .a5-tabs's own
+ * `margin-bottom: var(--a5-gap)`. Applied with:has so it lands only on the
+ * pages that actually have the strip -- login/register/change_password keep
+ * the shorter offset and their toasts do not drift needlessly far down.
+ * Has is already relied on in style.css (lines 291, 300, 1107, 5591).
+ *
+ * NOTE: this rule governs WIDE viewports only. On narrow ones the toast is
+ * bottom-anchored instead and neither top offset applies -- see the block
+ * below, which supersedes both for the touch tier.
+ * ------------------------------------------------------------------------ */
+body.a5:has(.a5-tabs) .notification-container {
+    top: calc(max(16px, env(safe-area-inset-top))
+              + var(--a5-touch) + var(--a5-gap)
+              + var(--a5-touch) + var(--a5-gap));
+}
+
+/* ---------------------------------------------------------------------------
+ * NARROW VIEWPORTS: anchor the toast to the BOTTOM band instead of top-right.
+ *
+ * Root cause: a fixed top-right toast is simply the
+ * wrong layout for a narrow viewport that already carries three rows of chrome
+ * (topbar, tab strip, panel actions). Each top offset only pushed the collision
+ * onto the next row down -- first the back link, then the Settings tab, then
+ * "Refresh". Adding a fourth offset would be chasing the symptom.
+ *
+ * On a phone the bottom band is the ONLY region with no persistent control row,
+ * so a toast placed there cannot occlude a control no matter how the rows above
+ * it grow. That is a structural guarantee, not a measured coincidence, which is
+ * why it replaces the offset stack rather than extending it.
+ *
+ * BREAKPOINT: reuses the two queries this stylesheet already uses, not a new
+ * number. `max-width: 767px` is the project's canonical narrow tier (style.css
+ * 267, 290, 1928, 3493, 4401, 8063, 8216 and the auth-page repair at
+ * auth-v5.css:141). The landscape half is required as well and is NOT
+ * redundant: 926x428 phone landscape is 926px WIDE, so it sits ABOVE 767 and a
+ * width-only query would miss precisely the viewport with the least vertical
+ * room. `max-height: 480px and (orientation: landscape)` is the same query
+ * Already uses at auth-v5.css:777.
+ *
+ * Every value is derived from existing custom properties:
+ *   bottom = safe-area-inset-bottom (never under the home indicator), floored
+ *            at --a5-gap so there is clearance even with no inset reported.
+ * No hardcoded colour is introduced -- this block sets geometry only, so the
+ * notification keeps its themed background from style.css in all 10 themes.
+ *
+ * SCOPE: `body.a5` only. The terminal shell's own toasts are untouched on every
+ * viewport, and desktop/tablet .a5 pages keep the top-right placement above.
+ * `top: auto` is required to release the top anchor those rules set, otherwise
+ * a container with both top and bottom set would stretch between them.
+ * ------------------------------------------------------------------------ */
+@media (max-width: 767px),
+       (max-height: 480px) and (orientation: landscape) {
+    body.a5 .notification-container,
+    body.a5:has(.a5-tabs) .notification-container {
+        top: auto;
+        bottom: max(var(--a5-gap), env(safe-area-inset-bottom));
+        /* Full-width band, inset by the same safe-area padding .a5 itself uses,
+         * so a long message wraps in place instead of colliding sideways. */
+        left: max(var(--a5-gap), env(safe-area-inset-left));
+        right: max(var(--a5-gap), env(safe-area-inset-right));
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+    }
+    body.a5 .notification-container .notification {
+        max-width: none;
+    }
+}

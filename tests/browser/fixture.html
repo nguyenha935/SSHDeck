@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<!--
+  Offline test fixture for the SSHDeck terminal interaction model.
+
+  It loads the SAME vendored xterm build the app ships (static/vendor/xterm)
+  AND the REAL static/js/terminal-manager.js, then builds + attaches a terminal
+  through the shipped code path (TerminalManager.createTerminal / attachTerminal).
+  There is no copied logic here: the OSC 52 clipboard handler, the unified touch
+  gestures (swipe->scroll, long-press->select->copy) and the ResizeObserver all
+  come from the file the app serves, so the tests exercise exactly what ships —
+  one source of truth, nothing to drift.
+
+  The terminal is opened onto a `.terminal-wrapper` (the #term div carries that
+  class) so setupTouchGestures binds on the same element topology the app has
+  live: `.terminal-wrapper > .xterm`, with the gesture listeners on the wrapper
+  in capture phase and xterm's own touch listener on the inner `.xterm`.
+
+  No Flask, no SSH, no HTTPS: served over plain HTTP so the native copy/paste
+  path is proven to work off a secure context. (127.0.0.1 is still reported as a
+  secure context by Chromium, so the async clipboard API is available; tests that
+  need it run in a separate context that grants clipboard permission — see
+  interaction.test.mjs.)
+
+  window.__probe exposes:
+    - term:      the Terminal instance.
+    - manager:   the TerminalManager object.
+    - key:       the terminal key used ('test').
+    - data:      every chunk xterm emits on `onData` (keystrokes, paste, mouse
+                 reports) so a test can assert what would reach the PTY.
+    - clearData(): reset the captured data.
+    - enableAppMouse()/disableAppMouse(): toggle DECSET 1003/1006 so we can prove
+                 wheel/touch get forwarded as SGR mouse reports when an app
+                 (tmux/vim) has mouse tracking on.
+    - hasSelection/getSelection/selectAll/clearSelection/focus: selection probes.
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="/static/vendor/xterm/xterm.css" />
+    <style>
+      html, body { margin: 0; padding: 0; background: #000; }
+      /* Mimic the app's real pane topology, because the fit maths depends on it:
+         a sized pane containing a .terminal-wrapper that is width/height:100%
+         (exactly what style.css declares). Tests resize #pane, never #term.
+         This matters for the hidden-wrapper case: fitAddon parseInt()s the
+         wrapper's COMPUTED height, and on a display:none element that does not
+         resolve to pixels, so '100%' comes back and parseInt gives 100 — a
+         100x100px phantom box. A fixed-px fixture would hide that entirely. */
+      #pane { width: 800px; height: 400px; position: relative; }
+      #term { width: 100%; height: 100%; position: relative; overflow: hidden; }
+    </style>
+  </head>
+  <body>
+    <!-- The app opens the terminal onto a .terminal-wrapper nested in a sized
+         pane; carry that class and that nesting so setupTouchGestures binds on
+         the real topology, closest('.terminal-wrapper') resolves exactly as it
+         does live, and the wrapper's own size is percentage-derived like the
+         app's. Tests change #pane's height to drive a re-fit. -->
+    <div id="pane">
+      <div id="term" class="terminal-wrapper"></div>
+    </div>
+
+    <script src="/static/vendor/xterm/xterm.js"></script>
+    <script src="/static/vendor/xterm/xterm-addon-fit.js"></script>
+    <!-- The REAL shipped code — the single source of truth under test. -->
+    <script src="/static/js/terminal-manager.js"></script>
+
+    <script>
+      const KEY = 'test';
+      const dataChunks = [];
+      const emitted = [];
+
+      // A recording stand-in for the Socket.IO client. createTerminal registers
+      // terminal.onResize -> window.socket.emit('ssh_resize', ...), which is the
+      // single place the app tells the remote PTY its new size; without a socket
+      // here that branch would return early and the resize tests would be
+      // vacuous. Installed BEFORE createTerminal so the handler sees it.
+      window.socket = {
+        emit(event, payload) { emitted.push({ event, payload }); },
+      };
+
+      // Build + attach through the shipped code path. createTerminal registers
+      // the OSC 52 handler and the clipboard key handler; attachTerminal opens
+      // onto #term (.terminal-wrapper) and wires setupTouchGestures +
+      // setupResizeObserver.
+      const term = TerminalManager.createTerminal(KEY);
+      term.onData((d) => dataChunks.push(d));
+      TerminalManager.attachTerminal(KEY, 'term');
+
+      /*
+       * Stand this socket's VIEW up as attached (2026-09-13).
+       *
+       * A pane reports its size to the server in one of two ways: the FIRST fit
+       * carries it on `view_attach`, because there is no tmux client to resize
+       * until this socket has one, and every fit after the ack is an
+       * `ssh_resize`. A pane whose attach is still in flight PARKS its next
+       * size instead of sending it -- the ack applies the parked size as one
+       * resize -- so a fixture with no server to acknowledge would make every
+       * resize assertion below read zero and mean the opposite of what it says.
+       */
+      TerminalManager.noteViewAttached(KEY);
+
+      // attachTerminal clears the screen ~50ms after a double-rAF, so write the
+      // content afterwards; then there is real text to select and scroll.
+      setTimeout(() => {
+        for (let i = 1; i <= 200; i++) {
+          term.write('line ' + i + '\r\n');
+        }
+        setTimeout(() => { window.__ready = true; }, 60);
+      }, 250);
+
+      window.__probe = {
+        term,
+        key: KEY,
+        manager: TerminalManager,
+        data: dataChunks,
+        clearData() { dataChunks.length = 0; },
+        // Everything the app emitted on the socket, so a test can assert that a
+        // fit really forwarded the new size (and that a no-op fit sends nothing).
+        emitted,
+        clearEmitted() { emitted.length = 0; },
+        // Either form of "the pane told the server what it fits": see the
+        // noteViewAttached note above. A test that wants only one of them can
+        // filter `emitted` itself.
+        resizeEmits() {
+          return emitted.filter((e) => e.event === 'ssh_resize'
+            || e.event === 'view_attach');
+        },
+        // Turn on application mouse tracking the way tmux/vim would: SET_ANY_EVENT
+        // (1003) + SGR encoding (1006). After this, xterm forwards wheel/drag as
+        // mouse reports instead of scrolling its own viewport.
+        enableAppMouse() { term.write('\x1b[?1003h\x1b[?1006h'); },
+        disableAppMouse() { term.write('\x1b[?1003l\x1b[?1006l'); },
+        // DECCKM (application cursor keys), which any full-screen program turns
+        // on. It is what decides whether an arrow must be sent as \x1b[A or
+        // \x1bOA, so the keypad tests need to drive it both ways.
+        enableAppCursorKeys() { term.write('\x1b[?1h'); },
+        disableAppCursorKeys() { term.write('\x1b[?1l'); },
+        modes() { return term.modes; },
+        hasSelection() { return term.hasSelection(); },
+        getSelection() { return term.getSelection(); },
+        selectAll() { term.selectAll(); },
+        clearSelection() { term.clearSelection(); },
+        focus() { term.focus(); },
+      };
+    </script>
+  </body>
+</html>

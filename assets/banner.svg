@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320"><rect x="1" y="1" width="1198" height="318" rx="26" fill="#101113" stroke="#34383e" stroke-width="2"/><g transform="translate(92 0)"><svg x="224" y="81" width="150" height="150" viewBox="0 0 512 512">
+  <title id="title">Full-frame white routing fabric</title>
+  <desc id="desc">A full-frame white rounded-square router mark contains six asymmetric routes and a matching transmitter.</desc>
+
+  <defs>
+    <path id="v13-a" d="M10 240H158C199 240 222 219 250 188L405 -20C417 -34 438 -35 452 -23C466 -11 467 10 454 24L297 226C279 246 279 266 297 286L396 397C408 410 407 429 394 440C381 451 362 450 351 437L250 324C222 293 199 272 158 272H10C-3 272 -12 266 -12 256C-12 246 -3 240 10 240Z"/>
+    <path id="v13-b" d="M-105 240H158C199 240 222 219 250 188L400 6C411 -7 429 -8 442 2C455 13 456 30 445 42L297 226C279 246 279 266 297 286L405 402C418 416 417 437 403 449C389 461 368 459 356 445L248 326C221 295 199 272 158 272H-105C-118 272 -127 266 -127 256C-127 246 -118 240 -105 240Z"/>
+
+    <mask id="route-cutout">
+      <rect width="512" height="512" fill="white"/>
+      <g fill="black">
+        <use href="#v13-a" transform="translate(256 256) rotate(-10) scale(.64) translate(-225 -256)"/>
+        <use href="#v13-b" transform="translate(256 256) rotate(148) scale(.64) translate(-225 -256)"/>
+      </g>
+    </mask>
+  </defs>
+
+  <g transform="translate(256 256) scale(1.28) translate(-256 -256)">
+    <rect x="64" y="64" width="384" height="384" rx="96" fill="#FFFFFF" mask="url(#route-cutout)"/>
+
+    <circle cx="256" cy="256" r="18" fill="#FFFFFF"/>
+    <g fill="none" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M230 245Q219 256 230 267"/>
+      <path d="M282 245Q293 256 282 267" transform="rotate(-45 256 256)"/>
+      <path d="M282 245Q293 256 282 267" transform="rotate(45 256 256)"/>
+    </g>
+  </g>
+</svg><text x="416" y="178" fill="#eef2f6" font-family="Arial, sans-serif" font-size="88" font-weight="700" letter-spacing="-3">SSHDeck</text><text x="421" y="222" fill="#aab3bd" font-family="Arial, sans-serif" font-size="23">Your servers. One workspace.</text></g></svg>

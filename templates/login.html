@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<!--
+  Login — v5 design language.
+
+  RESTYLE ONLY. Every backend contract is preserved verbatim:
+    - CSRF hidden input (csrf_token())
+    - flash message loop with categories
+    - POST to url_for('login'), field names `username`, `password`, `remember`
+    - registration_enabled gate on the register link
+  And every auth.js hook is preserved: the `.password-toggle` class with its
+  data-target, the #loginUsernameHint / #loginPasswordHint hint ids, and the
+  is-valid / is-invalid / hint-error / hint-success classes auth.js toggles.
+
+  Icons come from the shipped sprite (static/icons/icons.svg), whose symbol ids
+  are Lucide names — the same mechanism templates/index.html:36 uses. The emoji
+  marks this page used before were never mockup vocabulary [INF-3].
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="app-root" content="{{ url_prefix }}">
+    <title>Login - SSHDeck</title>
+    <!-- H6: /favicon.ico used to 404. The SVG is the primary icon (crisp at any
+         size, same asset as the in-app brand logo); the .ico is the legacy
+         fallback and is ALSO served from the site root by a Flask route, because
+         browsers request /favicon.ico without reading this markup. -->
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icons/favicon.svg') }}?v=3">
+    <link rel="alternate icon" type="image/x-icon" href="{{ url_for('static', filename='icons/favicon.ico') }}?v=3">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}?v=3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=69">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/deck-tokens.css') }}?v=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth-v5.css') }}?v=2">
+</head>
+<!-- The theme the user had before logging in: the server passes it when it
+     knows it, and 'glass' is the :root default otherwise. -->
+<body class="a5" data-theme="{{ theme|default('glass') }}">
+
+    {% include '_brand_symbol.html' %}
+
+    <main class="a5-main">
+        <div class="a5-card">
+            <!-- The brand band: the delivered mark, the wordmark, and (where the
+                 page has one) the language control -- the same header shape the
+                 app shell uses. The mark is an inline symbol so it takes the
+                 theme's ink; see templates/_brand_symbol.html. -->
+            <div class="a5-brand">
+                <span class="a5-logo" aria-hidden="true">
+                    <svg><use href="#icon-brand"></use></svg>
+                </span>
+                <div class="a5-brand-text">
+                    <h1 class="a5-title" data-i18n="app.title">SSHDeck</h1>
+                    <p class="a5-subtitle" data-i18n="auth.signInPrompt">Sign in to your account</p>
+                </div>
+                <div class="a5-lang-wrap">
+                    <button type="button" class="a5-lang" id="langBtn"
+                            aria-haspopup="true" aria-expanded="false" aria-controls="langDropdown">
+                        <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-languages"></use></svg>
+                        <span id="currentLangName">English</span>
+                        <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-chevron-down"></use></svg>
+                    </button>
+                    <div class="a5-lang-menu" id="langDropdown" role="menu"></div>
+                </div>
+            </div>
+
+            <div class="a5-body">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="a5-alert a5-alert-{{ category }}" role="alert">
+                            <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-{% if category == 'success' %}circle-check{% elif category == 'error' %}circle-alert{% else %}info{% endif %}"></use></svg>
+                            <span>{{ message }}</span>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <form method="POST" action="{{ url_for('login') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+                <div class="a5-field">
+                    <label class="a5-label" for="username" data-i18n="auth.username">Username</label>
+                    <div class="a5-input-wrap">
+                        <span class="a5-input-icon" aria-hidden="true">
+                            <svg><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-contact-round"></use></svg>
+                        </span>
+                        <!-- [INF-4] 44px minimum, not the mockup's 32px chrome
+                             density: this is the most-tapped element in the
+                             product. mockup 234 vs amendment 30. -->
+                        <input type="text" id="username" name="username" class="a5-input"
+                               data-i18n-placeholder="auth.username" placeholder="Username"
+                               autocomplete="username" required autofocus>
+                    </div>
+                    <div class="a5-hint" id="loginUsernameHint"></div>
+                </div>
+
+                <div class="a5-field">
+                    <label class="a5-label" for="password" data-i18n="auth.password">Password</label>
+                    <div class="a5-input-wrap">
+                        <span class="a5-input-icon" aria-hidden="true">
+                            <svg><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-lock"></use></svg>
+                        </span>
+                        <input type="password" id="password" name="password" class="a5-input"
+                               data-i18n-placeholder="auth.password" placeholder="Password"
+                               autocomplete="current-password" required>
+                        <!-- class and data-target are auth.js hooks: do not rename. -->
+                        <button type="button" class="a5-toggle password-toggle" data-target="password"
+                                aria-label="Toggle password visibility"
+                                data-i18n-aria-label="auth.togglePasswordVisibility">
+                            <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-eye"></use></svg>
+                        </button>
+                    </div>
+                    <div class="a5-hint" id="loginPasswordHint"></div>
+                </div>
+
+                <!-- [INF-5] the LABEL is the 44px target; the painted box stays
+                     18px. Same rule modal_narrow.mjs enforces on the shell. -->
+                <div class="a5-check-row">
+                    <label class="a5-check-label" for="remember">
+                        <input type="checkbox" id="remember" name="remember">
+                        <span data-i18n="auth.rememberMe">Remember me</span>
+                    </label>
+                </div>
+
+                <button type="submit" class="a5-submit">
+                    <span data-i18n="auth.login">Sign In</span>
+                    <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-arrow-right"></use></svg>
+                </button>
+            </form>
+
+            <div class="a5-footer">
+                {% if registration_enabled %}
+                <span data-i18n="auth.noAccount">Don't have an account?</span>
+                <a href="{{ url_for('register') }}" data-i18n="auth.registerHere">Register here</a>
+                {% endif %}
+                <a href="{{ url_for('change_password') }}" data-i18n="auth.changePassword">Change Password</a>
+            </div>
+            {% include '_notice_footer.html' %}
+            </div>
+        </div>
+    </main>
+
+    <!-- The reader's strings. English is the fallback every key falls back to,
+         so it is always here; the reader's own language is the ONE extra file
+         the server adds, chosen from the `lang` cookie (app/__init__.py,
+         reader_language) so nothing flashes in English first. Written as one
+         literal line per language rather than a computed path: the browser
+         gates render this template with a plain substitution that cannot
+         evaluate Jinja expressions, and a computed src would reach them as an
+         empty one. -->
+    <script src="{{ url_for('static', filename='js/i18n/en.js') }}?v=1"></script>
+{% if lang == 'vi' %}    <script src="{{ url_for('static', filename='js/i18n/vi.js') }}?v=1"></script>
+{% elif lang == 'de' %}    <script src="{{ url_for('static', filename='js/i18n/de.js') }}?v=1"></script>
+{% elif lang == 'fr' %}    <script src="{{ url_for('static', filename='js/i18n/fr.js') }}?v=1"></script>
+{% elif lang == 'es' %}    <script src="{{ url_for('static', filename='js/i18n/es.js') }}?v=1"></script>
+{% elif lang == 'zh' %}    <script src="{{ url_for('static', filename='js/i18n/zh.js') }}?v=1"></script>
+{% endif %}    <script src="{{ url_for('static', filename='js/i18n.js') }}?v=50" data-i18n-version="1"></script>
+    <script src="{{ url_for('static', filename='js/auth.js') }}?v=2"></script>
+    <script src="{{ url_for('static', filename='js/auth-lang.js') }}"></script>
+</body>
+</html>

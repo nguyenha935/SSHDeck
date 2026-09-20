@@ -1,0 +1,22 @@
+# Every change is reviewed by the maintainer. Listed explicitly rather than
+# left implicit so GitHub requests the review itself, and so the areas that
+# must never change quietly are named.
+*                       @nguyenha935
+
+# Licensing and notices: a change here changes what users are allowed to do.
+/LICENSE                @nguyenha935
+/NOTICE.md              @nguyenha935
+/COMMERCIAL.md          @nguyenha935
+/UPSTREAM-MIT-LICENSE.txt  @nguyenha935
+/static/vendor/         @nguyenha935
+
+# The approved UI specification and the rules of the project.
+/docs/spec/             @nguyenha935
+/AGENTS.md              @nguyenha935
+
+# Credentials, sessions and encryption.
+/app/auth.py            @nguyenha935
+/app/key_encryption.py  @nguyenha935
+/app/key_manager.py     @nguyenha935
+/app/decorators.py      @nguyenha935
+/SECURITY.md            @nguyenha935

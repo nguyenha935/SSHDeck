@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<!--
+  Admin — v5 design language. [INF-6] WIDE page, not a 460px card.
+
+  RESTYLE ONLY. Every admin.js contract is preserved verbatim — the ids and
+  class names below are its lookup keys, not decoration:
+    #adminUsersTable / #adminUsersBody / #adminAuditTable / #adminAuditBody
+    #adminAddUserBtn #adminRefreshUsers #auditSearch #auditLevel #auditRefresh
+    #auditPrev #auditNext #auditPageInfo #settingRegistration
+    #addUserModal #closeAddUser #newUsername #newPassword #newIsAdmin
+    #submitNewUser #notificationContainer
+    .admin-tab[data-tab] + .active, .admin-panel + .hidden, .admin-muted,
+    .admin-badge.level-*, .admin-message
+  The meta tags (csrf-token, app-root, current-user) are read by admin.js too.
+
+  The modal keeps .modal / .modal-content / .modal-shell / .close because
+  test_modal_shell_contract.py and modal_narrow.mjs assert that shell contract.
+
+  [INF-6](a) HARD CONDITION: at phone widths the table reflows to stacked cards
+  rather than scrolling sideways. That needs a column name per cell, so each
+  <td> carries data-label, mirrored from its <th> by admin.js. Server-rendered
+  markup here carries data-label inline.
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="app-root" content="{{ url_prefix }}">
+    <meta name="current-user" content="{{ username }}">
+    <title>Admin · SSHDeck</title>
+    <!-- H6: /favicon.ico used to 404. The SVG is the primary icon (crisp at any
+         size, same asset as the in-app brand logo); the .ico is the legacy
+         fallback and is ALSO served from the site root by a Flask route, because
+         browsers request /favicon.ico without reading this markup. -->
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icons/favicon.svg') }}?v=3">
+    <link rel="alternate icon" type="image/x-icon" href="{{ url_for('static', filename='icons/favicon.ico') }}?v=3">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}?v=3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=69">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/deck-tokens.css') }}?v=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth-v5.css') }}?v=2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}?v=1">
+</head>
+<body class="a5" data-theme="{{ theme|default('glass') }}">
+    {% include '_brand_symbol.html' %}
+
+    <!-- The admin page is one deck window on the canvas, like the terminal
+         shell: topbar, tab row and panels inside a single framed surface.
+         #addUserModal and #notificationContainer stay OUTSIDE it -- a fixed
+         overlay inside an overflow container is clipped by it. -->
+    <div class="a5-window">
+    <!-- Mockup line 22/23: a 44px global row, brand left, controls right. -->
+    <div class="a5-topbar">
+        <div class="a5-topbar-brand">
+            <span class="a5-topbar-logo" aria-hidden="true">
+                <svg><use href="#icon-brand"></use></svg>
+            </span>
+            <span class="a5-topbar-wordmark" data-i18n="app.title">SSHDeck</span>
+            <h1 class="a5-topbar-title">
+                <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-settings"></use></svg>
+                <span data-i18n="admin.title">Admin Panel</span>
+            </h1>
+        </div>
+        <div class="a5-topbar-actions">
+            <a class="a5-btn" href="{{ url_for('index') }}">
+                <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-arrow-left"></use></svg>
+                <span data-i18n="admin.backToApp">Back to Terminal</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- .admin-tab and data-tab are admin.js hooks; .a5-tab is the styling. -->
+    <div class="a5-tabs" role="tablist">
+        <button class="a5-tab admin-tab active" data-tab="users" role="tab"
+                aria-selected="true" data-i18n="admin.users">Users</button>
+        <button class="a5-tab admin-tab" data-tab="audit" role="tab"
+                aria-selected="false" data-i18n="admin.auditLogs">Audit Logs</button>
+        <button class="a5-tab admin-tab" data-tab="settings" role="tab"
+                aria-selected="false" data-i18n="admin.settings">Settings</button>
+    </div>
+
+    <main>
+        <section class="a5-panel admin-panel" id="tab-users">
+            <div class="a5-toolbar">
+                <button class="a5-btn a5-btn-primary" id="adminAddUserBtn">
+                    <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-plus"></use></svg>
+                    <span data-i18n="admin.addUser">Add User</span>
+                </button>
+                <button class="a5-btn" id="adminRefreshUsers">
+                    <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-refresh-cw"></use></svg>
+                    <span data-i18n="admin.refresh">Refresh</span>
+                </button>
+            </div>
+            <div class="a5-table-wrap admin-table-wrap">
+                <table class="a5-table admin-table" id="adminUsersTable">
+                    <thead>
+                        <tr>
+                            <th data-i18n="admin.colId">ID</th>
+                            <th data-i18n="admin.colUser">User</th>
+                            <th data-i18n="admin.colRole">Role</th>
+                            <th data-i18n="admin.colStatus">Status</th>
+                            <th data-i18n="admin.colCreated">Created</th>
+                            <th data-i18n="admin.colLastLogin">Last login</th>
+                            <th data-i18n="admin.colActions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adminUsersBody"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="a5-panel admin-panel hidden" id="tab-audit">
+            <div class="a5-toolbar">
+                <input type="search" id="auditSearch" class="a5-input"
+                       placeholder="Search…" data-i18n-placeholder="admin.search">
+                <select id="auditLevel" class="a5-select">
+                    <option value="" data-i18n="admin.allLevels">All levels</option>
+                    <option value="INFO">INFO</option>
+                    <option value="WARNING">WARNING</option>
+                    <option value="ERROR">ERROR</option>
+                </select>
+                <button class="a5-btn" id="auditRefresh">
+                    <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-refresh-cw"></use></svg>
+                    <span data-i18n="admin.refresh">Refresh</span>
+                </button>
+            </div>
+            <div class="a5-table-wrap admin-table-wrap">
+                <table class="a5-table admin-table" id="adminAuditTable">
+                    <thead>
+                        <tr>
+                            <th data-i18n="audit.timestamp">Timestamp</th>
+                            <th data-i18n="audit.level">Level</th>
+                            <th data-i18n="audit.logger">Source</th>
+                            <th data-i18n="audit.message">Message</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adminAuditBody"></tbody>
+                </table>
+            </div>
+            <div class="a5-pagination admin-pagination">
+                <button class="a5-btn" id="auditPrev">
+                    <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-chevron-left"></use></svg>
+                    <span data-i18n="admin.prev">Prev</span>
+                </button>
+                <span id="auditPageInfo" class="a5-page-info admin-page-info"></span>
+                <button class="a5-btn" id="auditNext">
+                    <span data-i18n="admin.next">Next</span>
+                    <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-chevron-right"></use></svg>
+                </button>
+            </div>
+        </section>
+
+        <section class="a5-panel admin-panel hidden" id="tab-settings">
+            <div class="a5-setting-row admin-setting-row">
+                <!-- [INF-5] the LABEL is the 44px target, not the painted box. -->
+                <label class="a5-check-label admin-checkbox" for="settingRegistration">
+                    <input type="checkbox" id="settingRegistration">
+                    <strong data-i18n="admin.allowRegistration">Allow self-registration</strong>
+                </label>
+                <p class="a5-muted admin-muted" data-i18n="admin.allowRegistrationHint">When disabled, the public registration page and the "Register" link are turned off. Admins can still create users on the Users tab.</p>
+            </div>
+            <!-- Limits (owner ruling 2026-09-18): the runaway guards used to be
+                 environment-only. Rows are rendered by admin.js from
+                 /admin/api/settings; the environment value stays the default. -->
+            <form class="a5-setting-row admin-setting-row admin-limits" id="settingsLimitsForm" novalidate>
+                <h3 class="admin-limits-title" data-i18n="admin.limitsTitle">Limits</h3>
+                <p class="a5-muted admin-muted" data-i18n="admin.limitsHint">Applied immediately and kept across restarts. Until changed here, each value is the one the deployment started with.</p>
+                <div id="settingsLimitsFields"></div>
+                <div class="admin-limits-actions">
+                    <button type="submit" class="a5-btn a5-btn-primary" id="settingsSaveBtn" data-i18n="admin.saveSettings">Save</button>
+                    <button type="button" class="a5-btn" id="settingsResetBtn" data-i18n="admin.resetDefaults">Reset to defaults</button>
+                </div>
+            </form>
+        </section>
+    </main>
+    </div>
+
+    <div class="modal modal-small modal-shell" id="addUserModal" role="dialog" aria-modal="true" aria-labelledby="addUserModalTitle" aria-hidden="true">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="addUserModalTitle" data-i18n="admin.addUser">Add User</h2>
+                <span class="close" id="closeAddUser" aria-label="Close" data-i18n-aria-label="common.close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="a5-field">
+                    <label class="a5-label" for="newUsername" data-i18n="admin.username">Username</label>
+                    <div class="a5-input-wrap">
+                        <span class="a5-input-icon" aria-hidden="true">
+                            <svg><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-contact-round"></use></svg>
+                        </span>
+                        <!-- Constraint validation mirrors register.html, because the
+                             SAME backend rule decides both (auth.py register_user:
+                             3-32 chars, letters/numbers/underscore). Without it the
+                             admin learned the rule only from a server error toast.
+                             #adminUsernameHint is the auth.js hook, named like the
+                             login/register/change_password ones. -->
+                        <input type="text" id="newUsername" class="a5-input" autocomplete="off"
+                               required pattern="[a-zA-Z0-9_]{3,32}"
+                               title="3-32 characters, letters, numbers, and underscore only">
+                    </div>
+                    <div class="a5-hint" id="adminUsernameHint"></div>
+                </div>
+                <div class="a5-field">
+                    <label class="a5-label" for="newPassword" data-i18n="admin.password">Password</label>
+                    <div class="a5-input-wrap">
+                        <span class="a5-input-icon" aria-hidden="true">
+                            <svg><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-lock"></use></svg>
+                        </span>
+                        <input type="password" id="newPassword" class="a5-input" autocomplete="new-password"
+                               required minlength="8">
+                        <button type="button" class="a5-toggle password-toggle" data-target="newPassword"
+                                aria-label="Toggle password visibility"
+                                data-i18n-aria-label="auth.togglePasswordVisibility">
+                            <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-eye"></use></svg>
+                        </button>
+                    </div>
+                    <div class="a5-hint" id="adminPasswordHint"></div>
+                </div>
+                <div class="a5-check-row">
+                    <label class="a5-check-label admin-checkbox" for="newIsAdmin">
+                        <input type="checkbox" id="newIsAdmin">
+                        <span data-i18n="admin.makeAdmin">Make admin</span>
+                    </label>
+                </div>
+                <button class="a5-submit" id="submitNewUser">
+                    <span data-i18n="admin.create">Create</span>
+                    <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-arrow-right"></use></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="notificationContainer" class="notification-container"></div>
+
+    <!-- The reader's strings. English is the fallback every key falls back to,
+         so it is always here; the reader's own language is the ONE extra file
+         the server adds, chosen from the `lang` cookie (app/__init__.py,
+         reader_language) so nothing flashes in English first. Written as one
+         literal line per language rather than a computed path: the browser
+         gates render this template with a plain substitution that cannot
+         evaluate Jinja expressions, and a computed src would reach them as an
+         empty one. -->
+    <script src="{{ url_for('static', filename='js/i18n/en.js') }}?v=1"></script>
+{% if lang == 'vi' %}    <script src="{{ url_for('static', filename='js/i18n/vi.js') }}?v=1"></script>
+{% elif lang == 'de' %}    <script src="{{ url_for('static', filename='js/i18n/de.js') }}?v=1"></script>
+{% elif lang == 'fr' %}    <script src="{{ url_for('static', filename='js/i18n/fr.js') }}?v=1"></script>
+{% elif lang == 'es' %}    <script src="{{ url_for('static', filename='js/i18n/es.js') }}?v=1"></script>
+{% elif lang == 'zh' %}    <script src="{{ url_for('static', filename='js/i18n/zh.js') }}?v=1"></script>
+{% endif %}    <script src="{{ url_for('static', filename='js/i18n.js') }}?v=50" data-i18n-version="1"></script>
+    <script src="{{ url_for('static', filename='js/auth.js') }}?v=2"></script>
+    <script src="{{ url_for('static', filename='js/admin.js') }}?v=3"></script>
+</body>
+</html>

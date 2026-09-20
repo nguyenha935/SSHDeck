@@ -1,0 +1,132 @@
+/* ============================================================================
+   deck-tokens.css -- the theme bridge, shared by EVERY page.
+
+   Split out of deck.css on 2026-09-18. deck.css is the app shell and is still
+   loaded by index.html alone, but its --tw-* bridge is not shell-specific: it
+   is how any page reads the ten themes. The auth and admin pages used to paint
+   from the older bg and text token names and therefore could not look like the
+   product ("thiet ke lai toan bo giao dien cua trang dang nhap va cac trang
+   khac van dang giu giao dien cu"). They load this file now; they still do not
+   load deck.css.
+
+   Load order on every page: style.css (themes) -> this file (bridge) ->
+   the page's own sheet.
+   ========================================================================= */
+
+/* ---------------------------------------------------------------------------
+   TOKEN BRIDGE
+   The mockup paints from a --tw-* palette it declares literally (mockup lines
+   209-213). Those literals cannot ship: the app has 10 themes and the mockup
+   only spells out three of them. So each --tw-* token is declared ONCE here as
+   a var() reference onto the theme token that already carries the same role,
+   and the themes keep driving every colour exactly as they do today.
+
+   Declared on `body`, NOT on `:root`, and this is load-bearing rather than
+   stylistic. A custom property is substituted where it is DECLARED, not where
+   it is used. Every theme is a `body[data-theme=...]` block, so a derived
+   token declared in :root would resolve var(--bg-primary) against :root's own
+   value and hand the finished colour down -- the theme override on body would
+   never get to participate, and all 10 themes would collapse onto the default
+   palette. Declaring on body puts the bridge at the same level the theme
+   blocks then win against by specificity. This is the same reasoning that
+   already governs the --chrome-* block at style.css:177 and the derived-token
+   block below it; see the comment there.
+
+   Verified before writing: all 13 source tokens are declared in all 10 theme
+   contexts (:root + 9 body[data-theme] blocks), so no bridge token can fall
+   back to an unthemed value.
+   -------------------------------------------------------------------------- */
+body {
+    /* Surfaces. Mockup line 209: shell is the darkest plane, bar the chrome,
+       surface the raised menu/panel plane, hover the interactive lift. */
+    --tw-shell: var(--bg-primary);
+    --tw-bar: var(--bg-secondary);
+    --tw-surface: var(--bg-tertiary);
+    --tw-hover: var(--bg-hover);
+
+    /* The terminal body stays dark in every theme -- it is the one surface the
+       build order pins independently of the light/dark split, and the app
+       already models that with its own dedicated token. */
+    --tw-terminal: var(--term-background);
+    --tw-terminal-text: var(--text-primary);
+
+    /* Ink. */
+    --tw-text: var(--text-primary);
+    --tw-muted: var(--text-secondary);
+    --tw-border: var(--border-color);
+
+    /* Accent. --tw-accent-text is the ink painted ON the accent fill, so it
+       maps to --btn-primary-text rather than to a literal white: that token is
+       declared per theme (#000000 in retro/emerald-matrix/obsidian, #ffffff
+       elsewhere) precisely because three themes have a near-white accent. A
+       hardcoded white measured 1.00:1 on obsidian in an earlier refactor. */
+    --tw-accent: var(--accent-primary);
+    --tw-accent-text: var(--btn-primary-text);
+    --tw-accent-soft: color-mix(in srgb, var(--accent-primary) 14%, transparent);
+
+    /* Semantic trio, mockup line 209. */
+    --tw-success: var(--success-color);
+    --tw-danger: var(--error-color);
+    --tw-warning: var(--warning-color);
+
+    /* ----------------------------------------------------------------------
+       THE STAGE the framed product sits on. [INF-C1], declared not silent.
+
+       Mockup line 220 frames .tw5-window with a 1px border, 12px radius and a
+       shell background -- but the mockup is a preview tile on a documentation
+       page, so the page canvas BEHIND the tile is that page's, and the mockup
+       does not prescribe one for production. It has to be derived, and the
+       derivation is what makes the frame visible.
+
+       Why this token exists at all (owner report 2026-08-10: "the outer product
+       frame border/background separation has disappeared"). The app painted
+       body with var(--bg-gradient), whose FIRST colour stop is byte-identical
+       to --bg-primary -- the shell's own fill -- in six of the ten themes:
+
+         glass #09090b, noir #06080d, arctic-ice #0a1316, rose-gold #160a10,
+         emerald-matrix #050c0a, obsidian #000000
+
+       At the top-left corner, where the gradient starts and the frame's corner
+       actually is, the canvas and the shell were therefore the SAME colour. The
+       border was still declared and still painted, but it separated two
+       identical planes, so there was no readable frame. Shrinking the gutter to
+       4px removed the last of the visual cue. Both halves are fixed here: this
+       token gives the canvas a guaranteed-distinct value, and the gutter below
+       gives it room to be seen.
+
+       86/14 toward --text-primary, because --text-primary is by construction
+       the theme's maximum-contrast ink, so mixing toward it moves the canvas
+       AWAY from the shell in whichever direction the theme runs -- lighter on a
+       dark theme, darker on a light one. Measured delta on the largest RGB
+       channel, all ten themes: glass 32, retro 34, solar 32, paper 29, noir 33,
+       arctic-ice 32, rose-gold 33, cyberpunk-neon 33, emerald-matrix 34,
+       obsidian 36. No theme is degenerate, including obsidian, whose palette is
+       pure #000/#fff by design (mockup line 219) and which a colour-only
+       affordance cannot serve -- hence the 1px border and the radius carry the
+       frame structurally as well, and the contract measures those too.
+
+       Declared on body, with the rest of the bridge, for the reason the block
+       comment above gives: a derived token declared in :root would resolve
+       against :root and take ONE value in all ten themes. Since 2026-09-18
+       every page carries this canvas, not just the shell: the auth pages sit
+       their card on it exactly as index.html sits the window on it. */
+    --deck-canvas: color-mix(in srgb, var(--bg-primary) 86%, var(--text-primary));
+}
+
+/* The stage itself. Overrides style.css's body gradient on every page, so the
+   framed product reads as an object ON a surface rather than a shape cut out of
+   the same colour. */
+body {
+    background: var(--deck-canvas);
+}
+
+/* On touch the window frame collapses to the screen edges (deck.css), so no
+   canvas is visible: body is painted with the shell fill instead. Without it an
+   unpainted strip appears behind the safe-area padding and under rubber-band
+   overscroll, where the canvas colour reads as a stray band. The auth pages
+   have no frame at all, so they want the same thing for the same reason. */
+@media (pointer: coarse) and (hover: none), (max-width: 767px) {
+    body {
+        background: var(--tw-shell);
+    }
+}

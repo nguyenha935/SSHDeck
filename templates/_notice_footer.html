@@ -1,0 +1,8 @@
+{# The licence notice, on the one page a hosted deployment must show the
+   public before anyone has an account. Plain text on purpose: it is a
+   citation, not a control, so it neither claims a 44px touch target nor
+   depends on hover, and it copies cleanly out of the page. #}
+<p class="a5-notice">
+  {{ notice.name }} {{ notice.version }} &middot; {{ notice.license_name }}
+  <span class="a5-notice-line">{{ notice.required_notice }}</span>
+</p>
