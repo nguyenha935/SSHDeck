@@ -1,0 +1,48 @@
+name: Base branch
+
+# GitHub offers a fork the base repository's DEFAULT branch, so a contributor
+# who changes nothing opens against `main` even though CONTRIBUTING asks for
+# `dev`. Nothing in the repository can change that default. This says so on the
+# pull request itself, once, so the contributor is not left guessing why it was
+# retargeted later.
+#
+# It only ever comments. It does not close the pull request and does not move
+# the base itself: retargeting can turn a small diff into a large one, and that
+# is a judgement for the maintainer, not for a workflow.
+
+on:
+  pull_request_target:
+    types: [opened, reopened]
+    branches: [main]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  remind:
+    # The maintainer's own pull requests to main are the intended route.
+    if: github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Say which branch this should target
+        uses: actions/github-script@v8
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: [
+                "Thanks for the pull request.",
+                "",
+                "This one targets `main`, which is the branch releases are cut from.",
+                "Contributions go to **`dev`** instead — GitHub offers `main` because",
+                "it is the repository's default branch, so it is an easy one to miss.",
+                "",
+                "You can change the base branch with **Edit** at the top of this pull",
+                "request, or leave it and a maintainer will retarget it. Nothing is",
+                "lost either way, and the review can start now.",
+                "",
+                "See [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md#which-branch-to-target)."
+              ].join("\n")
+            })

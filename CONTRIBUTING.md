@@ -106,18 +106,37 @@ Feature requests are welcome! Please include:
 2. **Open an issue first** for larger changes - Let's discuss the approach
 3. **Small PRs are better** - Easier to review and merge
 
-#### Development Workflow
+#### Which branch to target
+
+The repository keeps two long-lived branches, and they do different jobs:
+
+| Branch | What it is |
+| --- | --- |
+| `main` | What a release is cut from: tagged, and the published image is built from it. Meant to be the state the project stands behind. |
+| `dev` | Where work lands first, and where it is squared with other work before any of it reaches `main`. |
+
+**Open your pull request against `dev`.** GitHub will offer you `main`
+because that is the repository's default branch -- change the base to `dev`
+in the pull request form. If you forget, a bot will say so on the pull
+request and the maintainer can retarget it; nothing is lost either way.
+
+The maintainer's own work follows the same route for the same reason: a
+local branch, then a pull request, so the suites run on it before it is
+merged. Nothing is pushed straight to a long-lived branch.
+
+#### Development workflow
 
 1. Fork the repository
-2. Create a feature branch from `main`
+2. Create a branch from `dev`
    ```bash
-   git checkout -b feature/your-feature-name
+   git switch dev && git pull
+   git switch -c feature/your-feature-name
    ```
 3. Make your changes
-4. Test your changes locally
-5. Commit with clear messages
+4. Run both suites locally (see below) -- CI runs them on every pull request
+5. Commit with clear messages, signed off (`git commit -s`)
 6. Push to your fork
-7. Open a Pull Request
+7. Open a pull request **against `dev`**
 
 #### Code Style
 
