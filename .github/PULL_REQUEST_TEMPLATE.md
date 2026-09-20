@@ -3,6 +3,11 @@ Thank you for contributing. This template is short on purpose: everything in it
 is something a reviewer would otherwise have to ask you for.
 -->
 
+> **Base branch:** contributions go to `dev`, not `main`. GitHub offers
+> `main` by default — change it in the form above if it still says `main`.
+> `main` is only merged into from `dev`, or from the maintainer's own
+> release branches. See [CONTRIBUTING.md](../CONTRIBUTING.md#which-branch-to-target).
+
 ## What this changes
 
 <!-- One or two sentences. What is different after this PR that was not before? -->

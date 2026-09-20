@@ -243,7 +243,10 @@ short conversation about the approach costs less than a rewritten branch. Small,
 focused pull requests get merged; one that changes several unrelated things gets
 questions instead.
 
-**2. Fork, branch from `main`, and make the change.**
+**2. Fork, branch from `dev`, and make the change.** The repository keeps
+`main` for releases and `dev` for work in progress, so contributions target
+`dev`. GitHub offers `main` by default — change the base in the pull request
+form, or let the bot remind you.
 
 **3. Make both suites green.** A red run is not reviewed:
 
