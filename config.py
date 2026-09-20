@@ -113,6 +113,18 @@ SOCKETIO_ASYNC_MODE = 'eventlet'
 SOCKETIO_PING_TIMEOUT = 60
 SOCKETIO_PING_INTERVAL = 25
 
+# One HTTP polling payload carries every event the page queued while the POST
+# was in flight, and python-engineio discards the WHOLE payload above this
+# count (engineio.payload.Payload.max_decode_packets, default 16) while still
+# answering 200 -- nothing is retried, because nothing failed as far as the
+# client can tell. Measured 2026-09-20 on a three-pane reload: the batch went
+# over 16, was dropped, and the panes sat on a stale frame for 7.1s and 7.2s
+# until the client's own attach retry. The bundled client caps its own polling
+# batches at 16 (scripts/socketio-entry.js); this is the ceiling for a page
+# still holding an older bundle, and the headroom for a larger workspace.
+# Payload BYTES stay bounded by max_http_buffer_size.
+SOCKETIO_MAX_DECODE_PACKETS = 64
+
 _allow_cors_wildcard = os.environ.get('ALLOW_CORS_WILDCARD', 'false').lower() == 'true'
 _cors_origins = os.environ.get('CORS_ORIGINS', '')
 if _cors_origins == '*':

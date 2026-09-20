@@ -675,6 +675,9 @@ const TerminalManager = {
     viewAttachTimers: {},
     // A fit measured while an attach was in flight, applied on the ack.
     pendingViewSizes: {},
+    // The size each in-flight attach CARRIED. The server opens the channel's
+    // PTY at it, so a pending fit that matches it needs no resize behind it.
+    viewAttachSizes: {},
     // Sessions whose attach has already been retried once.
     viewAttachRetried: {},
     // How long to wait for `view_attached` before one retry. Measured against
@@ -791,6 +794,7 @@ const TerminalManager = {
             return false;
         }
         this.views[sessionId] = 'attaching';
+        this.viewAttachSizes[sessionId] = { cols: dims.cols, rows: dims.rows };
         window.socket.emit('view_attach', {
             session_id: sessionId,
             cols: dims.cols,
@@ -826,6 +830,7 @@ const TerminalManager = {
             this.views[sessionId] = 'detached';
             delete this.reportedSizes[sessionId];
             delete this.pendingViewSizes[sessionId];
+            delete this.viewAttachSizes[sessionId];
             delete this.viewAttachRetried[sessionId];
             delete this.windowGeometry[sessionId];
             if (this.viewAttachTimers[sessionId]) {
@@ -886,6 +891,7 @@ const TerminalManager = {
         this.views[sessionId] = 'detached';
         delete this.reportedSizes[sessionId];
         delete this.pendingViewSizes[sessionId];
+        delete this.viewAttachSizes[sessionId];
         delete this.windowGeometry[sessionId];
         if (this.viewAttachTimers[sessionId]) {
             clearTimeout(this.viewAttachTimers[sessionId]);
@@ -909,17 +915,30 @@ const TerminalManager = {
         this.reportFirstAttach(sessionId);
         const pending = this.pendingViewSizes[sessionId];
         delete this.pendingViewSizes[sessionId];
-        if (pending) {
-            // A fit landed while the attach was in flight. Send it now, as one
-            // resize on the client that just opened.
-            this.reportedSizes[sessionId] = {
-                cols: pending.cols, rows: pending.rows, epoch: this.socketEpoch };
-            window.socket.emit('ssh_resize', {
-                session_id: sessionId,
-                rows: pending.rows,
-                cols: pending.cols,
-            });
+        const opened = this.viewAttachSizes[sessionId];
+        delete this.viewAttachSizes[sessionId];
+        if (!pending) {
+            return;
         }
+        // A fit landed while the attach was in flight. Record it either way, so
+        // the dedupe in reportLocalFit knows what the server is holding.
+        this.reportedSizes[sessionId] = {
+            cols: pending.cols, rows: pending.rows, epoch: this.socketEpoch };
+        if (opened && opened.cols === pending.cols && opened.rows === pending.rows) {
+            /*
+             * The attach already opened the PTY at exactly this size, so the
+             * resize would change nothing and cost a redraw: the server answers
+             * every ssh_resize with a tmux `refresh-client`, which is an exec
+             * channel at 432-472ms measured, on every pane of the session.
+             */
+            return;
+        }
+        // Send it now, as one resize on the client that just opened.
+        window.socket.emit('ssh_resize', {
+            session_id: sessionId,
+            rows: pending.rows,
+            cols: pending.cols,
+        });
     },
 
     /*

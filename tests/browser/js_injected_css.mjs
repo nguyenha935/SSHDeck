@@ -407,7 +407,9 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // the shared tmux window: the reported fit adds back the pixels that
         // chrome holds, while everything that DRAWS the pane keeps measuring
         // the box as it is.
-        ['js/terminal-manager.js', 93],
+        // v94: an attach records the size it carried, so the ack no longer
+        // sends an ssh_resize for a size the server already opened the PTY at.
+        ['js/terminal-manager.js', 94],
         ['js/sftp-file-manager.js', 16],
         // v11: S17 FIX 4d completion -- the insert-at-prompt write routes through
         // window.emitTerminalInput, so it is no longer swallowed by tmux copy
@@ -597,7 +599,12 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v89: the note's live typist wins a save conflict instead of losing
         // the words they are typing.
         // v94: the Broadcast toggle holds the grid across its own composer.
-        ['js/app.js', 94],
+        // v95: the first connect of a page no longer runs resetSocketEpoch,
+        // so a load sends ONE view_attach per session instead of two. A cached
+        // v94 keeps doubling the startup burst that overflowed the polling
+        // payload, and keeps losing its scrollback when the first attach is the
+        // one the server discarded.
+        ['js/app.js', 95],
         // v9: 0209f10 raise. v10: P1 D2 trigger-anchored More-sheet position
         // (top = trigger.bottom+1, bottom auto, measured maxHeight) — Entry 27 R4.
         ['js/header-menus.js', 13],
