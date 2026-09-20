@@ -30,7 +30,7 @@
          !important. Superseded rules are deleted from style.css as each region
          lands, so the two files never both own the same property. -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/deck-tokens.css') }}?v=1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/deck.css') }}?v=38">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/deck.css') }}?v=40">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sftp-file-manager.css') }}?v=6">
 </head>
 <body data-theme="{{ theme|default('glass') }}">
@@ -679,7 +679,7 @@
                 <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-arrow-down-to-line"></use></svg>
                 <span class="btn-label" data-i18n="tmux.exitScroll">Exit scroll</span>
             </button>
-            <button class="btn btn-primary mobile-dock-btn" id="mobileSendBtn" type="button" aria-label="Send"
+            <button class="btn btn-secondary mobile-dock-btn" id="mobileSendBtn" type="button" aria-label="Send"
                     data-i18n-aria-label="commandPanel.send">
                 <svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=2#icon-send"></use></svg>
                 <!-- Icon-only on touch; the fine-pointer Broadcast override is
