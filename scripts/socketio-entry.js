@@ -30,14 +30,25 @@ import { Socket as EngineSocket } from 'engine.io-client';
  */
 const ENGINE_IO_MAX_PACKETS = 16;
 const engineWritablePackets = EngineSocket.prototype._getWritablePackets;
-EngineSocket.prototype._getWritablePackets = function sshdeckWritablePackets() {
-    const packets = engineWritablePackets.call(this);
-    if (this.transport?.name !== 'polling') {
-        return packets;
-    }
-    return packets.length > ENGINE_IO_MAX_PACKETS
-        ? packets.slice(0, ENGINE_IO_MAX_PACKETS) : packets;
-};
+/*
+ * A private method can disappear in a dependency bump, and this decides what
+ * happens when it does. `npm run vendor` refuses to build without it, so the
+ * break lands at BUILD time with a name on it (scripts/vendor.js); the guard
+ * here is for a bundle built before that check existed -- it keeps the stock
+ * client working, where the server's own ceiling
+ * (config.SOCKETIO_MAX_DECODE_PACKETS) is what holds, instead of calling
+ * `undefined` on every flush and sending nothing at all.
+ */
+if (typeof engineWritablePackets === 'function') {
+    EngineSocket.prototype._getWritablePackets = function sshdeckWritablePackets() {
+        const packets = engineWritablePackets.call(this);
+        if (this.transport?.name !== 'polling') {
+            return packets;
+        }
+        return packets.length > ENGINE_IO_MAX_PACKETS
+            ? packets.slice(0, ENGINE_IO_MAX_PACKETS) : packets;
+    };
+}
 
 io.io = io;
 io.Manager = Manager;

@@ -234,7 +234,7 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # v94: the Broadcast toggle calls holdChromeGrid, so opening and
         # closing the desktop composer costs no resize (owner,:
         # "mở broadcast lên tắt đi thôi là terminal đang mở omp vẫn nhảy nhảy").
-        "filename='js/app.js'": '?v=94',
+        "filename='js/app.js'": '?v=95',
         "filename='js/sftp-file-manager.js'": '?v=16',
         # Extracted from a 146-line inline <script> in index.html. Inline script
         # cannot be cache-busted at all -- it ships inside the cached HTML -- so
@@ -552,7 +552,7 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # the shared tmux window: the reported fit adds back the pixels that
         # chrome holds, while everything that DRAWS the pane keeps measuring
         # the box as it is.
-        "filename='js/terminal-manager.js'": '?v=93',
+        "filename='js/terminal-manager.js'": '?v=94',
         # touch-action-row.js owns the six-action global row. It did not exist
         # when this table was written; an unpinned copy of it is the single most
         # damaging stale asset on touch, because the row it builds is the only

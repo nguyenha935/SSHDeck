@@ -4,6 +4,7 @@ from flask_socketio import SocketIO
 from flask_login import login_user, logout_user, login_required, current_user
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.middleware.proxy_fix import ProxyFix
+from engineio import payload as engineio_payload
 import config
 import os
 from .models import db
@@ -141,6 +142,11 @@ def create_app():
         cors_origins = [origin.strip() for origin in cors_origins.split(',') if origin.strip()]
     if cors_origins == ['*']:
         cors_origins = '*'
+
+    # A polling payload above this count is discarded WHOLE, with a 200 back
+    # to the client, so the ceiling has to clear a page's startup burst. See
+    # config.SOCKETIO_MAX_DECODE_PACKETS for the measurement.
+    engineio_payload.Payload.max_decode_packets = config.SOCKETIO_MAX_DECODE_PACKETS
 
     socketio.init_app(
         app,

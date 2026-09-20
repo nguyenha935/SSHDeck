@@ -114,6 +114,22 @@ for (const [folder, packages] of Object.entries(licences)) {
  * esbuild is pinned, so the output is byte-identical between runs -- which is
  * what lets CI re-vendor and require an empty diff.
  */
+/*
+ * The entry patches a PRIVATE Engine.IO method. If a version bump removes it
+ * the bundle still builds and still runs -- it simply stops capping the
+ * polling payload, and the defect comes back as a 7-second stale screen after
+ * a reload. That is a long way from the cause, so the check belongs here,
+ * while the name is still in hand.
+ */
+const engineSocketPrototype = require('engine.io-client').Socket.prototype;
+if (typeof engineSocketPrototype._getWritablePackets !== 'function') {
+    throw new Error(
+        'engine.io-client no longer exposes Socket.prototype._getWritablePackets.'
+        + ' The polling packet cap in scripts/socketio-entry.js needs a new hook'
+        + ' before this bundle can ship; until then every client falls back to'
+        + ' the server ceiling in config.SOCKETIO_MAX_DECODE_PACKETS.');
+}
+
 const sioEntry = path.join(root, 'scripts', 'socketio-entry.js');
 const sioOut = path.join(outDir, 'socketio', 'socket.io.min.js');
 fs.mkdirSync(path.dirname(sioOut), { recursive: true });

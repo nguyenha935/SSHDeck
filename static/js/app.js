@@ -915,6 +915,29 @@
         }, 60000);
     };
 
+    /*
+     * A page's FIRST connect is not a reconnect, and resetting on it costs a
+     * whole extra attach round.
+     *
+     * Measured 2026-09-20, stacks recorded at the emit: every session sent
+     * view_attach TWICE on a load -- once from syncViews (applyActiveSession),
+     * then 2ms later from syncViews again, called by resetSocketEpoch out of
+     * this handler. The attaches this page had already sent were BUFFERED by
+     * socket.io and go out on this very socket, so there was nothing stale to
+     * forget; the reset simply threw them away and re-sent them.
+     *
+     * It cost two things. The doubled burst is half of what pushed the startup
+     * payload past the 16 packets python-engineio will decode (the defect this
+     * branch is fixing). And the attach that survived carried `history:false`,
+     * because the first one had already claimed the one-shot -- so a page whose
+     * first attach was the one discarded never pulled its scrollback at all.
+     *
+     * A reconnect still resets, which is what this call is for: it runs under a
+     * NEW socket sid, the server's client-size registry is keyed by sid, and the
+     * tmux clients opened on the old socket are gone with it.
+     */
+    let socketHasConnectedBefore = false;
+
     socket.on('connect', () => {
         console.log('Connected to server');
         const reconnectBar = document.getElementById('reconnectBar');
@@ -932,7 +955,10 @@
          * it a window that never changes size would stay invisible to the
          * registry until the socket died again.
          */
-        window.TerminalManager?.resetSocketEpoch();
+        if (socketHasConnectedBefore) {
+            window.TerminalManager?.resetSocketEpoch();
+        }
+        socketHasConnectedBefore = true;
         /*
          * The tmux clients this page held were opened on the OLD socket's
          * channels, so the server closed them when that socket went away.
