@@ -713,11 +713,11 @@
    (icons.svg#icon-square-terminal) -- only the frame around it is new. */
 /* [INF-B3] The delivered mark is a full-frame rounded square: it carries its
    own plate and its own corner radius. The owner's shell-balance amendment
-   increases the mark to 36px; --tw-text keeps its ink theme-aware. */
+   sets the mark to 32px; --tw-text keeps its ink theme-aware. */
 .brand-logo {
     display: block;
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
     color: var(--tw-text);
 }
 
@@ -2403,8 +2403,7 @@
 
 /* Owner-approved visual hierarchy: docs/spec/shell-balance.md.
    Paint stays inside the existing targets; no input or layout state changes. */
-#newConnectionBtn.strip-new-connection,
-#mobileSendBtn {
+#newConnectionBtn.strip-new-connection {
     position: relative;
     background: transparent;
     border-color: transparent;
@@ -2434,31 +2433,7 @@
     height: 14px;
 }
 
-#mobileSendBtn::before {
-    content: "";
-    position: absolute;
-    inset: 6px;
-    width: auto;
-    height: auto;
-    transform: none;
-    border-radius: 6px;
-    background: var(--chrome-primary);
-    z-index: 0;
-}
-
-#mobileSendBtn .icon,
-#mobileSendBtn .btn-label {
-    position: relative;
-    z-index: 1;
-}
-
-#mobileSendBtn .icon {
-    width: 18px;
-    height: 18px;
-}
-
-#newConnectionBtn.strip-new-connection:hover::before,
-#mobileSendBtn:hover::before {
+#newConnectionBtn.strip-new-connection:hover::before {
     background: color-mix(in srgb, var(--chrome-primary) 88%, var(--tw-text));
 }
 

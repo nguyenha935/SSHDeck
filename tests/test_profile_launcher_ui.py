@@ -77,7 +77,7 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # its list keeps one row under the two-row header.
         # v38: drag-shift / drag-settle transform transitions for the chip drag
         # (reduced motion: none).
-        "filename='css/deck.css'": '?v=39',
+        "filename='css/deck.css'": '?v=40',
         # New: the --tw-* bridge moved out of deck.css so every page
         # can read the ten themes, not just the shell.
         "filename='css/deck-tokens.css'": '?v=1',
