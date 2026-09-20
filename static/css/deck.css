@@ -712,14 +712,12 @@
    The app painted a bare 18px glyph with no box at all. Same asset
    (icons.svg#icon-square-terminal) -- only the frame around it is new. */
 /* [INF-B3] The delivered mark is a full-frame rounded square: it carries its
-   own plate and its own corner radius, so the accent-soft tile the old sprite
-   glyph sat on would be a second plate behind it. The box keeps the mockup's
-   28x28; `color` is the ink, and --tw-text gives the black mark on the one
-   light theme and the white mark on the nine dark ones. */
+   own plate and its own corner radius. The owner's shell-balance amendment
+   increases the mark to 36px; --tw-text keeps its ink theme-aware. */
 .brand-logo {
     display: block;
-    width: 28px;
-    height: 28px;
+    width: 36px;
+    height: 36px;
     color: var(--tw-text);
 }
 
@@ -2400,5 +2398,93 @@
        single-pane portrait state is affected. */
     .terminal-grid:has(.terminal-pane.active) .pane-label {
         display: none;
+    }
+}
+
+/* Owner-approved visual hierarchy: docs/spec/shell-balance.md.
+   Paint stays inside the existing targets; no input or layout state changes. */
+#newConnectionBtn.strip-new-connection,
+#mobileSendBtn {
+    position: relative;
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    overflow: visible;
+}
+
+#newConnectionBtn.strip-new-connection::before {
+    content: "";
+    position: absolute;
+    inset: auto;
+    top: 50%;
+    left: 50%;
+    width: 24px;
+    height: 24px;
+    transform: translate(-50%, -50%);
+    border-radius: 5px;
+    background: var(--chrome-primary);
+    box-shadow: none;
+    z-index: 0;
+}
+
+#newConnectionBtn.strip-new-connection .icon {
+    position: relative;
+    z-index: 1;
+    width: 14px;
+    height: 14px;
+}
+
+#mobileSendBtn::before {
+    content: "";
+    position: absolute;
+    inset: 6px;
+    width: auto;
+    height: auto;
+    transform: none;
+    border-radius: 6px;
+    background: var(--chrome-primary);
+    z-index: 0;
+}
+
+#mobileSendBtn .icon,
+#mobileSendBtn .btn-label {
+    position: relative;
+    z-index: 1;
+}
+
+#mobileSendBtn .icon {
+    width: 18px;
+    height: 18px;
+}
+
+#newConnectionBtn.strip-new-connection:hover::before,
+#mobileSendBtn:hover::before {
+    background: color-mix(in srgb, var(--chrome-primary) 88%, var(--tw-text));
+}
+
+.header {
+    box-shadow: none;
+}
+
+@media (pointer: coarse) and (hover: none), (max-width: 767px) {
+    .header #mobileMoreBtn {
+        padding: 0;
+        border-color: transparent;
+        box-shadow: none;
+        background: transparent;
+    }
+
+    .header #mobileMoreBtn:hover,
+    .header #mobileMoreBtn[aria-expanded="true"] {
+        background: var(--tw-hover);
+    }
+
+    .header-title-row,
+    .touch-action-row {
+        border-bottom-color: transparent;
+    }
+
+    .session-tabs-row {
+        border-top-color: transparent;
     }
 }

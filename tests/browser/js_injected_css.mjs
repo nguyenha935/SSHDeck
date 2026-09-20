@@ -198,7 +198,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v31: W14 item 2 bounded menus + item 6 broadcast picker.
         // v32: owner batch asset changes.
         // v38: drag-shift / drag-settle transitions for the chip drag.
-        ['css/deck.css', 38],
+        ['css/deck.css', 39],
         ['css/deck-tokens.css', 1],
         ['css/sftp-file-manager.css', 6],
         // v28: owner batch (terminal-manager untouched by P1 D1-D3,

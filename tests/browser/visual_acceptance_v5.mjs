@@ -36,6 +36,8 @@ const MIME = {
 
 function renderTemplate(rel, theme = 'glass') {
     let html = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    html = html.replace(/\{%\s*include\s+'([^']+)'\s*%\}/g,
+        (_, file) => fs.readFileSync(path.join(ROOT, 'templates', file), 'utf8'));
     html = html.replace(
         /\{\{\s*url_for\('static',\s*filename='([^']+)'\)\s*\}\}/g, '/static/$1');
     html = html.replace(/\{\{\s*url_for\('([a-z_.]+)'\)\s*\}\}/g, '/$1');
@@ -374,7 +376,7 @@ const MOCKUP = {
     dropdownGap: 1, dropdownRadius: 10,         // 264-268
     keypadPadding: 5, keypadBorderTop: 1, keyMinH: 39, keyRadius: 7,     // 342-347
     composerMinH: 42, composerRadius: 7,        // 371-372
-    logo: 28, logoRadius: 0,                    // 232 size; radius 0 since
+    logo: 36, logoRadius: 0,                    // 232 size; radius 0 since
     //: the mark the owner delivered IS a rounded square and carries
     // its own corner radius, so the 7px accent-soft tile the sprite glyph sat
     // on would be a second plate behind it. The SIZE is still the mockup's.
@@ -670,7 +672,7 @@ async function measureShot(page, name) {
             'mockup 234 radius carried onto the strip control');
     }
     if (m.logo && m.logo.visible) {
-        R('logo size', MOCKUP.logo, m.logo.w, 'mockup 232 28x28');
+        R('logo size', MOCKUP.logo, m.logo.w, 'shell-balance amendment: 36px brand');
         R('logo radius', MOCKUP.logoRadius, m.logo.radius, 'mockup 232');
     }
 
