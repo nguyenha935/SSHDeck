@@ -12,6 +12,32 @@
  * dependency bump can change a file that ships already built.
  */
 import { io, Manager, Socket, connect, protocol } from 'socket.io-client';
+import { Socket as EngineSocket } from 'engine.io-client';
+
+/*
+ * Python Engine.IO accepts at most 16 packets in one HTTP polling payload
+ * (engineio.payload.Payload.max_decode_packets). The browser client normally
+ * limits only by byte size, so a reload with several panes can queue more than
+ * 16 startup events while polling is still active. The server then logs
+ * "Too many packets in payload", returns 200, and silently loses the whole
+ * batch, including view_attach and get_notepad. Keep the server's safety cap
+ * and split the client packet batch before it crosses that boundary.
+ *
+ * The method is private in Engine.IO, but it is the single point where a
+ * writable polling payload is selected. The original method still enforces
+ * the negotiated byte limit; this wrapper adds the packet-count ceiling and
+ * leaves WebSocket batches untouched.
+ */
+const ENGINE_IO_MAX_PACKETS = 16;
+const engineWritablePackets = EngineSocket.prototype._getWritablePackets;
+EngineSocket.prototype._getWritablePackets = function sshdeckWritablePackets() {
+    const packets = engineWritablePackets.call(this);
+    if (this.transport?.name !== 'polling') {
+        return packets;
+    }
+    return packets.length > ENGINE_IO_MAX_PACKETS
+        ? packets.slice(0, ENGINE_IO_MAX_PACKETS) : packets;
+};
 
 io.io = io;
 io.Manager = Manager;
