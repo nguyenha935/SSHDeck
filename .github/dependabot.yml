@@ -1,16 +1,38 @@
+# What opens dependency pull requests here, on whose clock, and what it cannot
+# stop.
+#
+# PROVENANCE. The file this replaces was inherited from upstream WebSSH: its
+# comments were in German and its schedule ran on Europe/Berlin. It came
+# through the history squash of 2026-09-20 unread, so for a while this project
+# was asking for dependency updates at 06:00 in somebody else's timezone. It is
+# rewritten rather than patched, so the next reader can tell whose file it is.
+#
+# WHAT IT CANNOT STOP, AND WHY IT NOW CAN. `ignore: version-update:semver-major`
+# only governs a VERSION update -- bumping a dependency that is pinned. A
+# requirement written as a RANGE is a different operation ("update the
+# requirement"), and no update-types filter touches it. Measured here: every
+# line of requirements.txt was pinned with `==` except redis, which was a
+# range, and redis is exactly the dependency that arrived twice as a major
+# anyway (PR #4, 6.x -> 7.x; PR #10, 7.x -> 8.x). redis is now pinned like the
+# rest, so the rule below finally means what it says.
+#
+# Nothing merges itself either way: every pull request here runs the full CI,
+# and the image job refuses to publish behind a red one.
+
 version: 2
 
 updates:
-  # Python-Abhängigkeiten
+  # Python. Everything in requirements.txt is pinned, so these arrive as
+  # version bumps and the major filter below holds.
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
-      time: "06:00"
-      timezone: "Europe/Berlin"
+      time: "09:00"
+      timezone: "Asia/Ho_Chi_Minh"
 
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 3
 
     labels:
       - "dependencies"
@@ -32,16 +54,19 @@ updates:
         update-types:
           - "version-update:semver-major"
 
-  # Node.js-Abhängigkeiten
+  # Node. These are build-time only -- the browser is served the files in
+  # static/vendor/, which `npm run vendor` produces and CI re-derives on every
+  # pull request, so a bump that is not re-vendored fails there rather than
+  # shipping half-applied (that is how PR #1 was caught).
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
-      time: "06:15"
-      timezone: "Europe/Berlin"
+      time: "09:15"
+      timezone: "Asia/Ho_Chi_Minh"
 
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 3
 
     labels:
       - "dependencies"
@@ -63,13 +88,17 @@ updates:
         update-types:
           - "version-update:semver-major"
 
-  # GitHub Actions
+  # GitHub Actions. Every `uses:` is pinned to a commit SHA with its tag in a
+  # trailing comment; Dependabot reads that comment and moves both together, so
+  # pinning costs nothing in maintenance and a moved tag cannot change what CI
+  # runs. tests/test_supply_chain.py fails the build if a bare tag comes back.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "monthly"
+      timezone: "Asia/Ho_Chi_Minh"
 
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 2
 
     labels:
       - "dependencies"
