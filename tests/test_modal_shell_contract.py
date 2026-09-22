@@ -403,7 +403,7 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # move.
     # Desurgery v59 -> v60: the pty_source_changed handler now re-fits (a moved
     # source changes what a wider pane renders under the S36 minimum).
-    assert "\"filename='js/session-manager.js'\": '?v=69'," in tp
+    assert "\"filename='js/session-manager.js'\": '?v=70'," in tp
     assert "\"filename='js/terminal-manager.js'\": '?v=94'," in tp
     assert "style.css') }}?v=70\" in template" in tp
 
