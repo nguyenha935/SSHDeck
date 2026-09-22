@@ -385,7 +385,7 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # v93 -> v94: an attach records the size it carried, so the ack no longer
     # sends an ssh_resize for a size the server already opened the PTY at. A
     # browser on v93 keeps paying a refresh-client exec per pane per load.
-    assert "filename='js/terminal-manager.js') }}?v=94" in idx
+    assert "filename='js/terminal-manager.js') }}?v=95" in idx
     assert "\"filename='css/style.css'\": '?v=70'," in tp
     assert "\"filename='js/sftp-file-manager.js'\": '?v=16'," in tp
     assert "\"filename='js/app.js'\": '?v=95'," in tp
@@ -404,7 +404,7 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # Desurgery v59 -> v60: the pty_source_changed handler now re-fits (a moved
     # source changes what a wider pane renders under the S36 minimum).
     assert "\"filename='js/session-manager.js'\": '?v=70'," in tp
-    assert "\"filename='js/terminal-manager.js'\": '?v=94'," in tp
+    assert "\"filename='js/terminal-manager.js'\": '?v=95'," in tp
     assert "style.css') }}?v=70\" in template" in tp
 
 
