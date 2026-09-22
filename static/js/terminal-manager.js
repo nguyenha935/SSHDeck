@@ -4309,6 +4309,14 @@ const TerminalManager = {
     ZOOM_MAX: 6,
     ZOOM_MIN_FONT: 6,
     LINE_HEIGHT_MAX: 3,
+    /*
+     * How much of a character may be added between characters before the text
+     * stops reading as text (OWNER RULING B4). Past this the spare width stays
+     * as margin -- recentreTerminalScreen splits it evenly, so the frame is
+     * centred rather than stretched. Measured on the owner's own capture: the
+     * unlimited version put 8.4% of a character between every pair of glyphs.
+     */
+    LETTER_SPACING_MAX_RATIO: 0.02,
 
     presentWindowGrid(terminal) {
         const box = this.paneCellBox(terminal);
@@ -4324,7 +4332,16 @@ const TerminalManager = {
             const zoomW = box.width / (terminal.cols * box.baseCell.width);
             const zoomH = box.height / (terminal.rows * box.baseCell.height);
             const zoom = Math.min(zoomW, zoomH, this.ZOOM_MAX);
-            font = Math.max(this.ZOOM_MIN_FONT, Math.floor(base * zoom));
+            /*
+             * FRACTIONAL, not whole pixels. xterm accepts it and the glyph
+             * follows it smoothly (measured: 14 -> 8.429px, 14.5 -> 8.730px,
+             * 15 -> 9.031px). Flooring to an integer threw up to a pixel per
+             * column away, and that pixel became letter spacing -- 1.1% to
+             * 3.8% of a character across a sweep of pane widths. With the
+             * fraction kept it is 0.00-0.01px.
+             */
+            font = Math.max(this.ZOOM_MIN_FONT,
+                            Math.floor(base * zoom * 100) / 100);
             // Glyph metrics are not linear in the font size (an 8px font
             // measures 9px tall, not 14*8/12): set the font first and read
             // the character it actually produced before filling the rest.
@@ -4332,10 +4349,40 @@ const TerminalManager = {
                 terminal.options.fontSize = font;
             }
             const charSize = terminal._core._charSizeService;
-            // Fractional: a whole-pixel floor threw away up to a pixel per
-            // column, which at 55 columns is a 50px band down each side.
-            letterSpacing = Math.max(0, Math.floor(
-                (box.width / terminal.cols - charSize.width) * 100) / 100);
+            /*
+             * AND THEN FIT IT FOR REAL. Glyph height moves in steps (14 and
+             * 14.5 both measure 16px tall, 15 measures 18px) while width is
+             * continuous, so a font taken from the zoom ratio can come back a
+             * whole step taller than the ratio assumed -- and the grid hangs
+             * out of the pane. Measured, not predicted: read the character,
+             * and if it does not fit, take the font down by exactly the
+             * overflow and read it again.
+             */
+            for (let pass = 0; pass < 4; pass += 1) {
+                const over = Math.max(
+                    (terminal.cols * charSize.width) / box.width,
+                    (terminal.rows * charSize.height) / box.height);
+                if (!(over > 1) || font <= this.ZOOM_MIN_FONT) {
+                    break;
+                }
+                font = Math.max(this.ZOOM_MIN_FONT,
+                                Math.floor((font / over) * 100) / 100);
+                terminal.options.fontSize = font;
+                charSize.measure();
+            }
+            /*
+             * Fractional: a whole-pixel floor threw away up to a pixel per
+             * column, which at 55 columns is a 50px band down each side.
+             *
+             * CAPPED (OWNER RULING B4). What is left after the font has taken
+             * the tighter axis is the difference in SHAPE between the grid and
+             * the pane, and pouring all of it between the characters is what
+             * the owner reported as unreadable. Past the cap the width stays as
+             * margin and recentreTerminalScreen centres the frame in it.
+             */
+            const spare = box.width / terminal.cols - charSize.width;
+            letterSpacing = Math.max(0, Math.floor(Math.min(
+                spare, charSize.width * this.LETTER_SPACING_MAX_RATIO) * 100) / 100);
             lineHeight = Math.max(1, Math.min(this.LINE_HEIGHT_MAX,
                 (box.height / terminal.rows) / charSize.height));
             lineHeight = Math.floor(lineHeight * 100) / 100;
