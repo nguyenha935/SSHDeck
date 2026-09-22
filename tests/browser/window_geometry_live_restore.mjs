@@ -201,12 +201,21 @@ const shrunk = await READ(S1);
 num('§A after 51x20', shrunk);
 check('§A engine takes the window size', [shrunk.cols, shrunk.rows], [51, 20]);
 /*
- *: the grid FILLS the pane now (presentWindowGrid stretches the
- * text on both axes), so there is no band left to centre -- the margin is
- * whatever is left inside one cell, and zero is the best possible value.
+ * RESTATED for OWNER RULING B4 (2026-09-22). This used to read "the grid
+ * FILLS the pane width, > 0.97" -- the 2026-09-14 ruling taken literally.
+ * Filling the last few per cent costs letter spacing, and unbounded spacing is
+ * what the owner reported as unreadable: measured on this very window, the old
+ * code put 14.96px between characters, 165.7% of a character's own width.
+ *
+ * B4 caps the spacing at LETTER_SPACING_MAX_RATIO and leaves the rest as
+ * margin. So the pane is either filled, or the leftover is a real margin --
+ * and never a frame jammed against one edge, which is the "cut frame in a
+ * black field" this section exists for.
  */
-checkTrue('§A the grid leaves no band to centre', shrunk.marginLeft >= 0);
-checkTrue('§A because it fills the pane width', shrunk.fillW > 0.97);
+checkTrue('§A the grid is centred in whatever it does not fill',
+    shrunk.marginLeft >= 0);
+checkTrue('§A and it either fills the width or leaves an even margin',
+    shrunk.fillW > 0.97 || shrunk.marginLeft > 0);
 /*
  * PRESENTED, not merely rendered: a 51x20 window in a 1426x780 pane is drawn
  * at a larger font so it fills the pane on one axis (the owner's "cut frame
