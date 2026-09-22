@@ -324,7 +324,7 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
                 # refusal) as a notification.
                 # v69: a drag you can see -- the chip in hand follows the pointer
                 # with a tilt, displaced chips slide to their new slot (FLIP).
-                "filename='js/session-manager.js'": '?v=69',
+                "filename='js/session-manager.js'": '?v=70',
         # v33: S16/S3 -- W14-B-3 min-over-visible: TerminalManager
         # .reportVisibility emits client_visibility, the D3 cosmetic geometry
         # corrections (settled-frame recentre/pannable, fractional rect

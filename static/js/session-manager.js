@@ -639,7 +639,7 @@ const SessionManager = {
          * stays -- it is keyed by endpoint, not by whoever connected last.
          */
         const storedName = display_name || (pending && pending.displayName)
-            || this.getStoredDisplayName(session_id, host, port, username);
+            || this.getStoredDisplayName(session_id);
         this.sessions[session_id] = {
             id: session_id,
             host,
@@ -3747,7 +3747,32 @@ const SessionManager = {
             }
         });
 
-        input.addEventListener('blur', () => {
+        /*
+         * A blur is not consent. This app takes focus back by itself --
+         * focusActiveTerminal calls terminal.focus (:4511), the tap paths in
+         * terminal-manager.js focus the composer or the terminal -- and the old
+         * handler committed on any of them, so a half-typed name was saved by
+         * the app rather than by the person typing it (owner report).
+         *
+         * So: if focus went to the terminal, its hidden textarea or the
+         * composer, or the whole window lost focus, the edit is still in
+         * progress. Put focus back and keep the input open. Anything else is a
+         * person clicking elsewhere, which still commits as it always did.
+         */
+        input.addEventListener('blur', (event) => {
+            const next = event.relatedTarget;
+            const takenByTheApp = !!(next && typeof next.closest === 'function'
+                && (next.classList.contains('xterm-helper-textarea')
+                    || next.id === 'mobileInput'
+                    || next.closest('.xterm, .terminal-wrapper, .terminal-area')));
+            if (takenByTheApp || !document.hasFocus()) {
+                requestAnimationFrame(() => {
+                    if (input.isConnected) {
+                        input.focus();
+                    }
+                });
+                return;
+            }
             finishRename(true);
         });
 
@@ -3766,14 +3791,17 @@ const SessionManager = {
             } else {
                 delete stored[sessionId];
             }
-            // Also save by host:port:user key so it survives session ID changes
+            /*
+             * NOT under `host:port:username`. That key was here so a name would
+             * survive a session id change, but every pane on the same server
+             * shares it: renaming one chip renamed every NEW connection to that
+             * server, which is the owner's report. The server already keeps
+             * display_name on the session row and a reattach keeps that row, so
+             * the endpoint key bought nothing. Old ones are swept as they are
+             * met, so a browser that has them stops answering with them.
+             */
             if (session) {
-                const hostKey = `${session.host}:${session.port}:${session.username}`;
-                if (displayName) {
-                    stored[hostKey] = displayName;
-                } else {
-                    delete stored[hostKey];
-                }
+                delete stored[`${session.host}:${session.port}:${session.username}`];
             }
             localStorage.setItem('sessionDisplayNames', JSON.stringify(stored));
         } catch (e) {
@@ -3788,17 +3816,14 @@ const SessionManager = {
         }
     },
 
-    getStoredDisplayName(sessionId, host, port, username) {
+    getStoredDisplayName(sessionId) {
         try {
             const stored = JSON.parse(localStorage.getItem('sessionDisplayNames') || '{}');
-            // Check by session ID first
-            if (stored[sessionId]) return stored[sessionId];
-            // Check by host:port:user key (persists across session ID changes)
-            if (host && port && username) {
-                const hostKey = `${host}:${port}:${username}`;
-                if (stored[hostKey]) return stored[hostKey];
-            }
-            return null;
+            // By session id, and by nothing else. The `host:port:username`
+            // fallback that used to live here handed a new connection the name
+            // of whichever chip on that server was renamed last; see
+            // saveSessionDisplayName.
+            return stored[sessionId] || null;
         } catch (e) {
             return null;
         }

@@ -2558,6 +2558,14 @@ def _apply_session_geometry(session_id, socketio_instance, target=None,
         except Exception as exc:
             log_debug("Could not resize a view's PTY", session_id=session_id,
                       sid=sid, error=str(exc))
+    if redrawn:
+        # The one line that was missing. Five probes could not reproduce the
+        # owner's blank screen after a notepad-splitter drag, and there was
+        # nothing in the log to read when it happens on his machine: this path
+        # only ever logged failures, at debug level, with DEBUG off in prod.
+        log_info("session geometry applied", session_id=session_id,
+                 size=f"{cols}x{rows}", views=len(views),
+                 resized=len(redrawn), immediate=bool(immediate_redraw))
     _redraw_clients(session_id, redrawn, immediate=immediate_redraw)
 
 
@@ -2606,15 +2614,25 @@ def _redraw_clients(session_id, ttys, immediate=False):
         with _redraw_lock:
             _redraw_timers.pop(session_id, None)
         for tty in ttys:
+            started = time.monotonic()
             try:
                 ok, reason, _ = _exec_tmux_control(
                     session_id, 'refresh-client', target_override=tty)
+                elapsed_ms = int((time.monotonic() - started) * 1000)
                 if not ok:
-                    log_debug("Could not ask tmux to redraw a client",
-                              session_id=session_id, error=reason)
+                    # A missed repaint is exactly the reported defect, so this
+                    # is a warning now and not a debug line prod never prints.
+                    log_warning("Could not ask tmux to redraw a client",
+                                session_id=session_id, tty=tty,
+                                ms=elapsed_ms, error=reason)
+                else:
+                    log_info("redrew a tmux client", session_id=session_id,
+                             tty=tty, ms=elapsed_ms)
             except Exception as exc:
-                log_debug("Could not ask tmux to redraw a client",
-                          session_id=session_id, error=str(exc))
+                log_warning("Could not ask tmux to redraw a client",
+                            session_id=session_id, tty=tty,
+                            ms=int((time.monotonic() - started) * 1000),
+                            error=str(exc))
 
     with _redraw_lock:
         pending = _redraw_timers.pop(session_id, None)

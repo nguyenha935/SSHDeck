@@ -490,7 +490,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // stale offer in place).
         // v68: screen_diagnostic_saved shown as a notification.
         // v69: the chip drag is animated (follow + tilt, displaced chips slide).
-        ['js/session-manager.js', 69],
+        ['js/session-manager.js', 70],
         // v7: W14 item 6 broadcast target picker semantics (allMode/custom
         // subset), stable under the review contract.
         // v8: S17 FIX 4d completion -- sendAll routes each session through
