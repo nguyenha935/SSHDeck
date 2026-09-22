@@ -3564,6 +3564,24 @@ const TerminalManager = {
         const keys = this.sessionTerminals[sessionId] || [];
         const terminal = keys.length > 0 ? this.terminals[keys[0]] : null;
         if (terminal && this.tmuxPaneInCopyModeIndicator(terminal)) {
+            /*
+             * The wheels this session counted went into tmux's copy mode, not
+             * into an application, and leaving copy mode IS their return: tmux
+             * repaints at the bottom. So the debt is settled here.
+             *
+             * Without this the depth stayed at whatever the scroll reached, and
+             * because tmux turns mouse tracking on for its clients
+             * (`appOwnsMouse` true), syncTerminalScrollState never zeroed it
+             * either -- so its third driver re-showed the control on the next
+             * sweep, forever. Measured on a plain prompt: the indicator was gone
+             * by +600ms and the button came back at +1200ms and stayed
+             * (probe, owner report "nút thoát cuộn vẫn hiện lại").
+             *
+             * A full-screen program that holds the mouse never reaches this
+             * branch -- tmux does not enter copy mode for it -- so returnAppScroll
+             * below still owns that case.
+             */
+            this.appScrollDepth[sessionId] = 0;
             return 'tmux-copy-mode';
         }
         if ((this.appScrollDepth[sessionId] || 0) > 0) {

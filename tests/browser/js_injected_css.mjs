@@ -409,7 +409,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // the box as it is.
         // v94: an attach records the size it carried, so the ack no longer
         // sends an ssh_resize for a size the server already opened the PTY at.
-        ['js/terminal-manager.js', 94],
+        ['js/terminal-manager.js', 95],
         ['js/sftp-file-manager.js', 16],
         // v11: S17 FIX 4d completion -- the insert-at-prompt write routes through
         // window.emitTerminalInput, so it is no longer swallowed by tmux copy

@@ -552,7 +552,7 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # the shared tmux window: the reported fit adds back the pixels that
         # chrome holds, while everything that DRAWS the pane keeps measuring
         # the box as it is.
-        "filename='js/terminal-manager.js'": '?v=94',
+        "filename='js/terminal-manager.js'": '?v=95',
         # touch-action-row.js owns the six-action global row. It did not exist
         # when this table was written; an unpinned copy of it is the single most
         # damaging stale asset on touch, because the row it builds is the only
