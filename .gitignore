@@ -91,6 +91,7 @@ scripts/rollback.sh
 # One-off investigation scripts. They always exit 0, they are not gates, and
 # each answers a question that was asked once.
 tests/browser/probe*
+tests/browser/_probe*
 tests/browser/defect1_*probe*
 tests/browser/defect2_*probe*
 tests/browser/*_mutation_proof.sh
