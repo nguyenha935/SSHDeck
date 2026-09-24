@@ -62,8 +62,12 @@ const LIVE = /^(live_|s35_p91_|w5_partG_|two_device_live|typing_order_live)/;
  * This used to be spelled `probe\d+` inside LIVE, which matched `probe7_*` and
  * missed `probe_reload_jump` -- a probe named that way was swept as a HEADLESS
  * gate and opened sessions against the live deployment on an ordinary run.
+ *
+ * AGENTS.md §7 names a probe `tests/browser/_probe_*.mjs`, and `^probe` alone
+ * missed that spelling: a `_probe_omp_resize.mjs` was swept as a headless gate
+ * on 2026-09-24. The underscore is optional here, so both spellings stay out.
  */
-const PROBE = /^probe/;
+const PROBE = /^_?probe/;
 // Not a gate on its own: it EMITS a computed-style baseline (--emit) and
 // compares a later run against it (--against FILE). With neither flag it has
 // nothing to compare and exits non-zero by design, so a sweep that included it

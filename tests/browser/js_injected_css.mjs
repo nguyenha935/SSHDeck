@@ -409,7 +409,9 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // the box as it is.
         // v94: an attach records the size it carried, so the ack no longer
         // sends an ssh_resize for a size the server already opened the PTY at.
-        ['js/terminal-manager.js', 96],
+        // v97: a column change, a grow included, stays covered until the
+        // repaint has been quiet (omp replays its transcript after a settle).
+        ['js/terminal-manager.js', 97],
         ['js/sftp-file-manager.js', 16],
         // v11: S17 FIX 4d completion -- the insert-at-prompt write routes through
         // window.emitTerminalInput, so it is no longer swallowed by tmux copy
@@ -604,7 +606,8 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v94 keeps doubling the startup burst that overflowed the polling
         // payload, and keeps losing its scrollback when the first attach is the
         // one the server discarded.
-        ['js/app.js', 96],
+        // v97: wakeSocket leaves a socket that is still connecting alone.
+        ['js/app.js', 97],
         // v9: 0209f10 raise. v10: P1 D2 trigger-anchored More-sheet position
         // (top = trigger.bottom+1, bottom auto, measured maxHeight) — Entry 27 R4.
         ['js/header-menus.js', 13],

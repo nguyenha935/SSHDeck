@@ -162,6 +162,26 @@ await page.evaluate(() => {
 });
 check('§2 a live socket is never reconnected underneath itself', await calls(), 0);
 
+// A socket still TRYING -- the first handshake in flight, or Socket.IO's own
+// backoff -- is `active` and not yet `connected`. A connect() there sends a
+// second CONNECT on the same session, which the server refuses and drops
+// (measured 2026-09-24: `44"Unable to connect"`, then silence). The load's own
+// pageshow is exactly that moment. The dead-socket rows above are the other
+// half: `active` false still wakes.
+await reset();
+await setConnected(false);
+await page.evaluate(() => {
+    window.socket.active = true;
+    window.dispatchEvent(new Event('pageshow'));
+    window.dispatchEvent(new Event('online'));
+    window.dispatchEvent(new Event('focus'));
+    document.dispatchEvent(new Event('visibilitychange'));
+});
+check('§2 a socket that is still connecting is not asked to connect twice', await calls(), 0);
+await page.evaluate(() => { window.socket.active = false; window.dispatchEvent(new Event('pageshow')); });
+check('§2 ... and once it has given up, the same edge wakes it', await calls(), 1);
+await page.evaluate(() => { delete window.socket.active; });
+
 /* ------------------------------------------------------- §3 re-authenticate */
 await reset();
 await Promise.all([

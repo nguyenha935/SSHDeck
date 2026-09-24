@@ -332,7 +332,10 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # two. A browser on v94 keeps doubling the startup burst -- which is what
     # pushed it past the 16 packets python-engineio decodes -- and keeps losing
     # its scrollback when the first attach is the one discarded.
-    assert "filename='js/app.js') }}?v=96" in idx
+    # v96 -> v97: wakeSocket leaves a socket that is still connecting alone;
+    # the load's own pageshow sent a second CONNECT and the server dropped the
+    # session while the page still reported itself connected.
+    assert "filename='js/app.js') }}?v=97" in idx
     # S34: v46 -- the control-mode transport. pty_geometry may now arrive with
     # `render_local`, which this client must NOT adopt as its grid (it wraps the
     # relative %output stream at its own fit instead). A browser on v45 would adopt
@@ -385,10 +388,13 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # v93 -> v94: an attach records the size it carried, so the ack no longer
     # sends an ssh_resize for a size the server already opened the PTY at. A
     # browser on v93 keeps paying a refresh-client exec per pane per load.
-    assert "filename='js/terminal-manager.js') }}?v=96" in idx
+    # v96 -> v97: a column change holds the pane on its last good frame until
+    # the repaint has been quiet (omp replays its transcript after a settle),
+    # a grow included. A browser on v96 shows omp's replay run past.
+    assert "filename='js/terminal-manager.js') }}?v=97" in idx
     assert "\"filename='css/style.css'\": '?v=70'," in tp
     assert "\"filename='js/sftp-file-manager.js'\": '?v=16'," in tp
-    assert "\"filename='js/app.js'\": '?v=96'," in tp
+    assert "\"filename='js/app.js'\": '?v=97'," in tp
     # session-manager v51 -> v52 (S35 P5): restore-driven pane eviction stopped
     # (displaceOccupant:false) and the remembered session selection is applied on
     # arrival. v51 is RELEASED without the fix, so the pin must move.
@@ -404,7 +410,7 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # Desurgery v59 -> v60: the pty_source_changed handler now re-fits (a moved
     # source changes what a wider pane renders under the S36 minimum).
     assert "\"filename='js/session-manager.js'\": '?v=70'," in tp
-    assert "\"filename='js/terminal-manager.js'\": '?v=96'," in tp
+    assert "\"filename='js/terminal-manager.js'\": '?v=97'," in tp
     assert "style.css') }}?v=70\" in template" in tp
 
 
