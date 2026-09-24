@@ -18,8 +18,8 @@ const TerminalManager = {
     // The last STREAM_TAIL_MAX chars the engine was given, per session
     // (recordStreamTail); shipped by sendScreenDiagnostic.
     streamTail: {},
-    // Panes held on their last good frame while a shrink waits for tmux's
-    // repaint, keyed by terminal key (freezePaneForShrink).
+    // Panes held on their last good frame while a column change waits for
+    // the repaint to finish, keyed by terminal key (freezePaneForResize).
     frozenPanes: {},
     // The window size when the app's own chrome took space from the pane;
     // null when no chrome is holding the grid (holdChromeGrid).
@@ -743,12 +743,15 @@ const TerminalManager = {
                 return;
             }
             try {
-                // A shrink leaves the OLD frame on screen until tmux repaints
-                // (see freezePaneForShrink); the pane is held on its last good
-                // frame across that gap rather than showing the leftovers.
+                // A column change is answered by a repaint that is not one
+                // frame: a shrink leaves the OLD frame's leftovers until tmux
+                // repaints, and a program like omp replays its whole
+                // transcript at the new width. The pane is held on its last
+                // good frame until that repaint has finished (see
+                // freezePaneForResize).
                 const shrinking = win.cols < terminal.cols;
-                if (shrinking) {
-                    this.freezePaneForShrink(key, terminal);
+                if (win.cols !== terminal.cols) {
+                    this.freezePaneForResize(key, terminal);
                 }
                 this.resizeTerminalPreservingAltRows(
                     terminal, win.cols, win.rows, true);
@@ -4442,6 +4445,7 @@ const TerminalManager = {
                  * as live machinery.
                  */
                 this.ensureCharCellMeasured(terminal);
+                this.fitFrozenPane(key);
                 /*
                  * FitAddon.fit is proposeDimensions + terminal.resize in
                  * ONE call, so it cannot be told to hold the alternate rows.
@@ -5443,11 +5447,9 @@ const TerminalManager = {
     STREAM_TAIL_MAX: 65536,
 
     /*
-     * HOLD THE LAST GOOD FRAME WHILE A SHRINK WAITS FOR tmux.
+     * HOLD THE LAST GOOD FRAME UNTIL A COLUMN CHANGE HAS BEEN REPAINTED.
      *
-     * right, for a reason that is mechanical.
-     *
-     * Measured today, from three screen diagnostics and a bare engine:
+     * A shrink, measured from three screen diagnostics and a bare engine:
      *   - every attached tmux client draws on the ALTERNATE buffer (tmux's own
      *     smcup at attach); all three dumps report buffer="alternate" while the
      *     pane's program was on the normal screen;
@@ -5463,12 +5465,22 @@ const TerminalManager = {
      *     `refresh-client`, ~700 ms away (250 ms coalesce + a 432-472 ms exec
      *     channel). That gap IS the jitter.
      *
-     * So the pane is covered with a snapshot of its last good frame for the
-     * length of the gap. The engine underneath resizes and is written to
-     * exactly as before -- only the picture is held -- and the cover comes off
-     * the moment tmux's repaint lands, which is detected for what it IS: no
-     * row on screen is wider than the grid any more (staleWideRows). The
-     * timeout is a belt, not the mechanism.
+     * A grow or a shrink under omp (oh-my-pi), measured 2026-09-24 against
+     * tests/fixtures/fake_omp_resize.py, a stand-in built from
+     * @oh-my-pi/pi-tui 18.3.0: omp answers a width change by blanking to the
+     * alternate screen, waiting out a 120 ms settle window and then REPLAYING
+     * ITS WHOLE TRANSCRIPT at the new width -- 66 KB for a 400-message
+     * history, one to three times over in one 13-step drag. The owner saw that
+     * replay run from the top of the conversation down to the prompt: "nhay
+     * giat tu tren xuong khu su dung phien OMP".
+     *
+     * So the pane is covered with a snapshot of its last good frame, and the
+     * cover stays until the repaint has FINISHED: no repaint-sized write for
+     * FREEZE_QUIET_MS. The first write is not the end -- under omp it is the
+     * blank alternate screen, and the replay follows the settle window -- so
+     * the quiet window is longer than omp's settle. The engine underneath
+     * resizes and is written to exactly as before; only the picture is held.
+     * FREEZE_MAX_MS is a belt, re-armed by every geometry of a drag.
      *
      * The snapshot is a DOM clone (the renderer is the DOM one: measured, zero
      * canvases). The renderer's generated CSS is scoped by an owner class on
@@ -5477,6 +5489,7 @@ const TerminalManager = {
      * terminal, which is the one thing a snapshot must not touch.
      */
     FREEZE_MAX_MS: 1200,
+    FREEZE_QUIET_MS: 250,
     _freezeSeq: 0,
 
     /*
@@ -5570,10 +5583,21 @@ const TerminalManager = {
         return stale;
     },
 
-    freezePaneForShrink(terminalKey, terminal) {
+    freezePaneForResize(terminalKey, terminal) {
+        const held = this.frozenPanes[terminalKey];
+        if (held) {
+            // A drag lands geometry after geometry: each is a repaint still to
+            // come, so the quiet window restarts and the belt is re-armed.
+            clearTimeout(held.quiet);
+            held.quiet = null;
+            clearTimeout(held.timer);
+            held.timer = setTimeout(
+                () => this.releaseFrozenPane(terminalKey), this.FREEZE_MAX_MS);
+            return;
+        }
         const screen = terminal.element
             && terminal.element.querySelector('.xterm-screen');
-        if (!screen || this.frozenPanes[terminalKey]) {
+        if (!screen) {
             return;
         }
         const rect = screen.getBoundingClientRect();
@@ -5583,15 +5607,19 @@ const TerminalManager = {
         const owner = (terminal.element.className.match(
             /xterm-dom-renderer-owner-\d+/) || [])[0];
         const mine = `sshdeck-frozen-${this._freezeSeq += 1}`;
+        const pane = terminal.element.getBoundingClientRect();
         const cover = document.createElement('div');
         cover.className = `xterm sshdeck-frozen-pane ${mine}`;
         cover.setAttribute('aria-hidden', 'true');
         cover.style.cssText = 'position:fixed;overflow:hidden;pointer-events:none;'
-            + `z-index:5;left:${rect.left}px;top:${rect.top}px;`
-            + `width:${rect.width}px;height:${rect.height}px;`
-            + `background:${getComputedStyle(terminal.element).backgroundColor}`;
+            + `z-index:5;background:${getComputedStyle(terminal.element).backgroundColor}`;
+        // The snapshot stays exactly where the frame was painted; the cover
+        // around it is the whole pane (fitFrozenPane).
         const copy = screen.cloneNode(true);
-        copy.style.marginTop = '0px';
+        copy.style.position = 'absolute';
+        copy.style.margin = '0';
+        copy.style.left = `${rect.left - pane.left}px`;
+        copy.style.top = `${rect.top - pane.top}px`;
         if (owner) {
             copy.querySelectorAll('style').forEach(style => {
                 style.textContent = style.textContent.split(owner).join(mine);
@@ -5601,34 +5629,60 @@ const TerminalManager = {
         document.body.appendChild(cover);
         this.frozenPanes[terminalKey] = {
             cover,
+            quiet: null,
             timer: setTimeout(
                 () => this.releaseFrozenPane(terminalKey), this.FREEZE_MAX_MS),
         };
+        this.fitFrozenPane(terminalKey);
     },
 
     /*
-     * What ends a freeze is a REPAINT, and it has to be recognised by its
-     * size, not by the screen going clean.
+     * The cover is the WHOLE pane, and follows it. Measured on a grow
+     * (2026-09-24): a cover the size of the old frame left the strip the pane
+     * had just gained uncovered, and omp's replay ran past in it. A pane that
+     * shrinks while held has the cover cut to it instead of hanging past it.
+     */
+    fitFrozenPane(terminalKey) {
+        const frozen = this.frozenPanes[terminalKey];
+        const terminal = this.terminals[terminalKey];
+        if (!frozen || !terminal || !terminal.element) {
+            return;
+        }
+        const pane = terminal.element.getBoundingClientRect();
+        const style = frozen.cover.style;
+        style.left = `${pane.left}px`;
+        style.top = `${pane.top}px`;
+        style.width = `${pane.width}px`;
+        style.height = `${pane.height}px`;
+    },
+
+    /*
+     * What ends a freeze is a repaint that has FINISHED, and a repaint has to
+     * be recognised by its size, not by the screen going clean.
      *
      * Measured while building this: the stale cells are never trimmed. A line
      * that is 118 cells wide under a 59-column grid stays 118 -- `\x1b[2K`
      * erases to the grid, writing touches the first 59 -- so "no row is wider
      * than the grid" is true only before the shrink and after the buffer is
-     * replaced wholesale. As a release signal it never fires, and every freeze
-     * would run to its timeout.
+     * replaced wholesale. As a release signal it never fires.
      *
      * A row's worth of bytes is the line: tmux's answer to a resize is a full
      * redraw, thousands of bytes; the only traffic smaller than one row is a
-     * cursor move or a spinner tick, which repaints nothing and must not lift
-     * the cover. The rAF puts the release AFTER the frame that drew those
-     * bytes, so the fresh picture is on screen before the old one goes.
+     * cursor move or a spinner tick, which repaints nothing and neither lifts
+     * the cover nor holds it. Each repaint-sized write restarts the quiet
+     * window, so a replay that streams in many writes keeps the cover until
+     * its last one; the rAF puts the release AFTER the frame that drew it.
      */
     noteFrozenPaneWrite(terminalKey, data) {
         const terminal = this.terminals[terminalKey];
-        if (!terminal || !data || data.length < terminal.cols) {
+        const frozen = this.frozenPanes[terminalKey];
+        if (!terminal || !frozen || !data || data.length < terminal.cols) {
             return;
         }
-        requestAnimationFrame(() => this.releaseFrozenPane(terminalKey));
+        clearTimeout(frozen.quiet);
+        frozen.quiet = setTimeout(
+            () => requestAnimationFrame(() => this.releaseFrozenPane(terminalKey)),
+            this.FREEZE_QUIET_MS);
     },
 
     releaseFrozenPane(terminalKey) {
@@ -5638,6 +5692,7 @@ const TerminalManager = {
         }
         delete this.frozenPanes[terminalKey];
         clearTimeout(frozen.timer);
+        clearTimeout(frozen.quiet);
         frozen.cover.remove();
     },
 
