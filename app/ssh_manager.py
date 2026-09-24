@@ -2602,7 +2602,7 @@ def _redraw_clients(session_id, ttys, immediate=False):
     lands geometry after geometry; an attach, a detach or a dead view is ONE
     event, and waiting a quarter second for a burst that will never come just
     adds to the gap in which the other devices show the leftovers of their old
-    frame (see terminal-manager freezePaneForShrink for what that gap looks
+    frame (see terminal-manager freezePaneForResize for what that gap looks
     like). Those callers ask for the redraw straight away. The drag path,
     resize_session_view, keeps the coalesce -- that is the case it was
     measured for.

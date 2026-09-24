@@ -1038,7 +1038,7 @@ def test_the_decoder_is_per_reader_not_shared():
 # The coalesce exists for a DRAG, which lands geometry after geometry. An
 # attach, a detach or a dead view is one event, and the quarter second is added
 # straight onto the gap in which every other device is still showing the
-# leftovers of its old frame (terminal-manager freezePaneForShrink covers that
+# leftovers of its old frame (terminal-manager freezePaneForResize covers that
 # gap; this is the half that shortens it).
 # --------------------------------------------------------------------------
 

@@ -21,7 +21,16 @@
  *
  * §0 pins the mechanism itself, so nobody has to take the paragraph above on
  * trust, and the rest pins the fix: the pane is covered with its last good
- * frame for exactly as long as a row on screen is wider than the grid.
+ * frame until the repaint has FINISHED.
+ *
+ * 2026-09-24, omp: a program like omp (oh-my-pi) answers a width change --
+ * a grow as much as a shrink -- with a blank alternate screen and then, after
+ * a 120 ms settle, a replay of its whole transcript
+ * (tests/fixtures/fake_omp_resize.py). The first repaint is therefore not the
+ * end: §3 now pins that a repaint keeps the cover for FREEZE_QUIET_MS and that
+ * a second one inside that window keeps it longer, and §4 that a grow is
+ * covered too. Both replace assertions of the earlier contract ("the first
+ * repaint takes the cover off", "a grow freezes nothing").
  *
  * Run: node tests/browser/resize_freeze.mjs   (from source/)
  */
@@ -209,9 +218,45 @@ const scoping = await page.evaluate((key) => {
 check('§2 the snapshot\'s copy of the renderer CSS is re-scoped to itself',
     scoping, { owner: true, leaked: false, scoped: true });
 
-/* -------------------------------------------- §3 tmux's repaint ends it */
+/* ---------------------------------- §2b the cover is the pane, and follows it */
+// Seen in a screenshot of a grow, not in any number: a cover the size of the
+// OLD frame left the strip the pane had just gained showing omp's replay.
+const follows = await page.evaluate(({ id, key }) => {
+    const wrapper = document.getElementById(`term-${id}`);
+    const pane = () => TerminalManager.terminals[key].element.getBoundingClientRect();
+    const cover = () => document.querySelector('.sshdeck-frozen-pane').getBoundingClientRect();
+    const fits = () => {
+        const p = pane(), c = cover();
+        return Math.abs(c.left - p.left) < 1 && Math.abs(c.top - p.top) < 1
+            && Math.abs(c.right - p.right) < 1 && Math.abs(c.bottom - p.bottom) < 1;
+    };
+    const out = {};
+    wrapper.style.width = '600px';
+    TerminalManager.fitFrozenPane(key);
+    out.shrunk = { fits: fits(), wide: cover().width > 100 };
+    wrapper.style.width = '1300px';
+    TerminalManager.fitFrozenPane(key);
+    out.grown = { fits: fits(), gained: cover().width > 1200 };
+    wrapper.style.width = '1100px';
+    TerminalManager.fitFrozenPane(key);
+    return out;
+}, { id: S, key });
+check('§2b the cover covers exactly the pane as it shrinks and as it grows',
+    follows, { shrunk: { fits: true, wide: true }, grown: { fits: true, gained: true } });
+
+/* ------------------------------- §3 the repaint ends it, once it has ended */
+const held = () => page.evaluate(({ key }) => ({
+    covered: !!document.querySelector('.sshdeck-frozen-pane'),
+    held: !!TerminalManager.frozenPanes[key],
+}), { key });
 await paint(59, 'new');
-check('§3 the repaint takes the cover off', await page.evaluate(({ key }) => ({
+check('§3 the first repaint does not end the freeze (omp blanks first, replays after)',
+    await held(), { covered: true, held: true });
+await paint(59, 'new');
+check('§3 a second repaint inside the quiet window keeps the cover',
+    await held(), { covered: true, held: true });
+await page.waitForTimeout(await page.evaluate(() => TerminalManager.FREEZE_QUIET_MS) + 150);
+check('§3 once the repaint has been quiet for FREEZE_QUIET_MS the cover comes off', await page.evaluate(({ key }) => ({
     covered: !!document.querySelector('.sshdeck-frozen-pane'),
     held: !!TerminalManager.frozenPanes[key],
     // Measured, and the reason the release signal is the repaint's SIZE: the
@@ -223,10 +268,14 @@ check('§3 the repaint takes the cover off', await page.evaluate(({ key }) => ({
     rows: TerminalManager.terminals[key].rows,
 }), { key }), { covered: false, held: false, stale: 20, rows: 20 });
 
-/* --------------------------------------------------- §4 a grow does not */
+/* ------------------------------------------------ §4 a grow is covered too */
 await page.evaluate(id => TerminalManager.noteWindowGeometry(id, 118, 20), S);
-check('§4 growing the window freezes nothing (there is no stale frame to hide)',
-    await page.evaluate(() => !!document.querySelector('.sshdeck-frozen-pane')), false);
+check('§4 growing the window covers the pane (omp replays on a grow as well)',
+    await held(), { covered: true, held: true });
+await paint(118, 'grown');
+await page.waitForTimeout(await page.evaluate(() => TerminalManager.FREEZE_QUIET_MS) + 150);
+check('§4 and the grow\'s cover comes off once its repaint is quiet',
+    await held(), { covered: false, held: false });
 
 /* ------------------------------------------------ §5 the belt, and only */
 await paint(118, 'old');
