@@ -1050,9 +1050,18 @@
      * is not connected and, after a server-side refusal, not retrying either.
      * Every edge where the page is in front of a person again asks it to try
      * once more; when it is already connected this costs one property read.
+     *
+     * A socket that is still TRYING (`active`: connecting, or in Socket.IO's
+     * own backoff) is left alone. Measured 2026-09-24 against a local server:
+     * the load's own pageshow reached here while the first handshake was in
+     * flight, connect() sent a second CONNECT on the same engine session, the
+     * server answered `44"Unable to connect"` and dropped the session -- while
+     * the page went on reporting itself connected, and every emit after it
+     * went nowhere. `active` turns false only when the library has given up
+     * (the "io server disconnect" case above), which is the one this is for.
      */
     function wakeSocket() {
-        if (!window.socket || window.socket.connected) {
+        if (!window.socket || window.socket.connected || window.socket.active) {
             return;
         }
         try {

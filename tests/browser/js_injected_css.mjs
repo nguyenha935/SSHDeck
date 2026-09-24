@@ -606,7 +606,8 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v94 keeps doubling the startup burst that overflowed the polling
         // payload, and keeps losing its scrollback when the first attach is the
         // one the server discarded.
-        ['js/app.js', 96],
+        // v97: wakeSocket leaves a socket that is still connecting alone.
+        ['js/app.js', 97],
         // v9: 0209f10 raise. v10: P1 D2 trigger-anchored More-sheet position
         // (top = trigger.bottom+1, bottom auto, measured maxHeight) — Entry 27 R4.
         ['js/header-menus.js', 13],
