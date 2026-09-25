@@ -3206,7 +3206,7 @@ body.broadcast-active .terminal-pane:has(.terminal-wrapper:not(.unassigned))::af
 
 .notepad-mode-btn.active {
     background: var(--accent-primary);
-    color: #ffffff;
+    color: var(--accent-on-text);
     font-weight: 500;
 }
 
@@ -3224,8 +3224,8 @@ body.broadcast-active .terminal-pane:has(.terminal-wrapper:not(.unassigned))::af
    the fine-pointer chip draws them -- the same idea
    #newConnectionBtn.strip-new-connection uses at style.css:1116 (a 44px box with
    a smaller painted pill inside), expressed here through padding + negative
-   margin + background-clip rather than a pseudo-element, so the target is the
-   button's own box and needs no z-index, no pointer-events and no second node.
+   margin, so the target is the button's own box and needs no pointer-events
+   and no second node. The active chip's pill is its ::before (below).
    Two alternatives were measured and rejected, in this order:
      * a bare min-height: 44px -- the target is right but it grows the layout, and
        that cost two OTHER gate rows (see the inner comment);
@@ -3254,9 +3254,9 @@ body.broadcast-active .terminal-pane:has(.terminal-wrapper:not(.unassigned))::af
          *   padding 14px absorbs the extra height inside the border box
          *     (box-sizing: border-box, from the reset at style.css:2), leaving a
          *     16px content box;
-         *   background-clip: content-box keeps the .active chip's accent fill in
-         *     that 16px content box, so the taller target paints nothing extra
-         *     and cannot bleed over the title above or the meta line below;
+         *   the .active pill is painted by ::before, inset 14px, so the taller
+         *     target paints nothing extra and cannot bleed over the title
+         *     above or the meta line below;
          *   margin -14px cancels the growth in the parent's flow, so this chip
          *     still contributes 16px and .notepad-mode-toggle,
          *     .notepad-title and .notepad-header all keep their heights.
@@ -3276,7 +3276,38 @@ body.broadcast-active .terminal-pane:has(.terminal-wrapper:not(.unassigned))::af
         margin-bottom: calc(var(--sp-14) * -1);
         padding-top: var(--sp-14);
         padding-bottom: var(--sp-14);
-        background-clip: content-box;
+        position: relative;
+        isolation: isolate;
+    }
+
+    /*
+     * THE ACTIVE CHIP'S PILL IS THE FINE-POINTER CHIP: full width, 16px tall,
+     * --radius-sm, painted inside the 44px target.
+     *
+     * Owner, 2026-09-25: the Global / Per-server chips "phình rộng to tướng khi
+     * active". Measured on a 390px phone, Chromium and WebKit: the accent
+     * filled the whole target, 56x44 and 67x44, over the title and the meta
+     * line. This rule used to rely on `background-clip: content-box`, and
+     * `.notepad-mode-btn.active { background: ... }` above is a SHORTHAND at
+     * higher specificity -- a shorthand resets background-clip to border-box.
+     * The idle chip computed content-box and the active one border-box, and
+     * only the active one paints, so the clip never held where it mattered.
+     * It would not have matched the desktop chip either: content-box drops
+     * the 6px side padding, and 14px of vertical padding flattens a 4px radius
+     * to a square corner. isolation on the chip keeps z-index -1 under its
+     * label and above the toggle's own background.
+     */
+    .notepad-mode-btn.active {
+        background: transparent;
+    }
+
+    .notepad-mode-btn.active::before {
+        content: '';
+        position: absolute;
+        inset: var(--sp-14) 0;
+        z-index: -1;
+        border-radius: var(--radius-sm);
+        background: var(--accent-primary);
     }
 }
 

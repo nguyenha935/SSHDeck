@@ -63,7 +63,7 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # v70: owner ruling -- the phone-landscape 40px band, the dock slots
         # for the strip and the brand, and the 40px --shell-strip are gone; phone
         # landscape takes the >=768 touch tier (the min-height: 501px terms dropped).
-        "filename='css/style.css'": '?v=70',
+        "filename='css/style.css'": '?v=71',
         # v30: W13-A4 legacy tmux locale chip badge (.chip-locale-warning).
         # v31: W14 item 2 bounded menus + item 6 broadcast picker.
         # v35: the drag-armed chip's lift was a black rgba() literal -- the one
@@ -658,7 +658,7 @@ def test_profile_launcher_stylesheet_uses_current_cache_version():
     # test_merged_profile_frontend_assets_have_distinct_cache_versions above --
     # this file states the style.css pin TWICE, so a raise must move both or one
     # row goes red while the other passes.
-    assert "filename='css/style.css') }}?v=70" in template
+    assert "filename='css/style.css') }}?v=71" in template
 
 
 def test_retired_upload_modules_are_fully_gone():
