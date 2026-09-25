@@ -411,7 +411,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // sends an ssh_resize for a size the server already opened the PTY at.
         // v97: a column change, a grow included, stays covered until the
         // repaint has been quiet (omp replays its transcript after a settle).
-        ['js/terminal-manager.js', 98],
+        ['js/terminal-manager.js', 99],
         ['js/sftp-file-manager.js', 16],
         // v11: S17 FIX 4d completion -- the insert-at-prompt write routes through
         // window.emitTerminalInput, so it is no longer swallowed by tmux copy
