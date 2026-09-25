@@ -637,7 +637,7 @@ const TerminalManager = {
             this.pendingViewSizes[sessionId] = { cols, rows };
             return false;
         }
-        this.reportedSizes[sessionId] = { cols, rows, epoch: this.socketEpoch };
+        this.reportedSizes[sessionId] = { cols, rows, epoch: this.socketEpoch, at: Date.now() };
         if (this.views[sessionId] !== 'attached') {
             return this.attachView(sessionId, { cols, rows });
         }
@@ -713,8 +713,18 @@ const TerminalManager = {
         if (!sessionId || !(cols > 0) || !(rows > 0)) {
             return;
         }
+        // Every geometry answers this page's last proposal, an unchanged one
+        // included: the server announces the window to every view on every
+        // size change. It ends a hold (ownResizePending).
+        const held = this.ownResizePending(sessionId);
+        this.geometryAnsweredAt[sessionId] = Date.now();
         const current = this.windowGeometry[sessionId];
         if (current && current.cols === cols && current.rows === rows) {
+            if (held) {
+                // The window stays as it was -- another view holds it -- so
+                // what was held is presented now.
+                this.presentNow(sessionId);
+            }
             return;
         }
         this.noteTimeline(sessionId, 'geometry', { cols, rows });
@@ -766,7 +776,7 @@ const TerminalManager = {
                 }
                 this.resizeTerminalPreservingAltRows(
                     terminal, win.cols, win.rows, true);
-                this.presentWindowGrid(terminal);
+                this.presentWindowGrid(terminal, sessionId);
                 this.recentreTerminalScreen(terminal);
                 if (shrinking && this.staleWideRows(terminal) === 0) {
                     // Nothing was left behind (the frame was narrower than the
@@ -950,6 +960,7 @@ const TerminalManager = {
             return;
         }
         // Send it now, as one resize on the client that just opened.
+        this.reportedSizes[sessionId].at = Date.now();
         window.socket.emit('ssh_resize', {
             session_id: sessionId,
             rows: pending.rows,
@@ -2416,6 +2427,9 @@ const TerminalManager = {
         if (typeof ResizeObserver === 'undefined' || !container) {
             return;
         }
+        // The first callback is the initial observation, not a change: it
+        // keeps the coalesced path, so a pane's first fit happens when it did.
+        let observed = false;
         const observer = new ResizeObserver(() => {
             /*
              * OWNER RULING: the soft keyboard fits like anything
@@ -2438,7 +2452,12 @@ const TerminalManager = {
              * count while the keyboard is up.
              */
             this.noteLiveEdgeResize(terminalKey);
-            this.requestFit(sessionId);
+            if (observed) {
+                this.requestFitLeading(sessionId);
+            } else {
+                observed = true;
+                this.requestFit(sessionId);
+            }
         });
         observer.observe(container);
         this.resizeObservers[terminalKey] = observer;
@@ -4337,9 +4356,15 @@ const TerminalManager = {
      */
     LETTER_SPACING_MAX_RATIO: 0.02,
 
-    presentWindowGrid(terminal) {
+    presentWindowGrid(terminal, sessionId) {
         const box = this.paneCellBox(terminal);
         if (!box) {
+            return;
+        }
+        if (sessionId && this.ownResizePending(sessionId)) {
+            // The window is about to become this pane's own size: keep the
+            // text as it is and let the bottom anchor carry the difference.
+            this.holdResizePresent(sessionId);
             return;
         }
         const base = this.getBaseFontSize();
@@ -4510,8 +4535,10 @@ const TerminalManager = {
         (this.sessionTerminals[sessionId] || []).forEach(key => {
             this.restoreLiveEdgeIntent(key);
         });
-        this.schedulePresent(sessionId);
+        // The proposal first: the leading present must already see it in
+        // flight, or it zooms the old grid into the new box (ownResizePending).
         this.scheduleProposal(sessionId);
+        this.schedulePresent(sessionId);
     },
 
     /*
@@ -4541,9 +4568,62 @@ const TerminalManager = {
 
     presentRequests: {},
 
+    /*
+     * A SIZE THIS PAGE HAS ASKED FOR IS NOT A REASON TO ZOOM.
+     *
+     * Opening the keyboard (or the function keypad) shrinks the pane once, and
+     * this page proposes the smaller grid at once. Until the server answers,
+     * the engine still holds the OLD window, and presentWindowGrid used to fit
+     * that old grid into the new box by zooming the text down -- then the answer
+     * came and zoomed it back. Measured at 428x926 with a server answering in
+     * 120 ms: the keyboard took the font 12 -> 6 -> 12 (the prompt hidden under
+     * the keyboard for the first 275 ms), the keypad 12 -> 9.64 -> 12.
+     *
+     * That zoom is for a window another view holds smaller or larger than this
+     * pane, which is permanent. A proposal of our own in flight is not: the
+     * window is about to be this pane's size. So while one is unanswered the
+     * text keeps its size and the bottom anchor (recentreTerminalScreen) keeps
+     * the prompt above the keyboard; the answer -- any tmux_window_geometry,
+     * an unchanged one included -- ends the hold. RESIZE_HOLD_MS bounds it for
+     * an answer that never comes.
+     */
+    RESIZE_HOLD_MS: 1500,
+    geometryAnsweredAt: {},
+    resizeHoldTimers: {},
+
+    ownResizePending(sessionId) {
+        const sent = this.reportedSizes[sessionId];
+        if (!sent || !sent.at) {
+            return false;
+        }
+        return (this.geometryAnsweredAt[sessionId] || 0) < sent.at
+            && Date.now() - sent.at < this.RESIZE_HOLD_MS;
+    },
+
+    holdResizePresent(sessionId) {
+        if (this.resizeHoldTimers[sessionId]) {
+            return;
+        }
+        const left = this.RESIZE_HOLD_MS - (Date.now() - this.reportedSizes[sessionId].at);
+        this.resizeHoldTimers[sessionId] = setTimeout(() => {
+            delete this.resizeHoldTimers[sessionId];
+            this.presentNow(sessionId);
+        }, Math.max(0, left) + 10);
+    },
+
+    /*
+     * LEADING AND TRAILING, like scheduleProposal. The first change of a burst
+     * is presented at once -- a keyboard opening is ONE change, and making it
+     * wait for the settle timer left the old frame on screen, the prompt under
+     * the keyboard -- and the burst itself is presented once more when it
+     * settles. The frames in between hold still, which is what PRESENT_SETTLE_MS
+     * exists for (resize_burst_normal_buffer §1).
+     */
     schedulePresent(sessionId) {
         if (this.presentRequests[sessionId]) {
             clearTimeout(this.presentRequests[sessionId]);
+        } else {
+            this.presentNow(sessionId);
         }
         this.presentRequests[sessionId] = setTimeout(() => {
             delete this.presentRequests[sessionId];
@@ -4559,7 +4639,7 @@ const TerminalManager = {
             }
             try {
                 if (this.windowGeometry[sessionId]) {
-                    this.presentWindowGrid(terminal);
+                    this.presentWindowGrid(terminal, sessionId);
                 }
                 // Re-split whatever the column floor (or the window) left
                 // over, so the grid sits centred horizontally instead of hard
@@ -4667,6 +4747,30 @@ const TerminalManager = {
             clearTimeout(this.fitRequests[sessionId]);
             delete this.fitRequests[sessionId];
         }
+        clearTimeout(this.fitWindows[sessionId]);
+        delete this.fitWindows[sessionId];
+    },
+
+    /*
+     * The FIRST box change of a burst is fitted in the frame it happened.
+     * A ResizeObserver callback runs after layout and before paint, so the fit
+     * -- and the leading present it schedules -- land before the smaller box is
+     * ever drawn. Through requestFit alone they waited out its 50 ms debounce:
+     * measured with the keypad, four frames with the prompt under it before the
+     * content moved up. A burst (a drag, a keyboard slide) coalesces from the
+     * second change on, exactly as before; a single change costs one fit.
+     */
+    fitWindows: {},
+
+    requestFitLeading(sessionId) {
+        if (this.fitWindows[sessionId] || this.fitRequests[sessionId]) {
+            this.requestFit(sessionId);
+            return;
+        }
+        this.fitWindows[sessionId] = setTimeout(() => {
+            delete this.fitWindows[sessionId];
+        }, 50);
+        this.fitTerminal(sessionId);
     },
 
     getTerminalSize(sessionId) {
@@ -4808,6 +4912,9 @@ const TerminalManager = {
         this.cancelPendingFit(sessionId);
         this.cancelPendingProposal(sessionId);
         this.cancelPendingPresent(sessionId);
+        clearTimeout(this.resizeHoldTimers[sessionId]);
+        delete this.resizeHoldTimers[sessionId];
+        delete this.geometryAnsweredAt[sessionId];
         const terminalKeys = this.sessionTerminals[sessionId] || [];
         terminalKeys.forEach(key => {
             this.releaseFrozenPane(key);

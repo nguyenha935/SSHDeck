@@ -54,9 +54,21 @@
  *      entered at all and both arms read identical, proving nothing.
  *
  *   3. All of it must land INSIDE the 50ms fit debounce (`requestFit`'s
- *      default, :4565). An earlier revision took a snapshot between the resize
+ *      default). An earlier revision took a snapshot between the resize
  *      and the clamp; the round trip alone overran the debounce, the fit had
  *      already re-glued, and both arms read "not stranded".
+ *
+ * THE DEBOUNCE NOW STARTS AT THE SECOND CHANGE (2026-09-25). The first box
+ * change of a burst is fitted inside its own ResizeObserver callback
+ * (`requestFitLeading`), so the fit consumes `pending` in the same callback
+ * that set it and no clamp can land between them. Later changes of the burst
+ * still go through `requestFit` and keep the window this clause guards. So the
+ * journey opens a burst with a first grow, waits for that fit to have
+ * consumed its mark, and builds the three conditions on the SECOND grow.
+ * Measured on xterm 6 before restating (Chromium and WebKit; a single grow,
+ * a keyboard-close grow and a burst, each at the live edge): a real grow
+ * produced ZERO scroll events and every run ended on the live row, with the
+ * leading fit and without it. The clamp is injected below for that reason.
  *
  * With those three satisfied the pair discriminates cleanly and repeatably:
  *
@@ -289,7 +301,26 @@ async function journey(mutate) {
             return r;
         };
 
-        // (1) the product's own ResizeObserver path: grow the scroller box.
+        // (0) open the burst: the first change is fitted in its own callback,
+        //     which consumes its pending mark at once (requestFitLeading).
+        el.style.height = '700px';
+        void el.offsetHeight;
+        await new Promise(resolve => {
+            const t0 = performance.now();
+            const tick = () => {
+                const e = TM.liveEdgeIntent[key];
+                if ((e && e.clientHeight === vp.clientHeight && e.pending === false)
+                    || performance.now() - t0 > 200) {
+                    return resolve();
+                }
+                requestAnimationFrame(tick);
+            };
+            requestAnimationFrame(tick);
+        });
+        calls.length = 0;
+
+        // (1) the product's own ResizeObserver path: grow the scroller box
+        //     again, inside the burst, so the fit is the debounced one.
         el.style.height = '844px';
         void el.offsetHeight;
 

@@ -391,7 +391,7 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # v96 -> v97: a column change holds the pane on its last good frame until
     # the repaint has been quiet (omp replays its transcript after a settle),
     # a grow included. A browser on v96 shows omp's replay run past.
-    assert "filename='js/terminal-manager.js') }}?v=98" in idx
+    assert "filename='js/terminal-manager.js') }}?v=99" in idx
     assert "\"filename='css/style.css'\": '?v=72'," in tp
     assert "\"filename='js/sftp-file-manager.js'\": '?v=16'," in tp
     assert "\"filename='js/app.js'\": '?v=98'," in tp
@@ -410,7 +410,7 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # Desurgery v59 -> v60: the pty_source_changed handler now re-fits (a moved
     # source changes what a wider pane renders under the S36 minimum).
     assert "\"filename='js/session-manager.js'\": '?v=70'," in tp
-    assert "\"filename='js/terminal-manager.js'\": '?v=98'," in tp
+    assert "\"filename='js/terminal-manager.js'\": '?v=99'," in tp
     assert "style.css') }}?v=72\" in template" in tp
 
 

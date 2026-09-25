@@ -558,7 +558,7 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # v97: a column change -- a grow too -- stays covered until the repaint
         # has been quiet for FREEZE_QUIET_MS, so omp's transcript replay is not
         # seen running from the top of the conversation to the prompt.
-        "filename='js/terminal-manager.js'": '?v=98',
+        "filename='js/terminal-manager.js'": '?v=99',
         # touch-action-row.js owns the six-action global row. It did not exist
         # when this table was written; an unpinned copy of it is the single most
         # damaging stale asset on touch, because the row it builds is the only
