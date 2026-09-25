@@ -5111,12 +5111,26 @@ body.keyboard-open .workspace {
     grid-template-rows: 1fr;
 }
 
-body.keyboard-open .header {
-    display: none;
-}
-
-body.keyboard-open:not(.notepad-focused) .header .session-tabs,
-body.keyboard-open:not(.notepad-focused) .session-info {
+/*
+ * TYPING INTO THE TERMINAL, THE SYSTEM KEYBOARD IS THE FUNCTION KEYPAD.
+ *
+ * OWNER RULING 2026-09-25: "Làm y hệt như mở bàn phím chức năng." The mockup
+ * already said so: its keyboard state shows the system keyboard and nothing
+ * else changes (spec line 352), with the composer riding on it and the
+ * terminal fitting the visual viewport (line 423), exactly as the keypad
+ * "co terminal lên thay vì phủ terminal" (line 421).
+ *
+ * This used to hide the header and the session strip whenever the keyboard
+ * was up. Measured at 428x926 before the change: the keypad (154px) kept the
+ * header, the terminal lost 11 rows and its content moved once; the keyboard
+ * (visual viewport 926 -> 469) hid the 88px header, the terminal lost 27 rows
+ * and its content moved three times -- up by the header, then the refit, then
+ * a late settle. Now only the bottom edge moves, as with the keypad.
+ *
+ * Typing into the NOTES is a different state -- the keypad cannot be open
+ * then -- and keeps its whole-screen sheet: the header still goes.
+ */
+body.keyboard-open.notepad-focused .header {
     display: none;
 }
 
