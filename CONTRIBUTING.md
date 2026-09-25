@@ -301,6 +301,12 @@ This is not paperwork for its own sake. SSHDeck is licensed, not public domain,
 and a project that licenses its own code has to be able to say where every line
 came from.
 
+For the same reason, commits and pull request descriptions carry no AI tool's
+signature: no `Co-Authored-By` trailer naming a model, no session link, no
+tool's "generated with" line. The `commit provenance` check refuses them. Write
+the change with whatever tools you like -- the `Signed-off-by` line is where a
+person says it is theirs to submit.
+
 ## License
 
 SSHDeck is distributed under the
