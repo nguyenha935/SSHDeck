@@ -18,6 +18,9 @@ const TerminalManager = {
     // The last STREAM_TAIL_MAX chars the engine was given, per session
     // (recordStreamTail); shipped by sendScreenDiagnostic.
     streamTail: {},
+    // What happened to the engines, oldest first, at most TIMELINE_MAX entries
+    // across every session (noteTimeline); shipped with a screen diagnostic.
+    timeline: [],
     // Panes held on their last good frame while a column change waits for
     // the repaint to finish, keyed by terminal key (freezePaneForResize).
     frozenPanes: {},
@@ -413,6 +416,11 @@ const TerminalManager = {
         }
 
         this.terminals[key] = terminal;
+        // Every resize and buffer switch, whichever path caused it.
+        terminal.onResize(({ cols, rows }) =>
+            this.noteTimeline(sessionId, 'resize', { cols, rows }));
+        terminal.buffer.onBufferChange((active) =>
+            this.noteTimeline(sessionId, 'buffer', { type: active.type }));
         this.fitAddons[key] = fitAddon;
         this.searchAddons[key] = searchAddon;
 
@@ -709,6 +717,7 @@ const TerminalManager = {
         if (current && current.cols === cols && current.rows === rows) {
             return;
         }
+        this.noteTimeline(sessionId, 'geometry', { cols, rows });
         this.windowGeometry[sessionId] = { cols, rows };
         // The engine takes the new size SYNCHRONOUSLY: the repaint at this
         // size is already behind this frame on the same socket, and the
@@ -751,6 +760,8 @@ const TerminalManager = {
                 // freezePaneForResize).
                 const shrinking = win.cols < terminal.cols;
                 if (win.cols !== terminal.cols) {
+                    this.noteTimeline(sessionId, 'cover',
+                        { from: terminal.cols, to: win.cols });
                     this.freezePaneForResize(key, terminal);
                 }
                 this.resizeTerminalPreservingAltRows(
@@ -798,6 +809,7 @@ const TerminalManager = {
         }
         this.views[sessionId] = 'attaching';
         this.viewAttachSizes[sessionId] = { cols: dims.cols, rows: dims.rows };
+        this.noteTimeline(sessionId, 'attach', { cols: dims.cols, rows: dims.rows });
         window.socket.emit('view_attach', {
             session_id: sessionId,
             cols: dims.cols,
@@ -904,6 +916,7 @@ const TerminalManager = {
 
     // The server accepted the attach: this socket now holds a tmux client.
     noteViewAttached(sessionId) {
+        this.noteTimeline(sessionId, 'attached');
         if (this.viewAttachTimers[sessionId]) {
             clearTimeout(this.viewAttachTimers[sessionId]);
             delete this.viewAttachTimers[sessionId];
@@ -1517,6 +1530,7 @@ const TerminalManager = {
                 this.fitTerminal(sessionId);
 
                 setTimeout(() => {
+                    this.noteTimeline(sessionId, 'clear', { why: 'ready' });
                     terminal.clear();
                     // DRAIN, not discard. The restore replay is pushed
                     // by the server at connect time (socket_events.py:
@@ -2491,6 +2505,7 @@ const TerminalManager = {
         }
         // Engine-only, but the engine saw it: the tail records it too.
         this.recordStreamTail(sessionId, data);
+        this.noteWrite(sessionId, data, 'ctl');
         terminalKeys.forEach(key => {
             this.writeOutputToTerminal(key, data, sessionId);
         });
@@ -2529,6 +2544,7 @@ const TerminalManager = {
         }
 
         this.recordStreamTail(sessionId, data);
+        this.noteWrite(sessionId, data, 'out');
         this.appendTranscript(sessionId, data);
 
         terminalKeys.forEach(key => {
@@ -4988,6 +5004,7 @@ const TerminalManager = {
     clear(sessionId) {
         const terminal = this.terminals[sessionId];
         if (terminal) {
+            this.noteTimeline(sessionId, 'clear', { why: 'user' });
             terminal.clear();
         }
     },
@@ -5445,6 +5462,12 @@ const TerminalManager = {
      * engine against that pane is the whole reproduction.
      */
     STREAM_TAIL_MAX: 65536,
+    TIMELINE_MAX: 400,
+    // Writes closer together than this are one entry, so a stream cannot push
+    // everything else out of the ring.
+    TIMELINE_MERGE_MS: 250,
+    // What is not printable: CSI and OSC sequences, two-byte escapes, C0.
+    WRITE_CONTROLS: /\x1b\[[0-?]*[ -\/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b.|[\x00-\x1f\x7f]/g,
 
     /*
      * HOLD THE LAST GOOD FRAME UNTIL A COLUMN CHANGE HAS BEEN REPAINTED.
@@ -5629,6 +5652,7 @@ const TerminalManager = {
         document.body.appendChild(cover);
         this.frozenPanes[terminalKey] = {
             cover,
+            since: Date.now(),
             quiet: null,
             timer: setTimeout(
                 () => this.releaseFrozenPane(terminalKey), this.FREEZE_MAX_MS),
@@ -5694,6 +5718,95 @@ const TerminalManager = {
         clearTimeout(frozen.timer);
         clearTimeout(frozen.quiet);
         frozen.cover.remove();
+        this.noteTimeline(terminalKey, 'uncover', { held: Date.now() - frozen.since });
+    },
+
+    /*
+     * THE TIMELINE: what happened around a capture, not what was said.
+     *
+     * The captures of 2026-09-21 showed a pane 83 of 84 rows blank while tmux
+     * held a full screen, and a tail of nothing but cursor movement. They could
+     * say THAT the engine was blank, never after WHAT: nothing had recorded the
+     * resizes, buffer switches, clears, covers, attaches and reconnects around
+     * it. This is that record. Times are Date.now() so they line up with the
+     * server log; a write keeps counts and flags only, never its bytes -- the
+     * tail is where the bytes are.
+     */
+    noteTimeline(sessionId, type, detail) {
+        this.timeline.push(Object.assign(
+            { t: Date.now(), s: String(sessionId || '').slice(0, 8), e: type }, detail));
+        if (this.timeline.length > this.TIMELINE_MAX) {
+            this.timeline.splice(0, this.timeline.length - this.TIMELINE_MAX);
+        }
+    },
+
+    noteWrite(sessionId, data, source) {
+        if (typeof data !== 'string' || !data) {
+            return;
+        }
+        const flags = {};
+        if (/\x1b\[\?(?:1049|1047|47)h/.test(data)) flags.enter = 1;
+        if (/\x1b\[\?(?:1049|1047|47)l/.test(data)) flags.leave = 1;
+        if (/\x1b\[[23]J|\x1bc/.test(data)) flags.clr = 1;
+        const printable = data.replace(this.WRITE_CONTROLS, '').length;
+        const now = Date.now();
+        const last = this.timeline[this.timeline.length - 1];
+        if (last && last.e === 'write' && last.src === source
+                && last.s === String(sessionId).slice(0, 8)
+                && now - last.t2 <= this.TIMELINE_MERGE_MS) {
+            last.k += 1;
+            last.n += data.length;
+            last.p += printable;
+            last.t2 = now;
+            Object.assign(last, flags);
+            return;
+        }
+        this.noteTimeline(sessionId, 'write', Object.assign(
+            { src: source, k: 1, n: data.length, p: printable, t2: now }, flags));
+    },
+
+    /*
+     * What is PAINTED, next to what the buffer holds: the DOM rows that carry
+     * text, whether the pane is covered by a held frame and for how long, and
+     * where the screen and the pane sit. A blank buffer, a buffer the renderer
+     * did not paint, and a pane hidden under a cover are three different
+     * defects that looked the same in the old capture.
+     */
+    paintEvidence(sessionId) {
+        const key = (this.sessionTerminals[sessionId] || [])[0];
+        const terminal = this.terminals[key];
+        if (!terminal || !terminal.element) {
+            return null;
+        }
+        const rect = (el) => {
+            if (!el) return null;
+            const r = el.getBoundingClientRect();
+            return [r.left, r.top, r.width, r.height].map(Math.round);
+        };
+        const look = (el) => {
+            if (!el) return '';
+            const cs = getComputedStyle(el);
+            return `${cs.display}/${cs.visibility}/${cs.opacity}`;
+        };
+        const rowsEl = terminal.element.querySelector('.xterm-rows');
+        const texts = rowsEl
+            ? [...rowsEl.children].map(row => row.textContent.trim().length > 0) : [];
+        const screen = terminal.element.querySelector('.xterm-screen');
+        const pane = terminal.element.parentElement;
+        const frozen = this.frozenPanes[key];
+        return {
+            domRows: texts.length,
+            domPainted: texts.filter(Boolean).length,
+            domFirst: texts.indexOf(true),
+            domLast: texts.lastIndexOf(true),
+            covered: frozen ? Date.now() - frozen.since : -1,
+            screen: rect(screen),
+            pane: rect(pane),
+            marginTop: screen ? screen.style.marginTop : '',
+            look: `${look(pane)} ${look(terminal.element)}`,
+            page: document.visibilityState,
+            connected: terminal.element.isConnected,
+        };
     },
 
     recordStreamTail(sessionId, data) {
@@ -5709,10 +5822,14 @@ const TerminalManager = {
     // sizes it announced and was given, and the rows a person is looking at.
     screenDiagnosticReport(sessionId) {
         const tail = this.streamTail[sessionId] || '';
+        const prefix = String(sessionId).slice(0, 8);
         const report = {
             tailChars: tail.length,
             view: String(this.views[sessionId] || ''),
             agent: navigator.userAgent.slice(0, 200),
+            now: Date.now(),
+            // This session's entries and the page-wide ones (socket, page).
+            timeline: this.timeline.filter(e => !e.s || e.s === prefix),
         };
         const key = (this.sessionTerminals[sessionId] || [])[0];
         const terminal = this.terminals[key];
@@ -5742,6 +5859,7 @@ const TerminalManager = {
             window: win ? { cols: win.cols, rows: win.rows } : null,
             reported: reported ? { cols: reported.cols, rows: reported.rows } : null,
             screen,
+            paint: this.paintEvidence(sessionId),
         });
     },
 

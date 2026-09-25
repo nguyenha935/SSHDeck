@@ -940,6 +940,7 @@
 
     socket.on('connect', () => {
         console.log('Connected to server');
+        TerminalManager.noteTimeline(null, 'socket', { up: 1 });
         const reconnectBar = document.getElementById('reconnectBar');
         if (reconnectBar && reconnectBar.style.display !== 'none') {
             reconnectBar.style.display = 'none';
@@ -1073,6 +1074,7 @@
     window.__wakeSocket = wakeSocket;
 
     document.addEventListener('visibilitychange', () => {
+        TerminalManager.noteTimeline(null, 'page', { state: document.visibilityState });
         if (document.visibilityState === 'visible') {
             wakeSocket();
         }
@@ -1098,6 +1100,7 @@
 
     socket.on('disconnect', (reason) => {
         console.log('Disconnected from server:', reason);
+        TerminalManager.noteTimeline(null, 'socket', { up: 0, why: String(reason).slice(0, 40) });
         showNotification('Disconnected from server', 'error');
         const reconnectBar = document.getElementById('reconnectBar');
         if (reconnectBar) {

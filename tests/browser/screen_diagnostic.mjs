@@ -17,7 +17,12 @@
  *   §3 the button exists only with ?kbdebug=1, is pressable (it is NOT inside
  *      the pointer-events:none panel), and sends the ACTIVE session;
  *   §4 the server's answer is shown as a notification, success or refusal;
- *   §5 the tail is released with the terminal.
+ *   §5 the tail is released with the terminal;
+ *   §6 the timeline: what happened around the capture, in order, as counts
+ *      and flags (never the bytes), merged while a stream runs, bounded, and
+ *      this session's own entries with the page-wide ones;
+ *   §7 the paint: what the DOM shows next to what the buffer holds, and
+ *      whether a held frame covers the pane.
  *
  * Run: node tests/browser/screen_diagnostic.mjs   (from source/)
  */
@@ -229,7 +234,100 @@ check('§3 ... kept from the first write on',
     await page.evaluate(() => TerminalManager.streamTail['diag-b']), 'kept');
 await page.evaluate(() => TerminalManager.destroyTerminal('diag-b'));
 
-check('§6 no page errors', errors, []);
+/*
+ * The terminals above stack in one container, so a new one sits below the
+ * viewport, where xterm does not render at all -- measured: the pane at
+ * y=1871 in an 860px page, 3 rows in the buffer and 0 painted in the DOM,
+ * which is exactly what §7 exists to report. These two are moved to the top
+ * of the container instead. Not position:fixed -- that leaves offsetParent
+ * null, isTerminalVisible reads the pane as hidden, and applyWindowGeometry
+ * skips it.
+ */
+async function mountInView(id) {
+    await mount(id);
+    await page.evaluate(id => {
+        const el = document.getElementById(`term-${id}`);
+        el.parentElement.prepend(el);
+    }, id);
+    await page.waitForTimeout(300);
+}
+
+/* ---------------------------------------------------- §6 the timeline */
+await mountInView('diag-t');
+const tl = await page.evaluate(async (id) => {
+    const tm = TerminalManager;
+    tm.timeline.length = 0;
+    tm.noteTimeline('elsewhere', 'resize', { cols: 1, rows: 1 });
+    tm.writeOutput(id, 'hello ');
+    tm.writeOutput(id, 'world\r\n');
+    tm.writeControlNow(id, '\x1b[?1049h');
+    // A GROW: a shrink that leaves no wide row behind releases its cover at
+    // once (nothing to hide), so it could not show a held frame at all.
+    const term = tm.terminals[id];
+    tm.noteWindowGeometry(id, term.cols + 10, term.rows);
+    await new Promise(r => setTimeout(r, 80));
+    // ?. throughout: a missing record must report its rows, not crash the gate.
+    const coveredWhileHeld = tm.paintEvidence(id)?.covered;
+    tm.releaseFrozenPane(id);
+    window.__server('disconnect', 'transport close');
+    window.__server('connect');
+    document.dispatchEvent(new Event('visibilitychange'));
+    const report = tm.screenDiagnosticReport(id);
+    for (let i = 0; i < 450; i += 1) tm.noteTimeline(id, 'filler', { i });
+    return {
+        types: report.timeline.map(e => e.e + (e.src ? ':' + e.src : '')
+            + (e.e === 'socket' ? ':' + e.up : '')),
+        out: report.timeline.find(e => e.e === 'write' && e.src === 'out'),
+        ctl: report.timeline.find(e => e.e === 'write' && e.src === 'ctl'),
+        sessions: [...new Set(report.timeline.map(e => e.s))],
+        text: JSON.stringify(report.timeline),
+        ring: [tm.timeline.length, tm.timeline[tm.timeline.length - 1].i],
+        coveredWhileHeld,
+        coveredAfter: report.paint?.covered,
+    };
+}, 'diag-t');
+const inOrder = (seq, want) => {
+    let at = 0;
+    for (const item of seq) if (item === want[at]) at += 1;
+    return at === want.length;
+};
+check('§6 writes, geometry, cover, resize, uncover, socket and page are recorded in order',
+    inOrder(tl.types, ['write:out', 'write:ctl', 'geometry', 'cover', 'resize',
+        'uncover', 'socket:0', 'socket:1', 'page']), true);
+check('§6 the buffer switch the control write caused is recorded after it',
+    tl.types.indexOf('buffer') > tl.types.indexOf('write:ctl'), true);
+check('§6 two writes in a row are one entry: count, bytes, printable',
+    [tl.out?.k, tl.out?.n, tl.out?.p], [2, 13, 11]);
+check('§6 the alternate-screen switch is flagged, and has nothing printable',
+    [tl.ctl?.enter, tl.ctl?.p], [1, 0]);
+check('§6 no byte of what was written is kept', /hello|world/.test(tl.text), false);
+check("§6 another session's entries stay out of this session's report",
+    tl.sessions.every(s => s === '' || s === 'diag-t'), true);
+check('§6 the ring keeps the newest TIMELINE_MAX entries', tl.ring, [400, 449]);
+
+/* ------------------------------------------------------- §7 the paint */
+await mountInView('diag-p');
+const paint = await page.evaluate(async (id) => {
+    const tm = TerminalManager;
+    tm.writeOutput(id, 'one\r\ntwo\r\nthree');
+    await new Promise(r => setTimeout(r, 150));
+    const report = tm.screenDiagnosticReport(id);
+    return {
+        paint: report.paint,
+        bufferPainted: report.screen.filter(r => r.trim()).length,
+        rows: report.rows,
+    };
+}, 'diag-p');
+check('§7 the DOM rows are counted, one per grid row', paint.paint?.domRows, paint.rows);
+check('§7 what the DOM paints matches what the buffer holds (and is not nothing)',
+    [paint.paint?.domPainted, paint.bufferPainted], [3, 3]);
+check('§7 a held frame is reported while it covers the pane, and not after',
+    [tl.coveredWhileHeld >= 0, tl.coveredAfter], [true, -1]);
+check('§7 the screen and pane rects, the page state and the element are there',
+    [paint.paint?.screen?.length, paint.paint?.pane?.length, paint.paint?.page, paint.paint?.connected],
+    [4, 4, 'visible', true]);
+
+check('§Z no page errors', errors, []);
 await browser.close();
 server.close();
 console.log(`screen_diagnostic: ${pass} pass / ${fail} fail`);
