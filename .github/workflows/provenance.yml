@@ -1,0 +1,40 @@
+name: Provenance
+
+# Refuses history or a pull request that carries an AI tool's signature
+# (AGENTS.md section 11). It is a workflow of its own so it can run again when
+# a pull request's DESCRIPTION is edited: the description is checked too, and
+# adding `edited` to ci.yml would re-run five minutes of browser gates on every
+# change of wording.
+
+on:
+  push:
+    branches: [main, dev]
+    tags: ['v*']
+  pull_request:
+    branches: [main, dev]
+    types: [opened, synchronize, reopened, edited]
+
+concurrency:
+  group: provenance-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  provenance:
+    name: commit provenance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Every commit reachable from the tip, not the tip alone.
+          fetch-depth: 0
+
+      - name: No AI attribution in the history or the description
+        env:
+          # Through the environment and never interpolated into the script:
+          # a description is text that anyone opening a pull request writes.
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: python3 scripts/check_provenance.py HEAD

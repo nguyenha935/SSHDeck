@@ -65,7 +65,11 @@ node_modules/
 
 # AI assistant files
 CLAUDE.md
-.claude/
+.claude/*
+# ...except the shared Claude Code settings, which switch off the attribution
+# it adds to commits and pull requests (AGENTS.md section 11). A cloud session
+# reads only what is committed; settings.local.json stays private.
+!.claude/settings.json
 plans/
 
 # Knowledge graph

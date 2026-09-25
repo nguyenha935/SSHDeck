@@ -309,3 +309,40 @@ Run the full pytest suite before every deploy: the `?v=` pins of the static
 files are asserted in `tests/test_modal_shell_contract.py` and
 `tests/test_profile_launcher_ui.py`, and a stale pin is invisible until a
 reader gets a cached file.
+
+---
+
+## 11. Commits and pull requests carry a person's name, not a tool's
+
+No commit and no pull request here carries an AI tool's signature: no
+`Co-Authored-By` trailer naming a model, no `Claude-Session` trailer or session
+link, no "Generated with" line -- whatever the tool's own defaults are.
+Working for the owner, commit as the owner, `Nguyen Thanh Ha
+<nguyenthanhha935@gmail.com>`; working for anyone else, as that person. Sign
+off with `git commit -s`, as CONTRIBUTING.md asks of every commit.
+
+> **This has already gone wrong.** On 2026-09-24 a cloud session merged PR #16
+> with three commits authored `Claude <noreply@anthropic.com>`, each with a
+> co-author trailer and a session link, under a description that ended in the
+> tool's attribution line. The rule existed, but only in notes outside the
+> repository, so the session that broke it could not have read it. `main` and
+> `dev` were rewritten on 2026-09-25 to the same trees under the owner's name
+> (`f390e81` became `8f0e30f`). The pull request's own commit list still shows
+> the originals: GitHub keeps `refs/pull/16/head`, and only GitHub Support can
+> remove it.
+
+Three layers hold the rule, and each covers what the one before cannot:
+
+1. `.claude/settings.json` switches the attribution off in every Claude Code
+   session that opens this repository; a cloud session reads the committed
+   file. It cannot change the commit **author** -- that is the git identity of
+   the environment the session runs in -- so in an environment whose identity
+   is a tool's, set `git config user.name` / `user.email` for the repository
+   before the first commit.
+2. This section.
+3. `.github/workflows/provenance.yml` runs `scripts/check_provenance.py` on
+   every push and pull request, and fails on a tool's address, trailer, session
+   link or attribution line, in the history and in the description. It is a
+   required check, so a pull request that carries one cannot be merged. It
+   looks for the forms the tools write, not for words, so a commit or a
+   description can still talk about this rule.
