@@ -2297,10 +2297,29 @@ SCREEN_DIAGNOSTIC_TAIL_MAX = 65536
 SCREEN_DIAGNOSTIC_ROWS_MAX = 500
 SCREEN_DIAGNOSTIC_ROW_CHARS = 1024
 SCREEN_DIAGNOSTIC_RATELIMIT = '6 per minute'
+SCREEN_DIAGNOSTIC_TIMELINE_MAX = 400
 _SCREEN_DIAGNOSTIC_NUMBERS = ('cols', 'rows', 'baseY', 'viewportY', 'cursorX',
                               'cursorY', 'fontSize', 'letterSpacing',
-                              'lineHeight', 'tailChars')
+                              'lineHeight', 'tailChars', 'now')
 _SCREEN_DIAGNOSTIC_STRINGS = ('buffer', 'unicode', 'view', 'agent', 'href')
+
+
+def _bounded_flat(record, max_keys):
+    """One flat record from the client: short keys; numbers, booleans, short
+    strings and rects (up to four numbers). Anything nested is dropped."""
+    out = {}
+    for key, value in list(record.items())[:max_keys]:
+        if not isinstance(key, str) or len(key) > 16:
+            continue
+        if isinstance(value, (bool, int, float)):
+            out[key] = value
+        elif isinstance(value, str):
+            out[key] = value[:60]
+        elif (isinstance(value, list) and len(value) <= 4
+              and all(isinstance(n, (int, float)) and not isinstance(n, bool)
+                      for n in value)):
+            out[key] = value
+    return out
 
 
 def _bounded_engine_report(engine):
@@ -2329,6 +2348,16 @@ def _bounded_engine_report(engine):
     if isinstance(rows, list):
         out['screen'] = [str(r)[:SCREEN_DIAGNOSTIC_ROW_CHARS]
                          for r in rows[:SCREEN_DIAGNOSTIC_ROWS_MAX]]
+    # What led up to the capture and what was painted (terminal-manager
+    # noteTimeline / paintEvidence): the newest entries, each one flat.
+    timeline = engine.get('timeline')
+    if isinstance(timeline, list):
+        out['timeline'] = [_bounded_flat(e, 12)
+                           for e in timeline[-SCREEN_DIAGNOSTIC_TIMELINE_MAX:]
+                           if isinstance(e, dict)]
+    paint = engine.get('paint')
+    if isinstance(paint, dict):
+        out['paint'] = _bounded_flat(paint, 24)
     return out
 
 

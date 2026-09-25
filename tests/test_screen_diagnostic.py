@@ -340,3 +340,26 @@ def test_capture_stops_at_the_first_failure(monkeypatch):
     out = ssh_manager.capture_screen_for_diagnostic('sess-2')
     assert out == {'screen': None, 'error': 'Session not connected'}
     assert calls == ['capture-pane']
+
+
+def test_timeline_and_paint_are_kept_flat_and_bounded():
+    """The two records the client adds are shaped here, not trusted."""
+    from app.socket_events import (SCREEN_DIAGNOSTIC_TIMELINE_MAX,
+                                   _bounded_engine_report)
+    normal = [{'t': i, 's': 'abcd1234', 'e': 'write', 'src': 'out', 'k': 2}
+              for i in range(SCREEN_DIAGNOSTIC_TIMELINE_MAX + 50)]
+    odd = {'e': 'x' * 500, 'nested': {'a': 1}, 'rect': [1, 2, 3, 4, 5],
+           'k' * 40: 1, 'ok': True}
+    out = _bounded_engine_report({
+        'timeline': normal + ['not a record', odd],
+        'paint': {'domRows': 24, 'screen': [0, 0, 900, 520],
+                  'look': 'x' * 200, 'deep': {'x': 1}},
+        'now': 5,
+    })
+    kept = out['timeline']
+    # The newest TIMELINE_MAX items, of which one is not a record.
+    assert len(kept) == SCREEN_DIAGNOSTIC_TIMELINE_MAX - 1
+    assert kept[0]['t'] == 52 and kept[-2]['t'] == 449
+    assert kept[-1] == {'e': 'x' * 60, 'ok': True}
+    assert out['paint'] == {'domRows': 24, 'screen': [0, 0, 900, 520], 'look': 'x' * 60}
+    assert out['now'] == 5
