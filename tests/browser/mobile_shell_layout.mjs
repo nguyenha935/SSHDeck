@@ -869,25 +869,39 @@ for (const vp of [{ label: 'decision-390', w: 390, h: 844 },
         m.grid.height, vp.h - expectedReserved - statusH);
 
     const reclaimed = await page.evaluate(() => {
+        const shown = () => getComputedStyle(document.querySelector('.header')).display !== 'none';
         document.body.classList.add('keyboard-open');
         const pad = Math.round(parseFloat(
             getComputedStyle(document.querySelector('.main-content')).paddingBottom));
-        const stripShown = getComputedStyle(document.querySelector('.header')).display !== 'none';
+        const stripShown = shown();
+        const notes = document.getElementById('notepadPanel');
+        const wasOpen = notes.classList.contains('mobile-open');
+        notes.classList.add('mobile-open');
+        const notesStripShown = shown();
+        notes.classList.toggle('mobile-open', wasOpen);
         document.body.classList.remove('keyboard-open');
-        return { pad, stripShown };
+        return { pad, stripShown, notesStripShown };
     });
-    check(`${vp.label}: keyboard-open hides the docked strip`, reclaimed.stripShown, false);
     /*
-     * RE-TARGETED for the same reason. Under the reserve model, reclaiming the
-     * header meant SHRINKING .main-content's padding-bottom by the header height,
-     * so the delta was the proof. In the flow model there is no padding to shrink:
-     * the header is display:none while the keyboard is up, and the flex column
-     * hands its space to the terminal directly. The reclaim is therefore proven by
-     * the header leaving the flow entirely (asserted above) and by no reserve
-     * appearing in either state -- a padding-bottom reappearing here would mean
-     * the retired mechanism had been restored.
+     * RESTATED 2026-09-25, class (a). This row asserted that the system keyboard
+     * hides the strip. OWNER RULING 2026-09-25: typing into the terminal, the
+     * keyboard behaves like the function keypad -- the header stays and only
+     * the bottom edge moves (spec line 352 draws the keyboard state with the
+     * header in place; line 421 says the keypad works the same way). Typing
+     * into the NOTES still takes the whole screen, so the header still goes
+     * while the notes sheet is open -- the companion row, which keeps the
+     * narrowed rule honest.
      */
-    check(`${vp.label}: keyboard-open reclaims the header without any padding reserve`,
+    check(`${vp.label}: keyboard-open keeps the docked strip, as the keypad does`,
+        reclaimed.stripShown, true);
+    check(`${vp.label}: with the notes sheet open it still goes`, reclaimed.notesStripShown, false);
+    /*
+     * Under the retired reserve model, the keyboard reclaimed the header by
+     * SHRINKING .main-content's padding-bottom. In the flow model there is no
+     * padding: no reserve may appear in either state -- a padding-bottom
+     * reappearing here would mean the retired mechanism had been restored.
+     */
+    check(`${vp.label}: keyboard-open adds no padding reserve`,
         `open=${reclaimed.pad} closed=${placement.reserved}`, 'open=0 closed=0');
     check(`${vp.label}: no page errors`, errors, []);
     await ctx.close();
@@ -1019,18 +1033,24 @@ for (const optB of [{ label: 'decision-390', w: 390, h: 844, terminal: 733 },
         }), true);
 
     const reclaimed = await page.evaluate(() => {
+        const shown = () => getComputedStyle(document.querySelector('.header')).display !== 'none';
         document.body.classList.add('keyboard-open');
         const pad = Math.round(parseFloat(
             getComputedStyle(document.querySelector('.main-content')).paddingBottom));
-        const stripShown = getComputedStyle(document.querySelector('.header')).display !== 'none';
+        const stripShown = shown();
+        const notes = document.getElementById('notepadPanel');
+        const wasOpen = notes.classList.contains('mobile-open');
+        notes.classList.add('mobile-open');
+        const notesStripShown = shown();
+        notes.classList.toggle('mobile-open', wasOpen);
         document.body.classList.remove('keyboard-open');
-        return { pad, stripShown };
+        return { pad, stripShown, notesStripShown };
     });
-    check(`${optB.label}: keyboard-open hides the docked strip`, reclaimed.stripShown, false);
-    // RE-TARGETED: no padding reserve exists to shrink in the flow model, so the
-    // reclaim is proven by the header leaving the flow (asserted above) and by the
-    // reserve staying absent in BOTH states. See the first decision-* block.
-    check(`${optB.label}: keyboard-open reclaims the header without any padding reserve`,
+    // RESTATED 2026-09-25, class (a): see the first decision-* block.
+    check(`${optB.label}: keyboard-open keeps the docked strip, as the keypad does`,
+        reclaimed.stripShown, true);
+    check(`${optB.label}: with the notes sheet open it still goes`, reclaimed.notesStripShown, false);
+    check(`${optB.label}: keyboard-open adds no padding reserve`,
         `open=${reclaimed.pad} closed=${placement.reserved}`, 'open=0 closed=0');
     void headerHB;
     check(`${optB.label}: no page errors`, errors, []);

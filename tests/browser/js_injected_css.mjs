@@ -190,7 +190,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // must move.
         // v68: Phase 2 -- the resync/conflict popover rules are
         // gone with the sheets themselves.
-        ['css/style.css', 71],
+        ['css/style.css', 72],
         // deck.css owns the v5 shell and is edited every bucket, so it needs the
         // same pin contract as style.css. It was missing from this table -- which
         // is exactly the "no pin at all" failure described above.
