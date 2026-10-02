@@ -1,6 +1,7 @@
 import os
 import stat
 import secrets
+import time
 import posixpath
 import uuid
 from pathlib import Path
@@ -274,11 +275,58 @@ def sanitize_path(remote_path):
     # the server itself is hosted on Windows (os.path would emit backslashes).
     normalized = posixpath.normpath(remote_path)
 
-    if '..' in normalized:
+    # Traversal is '..' as a path COMPONENT. Inside a name it is just part of
+    # the name: the substring test this replaced refused file..txt and v1..2,
+    # so such a file could not be listed into, renamed, deleted or downloaded.
+    if '..' in normalized.split('/'):
         log_warning(f"SECURITY: Path traversal attempt blocked", path=remote_path)
         return None
 
     return normalized
+
+
+# Symlinks whose target is resolved in one listing. Each costs two round trips
+# (readlink + stat), paid by every listing, the Files panel's too. Measured
+# 2026-10-02 from tiny-server to goclaw (4 ms ping): 64 links took 274-297 ms,
+# which made /etc/alternatives 18 times slower to list than without them. So
+# the work stops at a count AND at a time budget; a link past either is listed
+# without its target and treated as a file, as it was before.
+LINK_DETAIL_LIMIT = 64
+LINK_DETAIL_BUDGET_S = 0.15
+
+
+def _owner_group(entry):
+    """Owner and group names from the server's ls-style long name.
+
+    OpenSSH writes `-rw-r--r--  1 root  root  18 Oct  2 14:05 app.py`, with
+    the name columns as wide as the names. Any other shape, or no long name at
+    all, falls back to the numeric ids the attributes carry.
+    """
+    parts = (getattr(entry, 'longname', None) or '').split(None, 4)
+    if len(parts) >= 4 and parts[0][:1] in '-dlcbps':
+        return parts[2], parts[3]
+    uid = getattr(entry, 'st_uid', None)
+    gid = getattr(entry, 'st_gid', None)
+    return (None if uid is None else str(uid), None if gid is None else str(gid))
+
+
+def _link_details(sftp, path):
+    """Where a symlink points and whether that is a directory.
+
+    The listing's attributes are lstat-shaped, so a link to a directory was
+    listed as a file and could not be opened as one.
+    """
+    details = {'link_target': None, 'target_is_dir': False, 'broken': False}
+    try:
+        details['link_target'] = sftp.readlink(path)
+    except (IOError, OSError):
+        pass
+    try:
+        details['target_is_dir'] = stat.S_ISDIR(sftp.stat(path).st_mode)
+    except (IOError, OSError):
+        details['broken'] = True
+    return details
+
 
 def list_directory(session_id, remote_path='.'):
     """List files via SFTP for the single-session Files feature.
@@ -302,17 +350,28 @@ def list_directory(session_id, remote_path='.'):
 
         with sftp_session(session_id) as (sftp, source_type):
             files = []
+            resolved = 0
             entries = sftp.listdir_attr(safe_path)
+            deadline = time.monotonic() + LINK_DETAIL_BUDGET_S
             for entry in entries:
                 is_symlink = stat.S_ISLNK(entry.st_mode)
-                files.append({
+                owner, group = _owner_group(entry)
+                row = {
                     'name': entry.filename,
                     'size': entry.st_size,
                     'mode': entry.st_mode,
                     'is_dir': stat.S_ISDIR(entry.st_mode),
                     'is_symlink': is_symlink,
-                    'modified': entry.st_mtime
-                })
+                    'modified': entry.st_mtime,
+                    'owner': owner,
+                    'group': group,
+                }
+                if (is_symlink and resolved < LINK_DETAIL_LIMIT
+                        and time.monotonic() < deadline):
+                    resolved += 1
+                    row.update(_link_details(
+                        sftp, posixpath.join(safe_path, entry.filename)))
+                files.append(row)
         return files, None
     except UnicodeDecodeError:
         from . import exec_fs
@@ -332,6 +391,20 @@ def list_directory_exec(session_id, remote_path='.'):
     from . import exec_fs
     return exec_fs.list_directory(session_id, remote_path)
 
+def _exists(sftp, path):
+    try:
+        sftp.lstat(path)
+        return True
+    except (IOError, OSError):
+        return False
+
+
+# An SFTP v3 server answers "exists" with the generic SSH_FX_FAILURE, which
+# paramiko raises as "Failure"; asking first is what lets the reply say why.
+def _already_exists(path):
+    return f"{posixpath.basename(path) or path} already exists"
+
+
 def create_directory(session_id, remote_path):
     """Create a directory on remote server."""
     try:
@@ -340,7 +413,31 @@ def create_directory(session_id, remote_path):
             return False, "Invalid path: path traversal detected"
 
         with sftp_session(session_id) as (sftp, source_type):
+            if _exists(sftp, safe_path):
+                return False, _already_exists(safe_path)
             sftp.mkdir(safe_path)
+        return True, None
+    except SFTPOperationError as e:
+        return False, str(e)
+    except Exception as e:
+        return False, str(e)
+
+
+def create_file(session_id, remote_path):
+    """Create an EMPTY file, and never touch one that is already there.
+
+    Mode 'x' is O_EXCL: if the name appears between the check and the open,
+    the open fails instead of truncating it.
+    """
+    try:
+        safe_path = sanitize_path(remote_path)
+        if safe_path is None:
+            return False, "Invalid path: path traversal detected"
+
+        with sftp_session(session_id) as (sftp, source_type):
+            if _exists(sftp, safe_path):
+                return False, _already_exists(safe_path)
+            sftp.open(safe_path, 'x').close()
         return True, None
     except SFTPOperationError as e:
         return False, str(e)
@@ -449,12 +546,31 @@ def rename_item(session_id, old_path, new_path):
             return False, "Invalid path"
 
         with sftp_session(session_id) as (sftp, source_type):
+            if _exists(sftp, safe_new):
+                return False, _already_exists(safe_new)
             sftp.rename(safe_old, safe_new)
         return True, None
     except SFTPOperationError as e:
         return False, str(e)
     except Exception as e:
         return False, str(e)
+
+def _protected_directory(sftp, path):
+    """Refuse to delete the home directory, the root, or any directory
+    that contains home.
+
+    A path of " " sanitised to "." -- the SFTP working directory, which is
+    home -- so one malformed payload recursively deleted the user's home, and
+    "/" was accepted as it stands. Resolved by the server (normalize), so
+    "sub/.." and "/home/u/." are caught as well. A symlink never reaches here:
+    removing a link does not touch its target.
+    """
+    real = sftp.normalize(path)
+    home = sftp.normalize('.')
+    if real == home or home.startswith(real.rstrip('/') + '/'):
+        return f"Refusing to delete {real}: it is the home directory or contains it"
+    return None
+
 
 def delete_directory_recursive(session_id, path):
     """Recursively delete a directory and all its contents."""
@@ -491,6 +607,9 @@ def delete_directory_recursive(session_id, path):
         with sftp_session(session_id) as (sftp, source_type):
             stat_result = sftp.lstat(safe_path)
             if stat_module.S_ISDIR(stat_result.st_mode):
+                refusal = _protected_directory(sftp, safe_path)
+                if refusal:
+                    return False, refusal
                 _delete_recursive(sftp, safe_path, safe_path)
                 sftp.rmdir(safe_path)
             elif stat_module.S_ISLNK(stat_result.st_mode):

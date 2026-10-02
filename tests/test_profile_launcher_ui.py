@@ -81,7 +81,10 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # New: the --tw-* bridge moved out of deck.css so every page
         # can read the ten themes, not just the shell.
         "filename='css/deck-tokens.css'": '?v=1',
-        "filename='css/sftp-file-manager.css'": '?v=8',
+        # v9: the panel head gains the Expand control (Files browser, PR 2a).
+        "filename='css/sftp-file-manager.css'": '?v=9',
+        # New: the expanded Files browser.
+        "filename='css/files-browser.css'": '?v=1',
         # v36: W13-A4 session.legacyTmuxLocale / .legacyTmuxLocaleShort keys
         # in all six locales.
         # v37: W13-B5 session.reconnectRetainBody key in all six locales.
@@ -237,8 +240,15 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # v97: wakeSocket no longer sends a second CONNECT while the first
         # handshake is in flight (the server refused it and the page went on
         # reporting itself connected).
-        "filename='js/app.js'": '?v=100',
-        "filename='js/sftp-file-manager.js'": '?v=17',
+        # v101: a socket `error` the Files panel or browser will toast itself
+        # is not toasted a second time by the app.
+        "filename='js/app.js'": '?v=101',
+        # v18: the Files browser hooks (expand, delegated render and menu, the
+        # selection kept by name across a relist, one toast per error).
+        "filename='js/sftp-file-manager.js'": '?v=18',
+        # New: the expanded Files browser; loads before sftp-file-manager.js,
+        # which constructs it.
+        "filename='js/files-browser.js'": '?v=1',
         # Extracted from a 146-line inline <script> in index.html. Inline script
         # cannot be cache-busted at all -- it ships inside the cached HTML -- so
         # pinning it is the point of moving it out.

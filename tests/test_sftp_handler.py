@@ -57,11 +57,15 @@ class TestSanitizePath:
         from app.sftp_handler import sanitize_path
         assert sanitize_path('foo/../../etc') is None
 
-    def test_embedded_dotdot_filename_blocked(self):
-        # Current contract is deliberately strict: any surviving '..' substring
-        # is rejected, even inside a filename. Pinned so the behavior is explicit.
+    def test_embedded_dotdot_filename_is_a_name(self):
+        # RESTATED 2026-10-02. This pinned the opposite -- "any surviving '..'
+        # substring is rejected, even inside a filename" -- and that strictness
+        # was a defect, not a safeguard: file..txt or v1..2 could not be
+        # listed into, renamed, deleted or downloaded. Traversal is '..' as a
+        # path component, which test_relative_escape_blocked still pins
+        # (tests/test_files_browser_server.py has both sides).
         from app.sftp_handler import sanitize_path
-        assert sanitize_path('file..txt') is None
+        assert sanitize_path('file..txt') == 'file..txt'
 
     def test_current_dir_segment_collapsed(self):
         from app.sftp_handler import sanitize_path

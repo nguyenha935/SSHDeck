@@ -110,7 +110,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
 // ------------------------------------------------------- no injection -----
 {
     console.log('--- the CSS no longer ships from JavaScript ---');
-    const files = ['sftp-file-manager.js', 'session-manager.js',
+    const files = ['sftp-file-manager.js', 'files-browser.js', 'session-manager.js',
                    'header-menus.js', 'app.js'];
     for (const f of files) {
         const src = fs.readFileSync(path.join(ROOT, 'static/js', f), 'utf8');
@@ -200,7 +200,9 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v38: drag-shift / drag-settle transitions for the chip drag.
         ['css/deck.css', 41],
         ['css/deck-tokens.css', 1],
-        ['css/sftp-file-manager.css', 8],
+        // v9: the panel head gains the Files browser's Expand control.
+        ['css/sftp-file-manager.css', 9],
+        ['css/files-browser.css', 1],
         // v28: owner batch (terminal-manager untouched by P1 D1-D3,
         // re-pinned to the served version).
         // v29: P1 steps S1/S3-S8 -- strict scrollback sanitizer, wheel sign fix,
@@ -412,7 +414,9 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v97: a column change, a grow included, stays covered until the
         // repaint has been quiet (omp replays its transcript after a settle).
         ['js/terminal-manager.js', 100],
-        ['js/sftp-file-manager.js', 17],
+        // v18: the Files browser hooks (expand, delegated render and menu).
+        ['js/sftp-file-manager.js', 18],
+        ['js/files-browser.js', 1],
         // v11: S17 FIX 4d completion -- the insert-at-prompt write routes through
         // window.emitTerminalInput, so it is no longer swallowed by tmux copy
         // mode. v10 is RELEASED, so the pin must move or the fix ships invisibly.
@@ -607,7 +611,8 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // payload, and keeps losing its scrollback when the first attach is the
         // one the server discarded.
         // v97: wakeSocket leaves a socket that is still connecting alone.
-        ['js/app.js', 100],
+        // v101: a socket error the Files UI toasts itself is not toasted twice.
+        ['js/app.js', 101],
         // v9: 0209f10 raise. v10: P1 D2 trigger-anchored More-sheet position
         // (top = trigger.bottom+1, bottom auto, measured maxHeight) — Entry 27 R4.
         ['js/header-menus.js', 13],

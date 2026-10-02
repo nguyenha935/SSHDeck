@@ -1632,8 +1632,11 @@
         FileTransferManager.handleDownloadReady(data);
     });
 
+    // While a file surface is open, its own listener shows the error
+    // (sftp-file-manager.js); one toast either way.
     socket.on('error', (data) => {
-        if (window.sftpFileManager && window.sftpFileManager.isOpen) return;
+        const files = window.sftpFileManager;
+        if (files && (files.isOpen || files.isInlineOpen())) return;
         showNotification(`Error: ${data.error}`, 'error');
     });
 
