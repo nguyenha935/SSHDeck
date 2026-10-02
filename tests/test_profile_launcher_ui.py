@@ -84,7 +84,8 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # v9: the panel head gains the Expand control (Files browser, PR 2a).
         "filename='css/sftp-file-manager.css'": '?v=9',
         # New: the expanded Files browser.
-        "filename='css/files-browser.css'": '?v=1',
+        # v2: the menu is as tall as the room under its control.
+        "filename='css/files-browser.css'": '?v=2',
         # v36: W13-A4 session.legacyTmuxLocale / .legacyTmuxLocaleShort keys
         # in all six locales.
         # v37: W13-B5 session.reconnectRetainBody key in all six locales.
@@ -248,7 +249,9 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         "filename='js/sftp-file-manager.js'": '?v=18',
         # New: the expanded Files browser; loads before sftp-file-manager.js,
         # which constructs it.
-        "filename='js/files-browser.js'": '?v=1',
+        # v2: the control that opened a menu closes it; Upload / Download in
+        # the phone's menu.
+        "filename='js/files-browser.js'": '?v=2',
         # Extracted from a 146-line inline <script> in index.html. Inline script
         # cannot be cache-busted at all -- it ships inside the cached HTML -- so
         # pinning it is the point of moving it out.

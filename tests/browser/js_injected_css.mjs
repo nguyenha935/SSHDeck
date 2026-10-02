@@ -202,7 +202,8 @@ const base = `http://127.0.0.1:${server.address().port}`;
         ['css/deck-tokens.css', 1],
         // v9: the panel head gains the Files browser's Expand control.
         ['css/sftp-file-manager.css', 9],
-        ['css/files-browser.css', 1],
+        // v2: the menu is as tall as the room under its control.
+        ['css/files-browser.css', 2],
         // v28: owner batch (terminal-manager untouched by P1 D1-D3,
         // re-pinned to the served version).
         // v29: P1 steps S1/S3-S8 -- strict scrollback sanitizer, wheel sign fix,
@@ -416,7 +417,9 @@ const base = `http://127.0.0.1:${server.address().port}`;
         ['js/terminal-manager.js', 100],
         // v18: the Files browser hooks (expand, delegated render and menu).
         ['js/sftp-file-manager.js', 18],
-        ['js/files-browser.js', 1],
+        // v2: the control that opened a menu closes it; Upload / Download in
+        // the phone's menu.
+        ['js/files-browser.js', 2],
         // v11: S17 FIX 4d completion -- the insert-at-prompt write routes through
         // window.emitTerminalInput, so it is no longer swallowed by tmux copy
         // mode. v10 is RELEASED, so the pin must move or the fix ships invisibly.

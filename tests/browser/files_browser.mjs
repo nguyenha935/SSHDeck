@@ -30,12 +30,15 @@
  *   §10 virtualization: 2000 entries are a few dozen rows of DOM; a refresh
  *       keeps the scroll position
  *   §11 phone: a hold starts selection, the bar follows it, a move cancels the
- *       hold, a tap opens, the row's sheet acts on this browser, the ⋮ menu;
- *       Back takes the same steps as Escape
+ *       hold, a tap opens, the row's sheet acts on this browser, the ⋮ menu
+ *       (with the panel's Upload / Download); the control that opened a menu
+ *       closes it; Back takes the same steps as Escape
  *   §12 no raw i18n keys; a language change re-renders the browser
  *   §13 another session's chip moves the browser to that host
  *   §14 the header's Files button closes it, and opens the panel again
  *   §15 a narrow window with a mouse: the bar follows the selection
+ *   §16 phone landscape: the ⋮ menu shows every item; a long one scrolls
+ *       inside the screen
  *   §Z  no page errors
  *
  * Run: node tests/browser/files_browser.mjs   (from source/)
@@ -800,6 +803,9 @@ await withPage('§8', { width: 1440, height: 900 }, false, async (page) => {
     await page.click('[data-act="crumbs-more"]');
     check('§8 "…" lists what it hides', await page.evaluate(() =>
         [...document.querySelectorAll('.fb-menu-item')].map(i => i.textContent)), ['/a', '/a/b', '/a/b/c']);
+    await page.click('[data-act="crumbs-more"]');
+    check('§8 "…" again closes it', await page.evaluate(() => !!document.querySelector('.fb-menu')), false);
+    await page.click('[data-act="crumbs-more"]');
     await clear(page);
     await page.click('.fb-menu-item >> nth=1');
     check('§8 picking one lists it', (await emitted(page, 'list_directory')).map(p => p.remote_path), ['/a/b']);
@@ -949,6 +955,13 @@ await withPage('§11', { width: 390, height: 844 }, true, async (page) => {
         return { title: menu.querySelector('.fm-context-title')?.textContent.trim(), onTop: menu.contains(hit) };
     });
     check('§11 the row\'s sheet names the file and is on top', sheet, { title: 'deploy.sh', onTop: true });
+    await page.tap(`${rowSel('.bashrc')} .fb-more`);
+    check('§11 another row\'s ⋮ opens that row\'s sheet', await page.evaluate(() =>
+        document.querySelector('.fm-context-sheet .fm-context-title')?.textContent.trim()), '.bashrc');
+    await page.tap(`${rowSel('.bashrc')} .fb-more`);
+    check('§11 the same ⋮ again closes it', await page.evaluate(() =>
+        !!document.querySelector('.fm-context-menu')), false);
+    await page.tap(`${rowSel('deploy.sh')} .fb-more`);
     await page.tap('.fm-context-sheet [data-action="rename"]');
     await page.waitForTimeout(50);
     check('§11 Rename from the sheet edits in this browser', await page.evaluate(() =>
@@ -958,8 +971,22 @@ await withPage('§11', { width: 390, height: 844 }, true, async (page) => {
     await page.tap('.fb-head [data-act="menu"]');
     check('§11 the ⋮ menu', await page.evaluate(() =>
         [...document.querySelectorAll('.fb-menu-item')].map(i => [i.textContent, i.getAttribute('aria-checked')])), [
-        ['Select', null], ['Refresh', null], ['Hidden files', 'true'], ['Sort by: Name ↑', 'true'],
-        ['Sort by: Size', 'false'], ['Sort by: Modified', 'false']]);
+        ['Select', null], ['Refresh', null], ['Upload / Download', null], ['Hidden files', 'true'],
+        ['Sort by: Name ↑', 'true'], ['Sort by: Size', 'false'], ['Sort by: Modified', 'false']]);
+    await page.tap('.fb-head [data-act="menu"]');
+    check('§11 ⋮ again closes the menu', await page.evaluate(() => !!document.querySelector('.fb-menu')), false);
+    await page.tap('.fb-head [data-act="menu"]');
+    await page.tap('.fb-menu-item >> nth=2');
+    await page.waitForTimeout(100);
+    check('§11 Upload / Download opens the panel\'s modal, on top, over the open browser', await page.evaluate(() => {
+        const modal = document.getElementById('fileTransferModal');
+        const box = modal.querySelector('.modal-content')?.getBoundingClientRect();
+        const hit = box && document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+        return { shown: modal.classList.contains('show'), onTop: !!hit && modal.contains(hit),
+                 browser: !document.getElementById('filesBrowser').hidden };
+    }), { shown: true, onTop: true, browser: true });
+    await page.evaluate(() => FileTransferManager.closeModal());
+    await page.tap('.fb-head [data-act="menu"]');
     await clear(page);
     await page.tap('.fb-menu-item >> nth=1');
     check('§11 Refresh from the menu re-lists', (await emitted(page, 'list_directory')).map(p => p.remote_path), [HERE]);
@@ -1099,6 +1126,27 @@ await withPage('§15', { width: 700, height: 900 }, false, async (page) => {
     await page.click('[data-dialog="cancel"]');
     await page.keyboard.press('Escape');
     check('§15 cleared: the bar creates again', await bar(), [true, false]);
+});
+
+// ── §16 phone landscape menus ───────────────────────────────────────────────
+await withPage('§16', { width: 844, height: 390 }, true, async (page) => {
+    await openFiles(page);
+    await page.tap('#sftpPanelExpand');
+    const menu = () => page.evaluate(() => {
+        const el = document.querySelector('.fb-menu');
+        const r = el.getBoundingClientRect();
+        return { items: el.querySelectorAll('.fb-menu-item').length,
+                 scrolls: el.scrollHeight > el.clientHeight + 1,
+                 inside: r.bottom <= window.innerHeight + 0.5 };
+    });
+    await page.tap('.fb-head [data-act="menu"]');
+    check('§16 the ⋮ menu shows all seven items, inside the screen', await menu(),
+        { items: 7, scrolls: false, inside: true });
+    await page.tap('.fb-head [data-act="menu"]');
+    await seed(page, LISTING, '/' + Array.from({ length: 20 }, (_, k) => `d${k}`).join('/'));
+    await page.tap('[data-act="crumbs-more"]');
+    check('§16 a long menu stays inside the screen and scrolls', await menu(),
+        { items: 17, scrolls: true, inside: true });
 });
 
 // ── §Z ──────────────────────────────────────────────────────────────────────
