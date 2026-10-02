@@ -174,6 +174,14 @@ def test_every_page_loads_english_plus_the_readers_language():
         assert 'data-i18n-version=' in source, (
             f'{name} must tell the engine which pin a runtime fetch uses'
         )
+        # The tags and the runtime fetch are one cache contract. 2026-10-02:
+        # the tags moved to ?v=2 while data-i18n-version stayed "1", so a
+        # language picked at runtime could come from a stale cache entry.
+        pins = set(re.findall(r"filename='js/i18n/\w+\.js'\) }}\?v=(\d+)", source))
+        runtime = re.search(r'data-i18n-version="(\d+)"', source).group(1)
+        assert pins == {runtime}, (
+            f'{name}: locale tags pin {sorted(pins)}, runtime fetch pins {runtime}'
+        )
 
     app_source = Path('app/__init__.py').read_text(encoding='utf-8')
     assert "request.cookies.get('lang')" in app_source

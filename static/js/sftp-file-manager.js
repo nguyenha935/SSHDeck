@@ -115,6 +115,10 @@ class SFTPFileManager {
         this.draggedItems = [];
         this.dragSource = null;
 
+        // The Files panel's expanded view (files-browser.js). It builds no DOM
+        // until the first expand.
+        this.browser = window.FilesBrowser ? new window.FilesBrowser(this) : null;
+
         this.init();
     }
 
@@ -862,7 +866,20 @@ class SFTPFileManager {
                         clearTimeout(state.loadingTimeout);
                         state.loadingTimeout = null;
                     }
+                    /*
+                     * The selection is kept BY NAME across a re-list of the
+                     * same directory. It is a set of indexes into the file
+                     * list, and the new list can be in another order or have
+                     * an entry added or removed, so the kept indexes pointed
+                     * at other files: Delete could act on a row nobody picked.
+                     */
+                    const kept = data.path === state.path
+                        ? new Set([...state.selected].map(i => state.files[i]?.name))
+                        : new Set();
                     state.files = data.files || [];
+                    state.selected = new Set(state.files.flatMap(
+                        (file, i) => kept.has(file.name) ? [i] : []));
+                    state.lastSelected = -1;
                     state.path = data.path;
                     state.loading = false;
                     state.error = null;
@@ -1011,7 +1028,15 @@ class SFTPFileManager {
                 }
             });
 
-            this.showNotification(errorMsg, 'error');
+            /*
+             * One toast per error: this listener while a file surface is open,
+             * app.js's otherwise. Both used to toast -- app.js stood aside only
+             * for the transfer modal -- so with the Files panel open, and once
+             * the manager existed at all, every error showed twice.
+             */
+            if (this.isOpen || this.isInlineOpen()) {
+                this.showNotification(errorMsg, 'error');
+            }
         });
     }
 
@@ -1323,6 +1348,17 @@ class SFTPFileManager {
                                     data-i18n="fm.filesTitle">Files</strong>
                             <small class="fm-panel-path" id="fmInlineHeadPath"></small>
                         </div>
+                        <!-- The Files browser (owner ruling 2026-10-02): the
+                             same pane, laid out over the workspace. -->
+                        <button type="button" class="sftp-inline-close btn-icon"
+                                id="sftpPanelExpand"
+                                aria-label="Expand"
+                                data-i18n-aria-label="fb.expand"
+                                data-i18n-title="fb.expand">
+                            <svg class="icon" aria-hidden="true">
+                                <use href="${this.sprite}#icon-maximize-2"></use>
+                            </svg>
+                        </button>
                         <button type="button" class="sftp-inline-close btn-icon"
                                 id="sftpPanelClose"
                                 aria-label="Close"
@@ -1447,6 +1483,8 @@ class SFTPFileManager {
             // Bind close button.
             document.getElementById('sftpPanelClose')
                 ?.addEventListener('click', () => this.closeInline());
+            document.getElementById('sftpPanelExpand')
+                ?.addEventListener('click', () => this.browser?.expand());
 
             // Navigation: the same four routes the dual-pane surface binds,
             // against the same generic methods.
@@ -1560,6 +1598,7 @@ class SFTPFileManager {
     closeInline() {
         const panel = document.getElementById('sftpPanel');
         if (!panel) return;
+        this.browser?.hide();
         const state = this.panes.inline;
         if (state?.loadingTimeout) {
             clearTimeout(state.loadingTimeout);
@@ -2190,6 +2229,10 @@ class SFTPFileManager {
     }
 
     renderPane(pane) {
+        if (pane === 'inline' && this.browser?.isExpanded()) {
+            this.browser.render();
+            return;
+        }
         const state = this.panes[pane];
         const container = document.getElementById(`fm${this.capitalize(pane)}List`);
 
@@ -3916,6 +3959,13 @@ class SFTPFileManager {
         const state = this.panes[pane];
         this.activePane = pane;
 
+        // The browser renames and creates in place and deletes through its
+        // own dialog; the panel keeps the prompts below.
+        if (pane === 'inline' && this.browser?.isExpanded()
+                && this.browser.handleMenuAction(action, state.files[index])) {
+            return;
+        }
+
         const ensureSelection = () => {
             if (index >= 0 && !state.selected.has(index)) {
                 state.selected.clear();
@@ -4048,6 +4098,7 @@ class SFTPFileManager {
         // The v5 inline panel lives in the workspace, not inside either modal,
         // so it needs its own walk or a language change would leave it stale.
         this.translateSubtree(document.getElementById('sftpPanel'));
+        this.translateSubtree(document.getElementById('filesBrowser'));
     }
 
     capitalize(str) {

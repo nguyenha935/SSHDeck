@@ -3291,65 +3291,133 @@ def handle_quick_disconnect(data, current_user=None):
         log_error("Quick disconnect failed", error=str(e))
         emit('error', {'error': 'Disconnect failed'})
 
+# ── Files browser operations ─────────────────────────────────────────────────
+#
+# The browser sends a request_id with every operation and gets ONE reply,
+# fm_result, naming that request with a result per item -- failures included.
+# The legacy replies (directory_created, file_renamed, item_deleted and the
+# generic 'error') carry no id, so an error could not be tied to the operation
+# that caused it, and every listener toasted it. Without a request_id the
+# legacy replies are unchanged: the transfer modal still uses them.
+
+FILE_BATCH_LIMIT = 1000
+
+
+def _owns_files_session(session_id, user):
+    """A session of this user, or one of their quick-connect connections."""
+    if verify_session_ownership(session_id, user.id):
+        return True
+    conn_info = connection_pool.temp_connection_pool.get_connection_info(session_id)
+    return bool(conn_info and conn_info['user_id'] == str(user.id))
+
+
+def _fm_result(request_id, op, session_id, results):
+    emit('fm_result', {'request_id': request_id, 'op': op,
+                       'session_id': session_id, 'results': results})
+
+
+def _fm_refuse(request_id, op, session_id, message):
+    """A refusal before any item ran: in fm_result when the caller can match
+    it to a request, as the generic error otherwise."""
+    if request_id is None:
+        emit('error', {'error': message})
+    else:
+        _fm_result(request_id, op, session_id,
+                   [{'path': None, 'ok': False, 'error': message}])
+
+
 @socketio.on('create_directory')
 @socket_login_required
 def handle_create_directory(data, current_user=None):
     """Create a directory on remote server."""
+    request_id = data.get('request_id')
+    session_id = data.get('session_id')
     try:
-        session_id = data.get('session_id')
         remote_path = data.get('remote_path')
 
         if not all([session_id, remote_path]):
-            emit('error', {'error': 'Missing required fields'})
+            _fm_refuse(request_id, 'create_directory', session_id, 'Missing required fields')
             return
 
-        if not verify_session_ownership(session_id, current_user.id):
-            conn_info = connection_pool.temp_connection_pool.get_connection_info(session_id)
-            if not conn_info or conn_info['user_id'] != str(current_user.id):
-                emit('error', {'error': 'Unauthorized access'})
-                return
+        if not _owns_files_session(session_id, current_user):
+            _fm_refuse(request_id, 'create_directory', session_id, 'Unauthorized access')
+            return
 
         success, error = sftp_handler.create_directory(session_id, remote_path)
 
-        if error:
+        if request_id is not None:
+            _fm_result(request_id, 'create_directory', session_id,
+                       [{'path': remote_path, 'ok': not error, 'error': error}])
+        elif error:
             emit('error', {'error': f'Failed to create directory: {error}'})
         else:
             emit('directory_created', {'path': remote_path})
 
     except Exception as e:
         log_error("Create directory failed", error=str(e))
-        emit('error', {'error': 'Failed to create directory'})
+        _fm_refuse(request_id, 'create_directory', session_id, 'Failed to create directory')
+
+
+@socketio.on('create_file')
+@socket_login_required
+def handle_create_file(data, current_user=None):
+    """Create an empty file; an existing file is never touched."""
+    request_id = data.get('request_id')
+    session_id = data.get('session_id')
+    try:
+        remote_path = data.get('remote_path')
+
+        if not all([session_id, remote_path]):
+            _fm_refuse(request_id, 'create_file', session_id, 'Missing required fields')
+            return
+
+        if not _owns_files_session(session_id, current_user):
+            _fm_refuse(request_id, 'create_file', session_id, 'Unauthorized access')
+            return
+
+        success, error = sftp_handler.create_file(session_id, remote_path)
+        _fm_result(request_id, 'create_file', session_id,
+                   [{'path': remote_path, 'ok': not error, 'error': error}])
+        if not error:
+            log_info(f"Created file: {remote_path}", user=current_user.username)
+
+    except Exception as e:
+        log_error("Create file failed", error=str(e))
+        _fm_refuse(request_id, 'create_file', session_id, 'Failed to create file')
 
 @socketio.on('rename_file')
 @socket_login_required
 def handle_rename_file(data, current_user=None):
     """Rename a file or directory on remote server."""
+    request_id = data.get('request_id')
+    session_id = data.get('session_id')
     try:
-        session_id = data.get('session_id')
         old_path = data.get('old_path')
         new_path = data.get('new_path')
 
         if not all([session_id, old_path, new_path]):
-            emit('error', {'error': 'Missing required fields'})
+            _fm_refuse(request_id, 'rename_file', session_id, 'Missing required fields')
             return
 
-        if not verify_session_ownership(session_id, current_user.id):
-            conn_info = connection_pool.temp_connection_pool.get_connection_info(session_id)
-            if not conn_info or conn_info['user_id'] != str(current_user.id):
-                emit('error', {'error': 'Unauthorized access'})
-                return
+        if not _owns_files_session(session_id, current_user):
+            _fm_refuse(request_id, 'rename_file', session_id, 'Unauthorized access')
+            return
 
         success, error = sftp_handler.rename_item(session_id, old_path, new_path)
 
-        if error:
+        if request_id is not None:
+            _fm_result(request_id, 'rename_file', session_id,
+                       [{'path': old_path, 'ok': not error, 'error': error}])
+        elif error:
             emit('error', {'error': f'Failed to rename: {error}'})
         else:
             emit('file_renamed', {'old_path': old_path, 'new_path': new_path})
+        if not error:
             log_info(f"Renamed: {old_path} -> {new_path}", user=current_user.username)
 
     except Exception as e:
         log_error("Rename failed", error=str(e))
-        emit('error', {'error': 'Failed to rename'})
+        _fm_refuse(request_id, 'rename_file', session_id, 'Failed to rename')
 
 @socketio.on('delete_item')
 @socket_login_required
@@ -3380,6 +3448,44 @@ def handle_delete_item(data, current_user=None):
     except Exception as e:
         log_error("Delete failed", error=str(e))
         emit('error', {'error': 'Failed to delete'})
+
+@socketio.on('delete_items')
+@socket_login_required
+def handle_delete_items(data, current_user=None):
+    """Delete several items in one request, each recursively.
+
+    One reply for the whole batch, so the browser refreshes once and reports
+    once; delete_item answered every item with its own frame, its own refresh
+    and its own toast. An item that fails does not stop the rest.
+    """
+    request_id = data.get('request_id')
+    session_id = data.get('session_id')
+    try:
+        paths = data.get('paths')
+        if (not session_id or not isinstance(paths, list) or not paths
+                or not all(isinstance(path, str) and path for path in paths)):
+            _fm_refuse(request_id, 'delete_items', session_id, 'Missing required fields')
+            return
+        if len(paths) > FILE_BATCH_LIMIT:
+            _fm_refuse(request_id, 'delete_items', session_id,
+                       f'At most {FILE_BATCH_LIMIT} items at a time')
+            return
+
+        if not _owns_files_session(session_id, current_user):
+            _fm_refuse(request_id, 'delete_items', session_id, 'Unauthorized access')
+            return
+
+        results = []
+        for path in paths:
+            success, error = sftp_handler.delete_directory_recursive(session_id, path)
+            results.append({'path': path, 'ok': not error, 'error': error})
+            if not error:
+                log_info(f"Deleted: {path}", user=current_user.username)
+        _fm_result(request_id, 'delete_items', session_id, results)
+
+    except Exception as e:
+        log_error("Delete failed", error=str(e))
+        _fm_refuse(request_id, 'delete_items', session_id, 'Failed to delete')
 
 @socketio.on('get_home_directory')
 @socket_login_required
