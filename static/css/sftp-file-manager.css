@@ -93,7 +93,13 @@
     justify-content: center;
 }
 
-#fmQuickConnectModal .password-toggle:hover {
+@media (hover: hover) {
+    #fmQuickConnectModal .password-toggle:hover {
+        color: var(--text-primary);
+    }
+}
+
+#fmQuickConnectModal .password-toggle:active {
     color: var(--text-primary);
 }
 
@@ -270,7 +276,15 @@
     transition: all 0.15s ease;
 }
 
-.fm-nav-btn:hover {
+@media (hover: hover) {
+    .fm-nav-btn:hover {
+        background: var(--bg-hover);
+        color: var(--text-primary);
+        border-color: var(--border-color);
+    }
+}
+
+.fm-nav-btn:active {
     background: var(--bg-hover);
     color: var(--text-primary);
     border-color: var(--border-color);
@@ -304,8 +318,10 @@
     transition: all 0.2s ease;
 }
 
-.fm-source-select:hover {
-    border-color: var(--border-hover);
+@media (hover: hover) {
+    .fm-source-select:hover {
+        border-color: var(--border-hover);
+    }
 }
 
 .fm-source-select:focus {
@@ -395,7 +411,15 @@
     font-size: 14px;
 }
 
-.fm-pane-btn:hover {
+@media (hover: hover) {
+    .fm-pane-btn:hover {
+        background: var(--bg-hover);
+        border-color: var(--accent-primary);
+        color: var(--accent-primary);
+    }
+}
+
+.fm-pane-btn:active {
     background: var(--bg-hover);
     border-color: var(--accent-primary);
     color: var(--accent-primary);
@@ -421,7 +445,13 @@
     border: 1px solid transparent;
 }
 
-.fm-file-item:hover {
+@media (hover: hover) {
+    .fm-file-item:hover {
+        background: var(--bg-hover);
+    }
+}
+
+.fm-file-item:active {
     background: var(--bg-hover);
 }
 
@@ -479,12 +509,26 @@
     font-weight: 600;
 }
 
-.fm-file-item.directory:hover {
+@media (hover: hover) {
+    .fm-file-item.directory:hover {
+        background: color-mix(in srgb, var(--warning-color) 10%, transparent);
+        border-color: color-mix(in srgb, var(--warning-color) 30%, transparent);
+    }
+}
+
+.fm-file-item.directory:active {
     background: color-mix(in srgb, var(--warning-color) 10%, transparent);
     border-color: color-mix(in srgb, var(--warning-color) 30%, transparent);
 }
 
-.fm-file-item.directory:hover .fm-file-icon.folder {
+@media (hover: hover) {
+    .fm-file-item.directory:hover .fm-file-icon.folder {
+        transform: scale(1.1);
+        transition: transform 0.15s ease;
+    }
+}
+
+.fm-file-item.directory:active .fm-file-icon.folder {
     transform: scale(1.1);
     transition: transform 0.15s ease;
 }
@@ -549,8 +593,19 @@
     cursor: pointer;
 }
 
-.fm-drop-zone:hover,
 .fm-drop-zone.drag-over {
+    border-color: var(--accent-primary);
+    background: var(--accent-primary-glow);
+}
+
+@media (hover: hover) {
+    .fm-drop-zone:hover {
+        border-color: var(--accent-primary);
+        background: var(--accent-primary-glow);
+    }
+}
+
+.fm-drop-zone:active {
     border-color: var(--accent-primary);
     background: var(--accent-primary-glow);
 }
@@ -580,7 +635,13 @@
     background: var(--bg-tertiary);
 }
 
-.fm-prompt-select:hover {
+@media (hover: hover) {
+    .fm-prompt-select:hover {
+        background: var(--bg-hover);
+    }
+}
+
+.fm-prompt-select:active {
     background: var(--bg-hover);
 }
 
@@ -608,7 +669,13 @@
     cursor: pointer;
 }
 
-.fm-queue-header:hover {
+@media (hover: hover) {
+    .fm-queue-header:hover {
+        background: var(--bg-hover);
+    }
+}
+
+.fm-queue-header:active {
     background: var(--bg-hover);
 }
 
@@ -737,12 +804,25 @@
     font-size: 14px;
 }
 
-.fm-transfer-btn:hover {
+@media (hover: hover) {
+    .fm-transfer-btn:hover {
+        background: var(--bg-hover);
+        color: var(--text-primary);
+    }
+}
+
+.fm-transfer-btn:active {
     background: var(--bg-hover);
     color: var(--text-primary);
 }
 
-.fm-transfer-btn.cancel:hover {
+@media (hover: hover) {
+    .fm-transfer-btn.cancel:hover {
+        color: var(--error-color);
+    }
+}
+
+.fm-transfer-btn.cancel:active {
     color: var(--error-color);
 }
 
@@ -781,7 +861,13 @@
     transition: background 0.15s ease;
 }
 
-.fm-context-item:hover {
+@media (hover: hover) {
+    .fm-context-item:hover {
+        background: var(--bg-hover);
+    }
+}
+
+.fm-context-item:active {
     background: var(--bg-hover);
 }
 
@@ -789,7 +875,13 @@
     color: var(--error-color);
 }
 
-.fm-context-item.danger:hover {
+@media (hover: hover) {
+    .fm-context-item.danger:hover {
+        background: color-mix(in srgb, var(--error-color) 10%, transparent);
+    }
+}
+
+.fm-context-item.danger:active {
     background: color-mix(in srgb, var(--error-color) 10%, transparent);
 }
 
@@ -878,7 +970,14 @@
     transition: all 0.2s ease;
 }
 
-.fm-conflict-option:hover {
+@media (hover: hover) {
+    .fm-conflict-option:hover {
+        background: var(--bg-hover);
+        border-color: var(--border-hover);
+    }
+}
+
+.fm-conflict-option:active {
     background: var(--bg-hover);
     border-color: var(--border-hover);
 }
@@ -984,7 +1083,14 @@
     transition: all 0.2s ease;
 }
 
-.fm-auth-toggle-btn:hover {
+@media (hover: hover) {
+    .fm-auth-toggle-btn:hover {
+        background: var(--bg-hover);
+        border-color: var(--border-hover);
+    }
+}
+
+.fm-auth-toggle-btn:active {
     background: var(--bg-hover);
     border-color: var(--border-hover);
 }
@@ -1378,7 +1484,14 @@
     height: 16px;
 }
 
-.fm-pane-tab:hover {
+@media (hover: hover) {
+    .fm-pane-tab:hover {
+        color: var(--text-primary);
+        background: var(--bg-hover);
+    }
+}
+
+.fm-pane-tab:active {
     color: var(--text-primary);
     background: var(--bg-hover);
 }
@@ -1961,9 +2074,11 @@
     border-radius: 4px;
 }
 
-.fm-file-list::-webkit-scrollbar-thumb:hover,
-.fm-queue-list::-webkit-scrollbar-thumb:hover {
-    background: var(--border-hover);
+@media (hover: hover) {
+    .fm-file-list::-webkit-scrollbar-thumb:hover,
+    .fm-queue-list::-webkit-scrollbar-thumb:hover {
+        background: var(--border-hover);
+    }
 }
 
 /* P3 -- SFTP panel head and file actions ====================================
@@ -2102,8 +2217,23 @@
     cursor: pointer;
 }
 
-.sftp-inline-close:hover,
 .sftp-inline-close:focus-visible {
+    background: var(--tw-hover, var(--bg-hover));
+    color: var(--tw-text, var(--text-primary));
+    outline: 2px solid var(--tw-accent, var(--accent-primary));
+    outline-offset: 2px;
+}
+
+@media (hover: hover) {
+    .sftp-inline-close:hover {
+        background: var(--tw-hover, var(--bg-hover));
+        color: var(--tw-text, var(--text-primary));
+        outline: 2px solid var(--tw-accent, var(--accent-primary));
+        outline-offset: 2px;
+    }
+}
+
+.sftp-inline-close:active {
     background: var(--tw-hover, var(--bg-hover));
     color: var(--tw-text, var(--text-primary));
     outline: 2px solid var(--tw-accent, var(--accent-primary));

@@ -25,7 +25,13 @@
     transition: color 0.2s ease, border-color 0.2s ease;
 }
 
-.admin-tab:hover {
+@media (hover: hover) {
+    .admin-tab:hover {
+        color: var(--text-primary);
+    }
+}
+
+.admin-tab:active {
     color: var(--text-primary);
 }
 
@@ -84,8 +90,10 @@
     border-bottom: none;
 }
 
-.admin-table tbody tr:hover {
-    background: var(--bg-tertiary);
+@media (hover: hover) {
+    .admin-table tbody tr:hover {
+        background: var(--bg-tertiary);
+    }
 }
 
 .admin-table td.admin-message {
@@ -137,7 +145,13 @@
     border: 1px solid #f43f5e;
 }
 
-.btn-danger:hover {
+@media (hover: hover) {
+    .btn-danger:hover {
+        filter: brightness(1.1);
+    }
+}
+
+.btn-danger:active {
     filter: brightness(1.1);
 }
 

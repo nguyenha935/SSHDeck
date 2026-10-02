@@ -24,14 +24,14 @@
 
     <link rel="stylesheet" href="{{ url_for('static', filename='vendor/material-icons/material-icons.css') }}?v=1">
 
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=72">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=73">
     <!-- deck.css owns the v5 shell and MUST load after style.css: it supersedes
          rather than merges, and the cascade order is what lets it win without
          !important. Superseded rules are deleted from style.css as each region
          lands, so the two files never both own the same property. -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/deck-tokens.css') }}?v=1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/deck.css') }}?v=40">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/sftp-file-manager.css') }}?v=6">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/deck.css') }}?v=41">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sftp-file-manager.css') }}?v=7">
 </head>
 <body data-theme="{{ theme|default('glass') }}">
     {% include '_brand_symbol.html' %}
@@ -1735,7 +1735,7 @@
     <script src="{{ url_for('static', filename='js/file-transfer.js') }}?v=2"></script>
     <script src="{{ url_for('static', filename='js/browser-filesystem.js') }}?v=2"></script>
     <script src="{{ url_for('static', filename='js/sftp-file-manager.js') }}?v=16"></script>
-    <script src="{{ url_for('static', filename='js/app.js') }}?v=98"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=99"></script>
     <script src="{{ url_for('static', filename='js/header-menus.js') }}?v=13"></script>
     <!-- After header-menus.js: it owns #mobileMoreBtn's listeners, and this
          module MOVES that button into the touch action row. Binding first means

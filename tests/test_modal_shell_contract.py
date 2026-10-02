@@ -288,7 +288,7 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # the flex-truncation idiom and the toggle is `flex: none`, so the deficit falls
     # on the static label instead of on the control's height. A browser on v63 keeps
     # the thickened toggle and the shortened note area, so the pin must move.
-    assert "filename='css/style.css') }}?v=72" in idx
+    assert "filename='css/style.css') }}?v=73" in idx
     assert "filename='js/sftp-file-manager.js') }}?v=16" in idx
     # app.js v69 -> v70 (S35 A, owner's composer/erase requirement): after the
     # empty-composer erase spends its last DEL, the draft is released from the
@@ -335,7 +335,7 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # v96 -> v97: wakeSocket leaves a socket that is still connecting alone;
     # the load's own pageshow sent a second CONNECT and the server dropped the
     # session while the page still reported itself connected.
-    assert "filename='js/app.js') }}?v=98" in idx
+    assert "filename='js/app.js') }}?v=99" in idx
     # S34: v46 -- the control-mode transport. pty_geometry may now arrive with
     # `render_local`, which this client must NOT adopt as its grid (it wraps the
     # relative %output stream at its own fit instead). A browser on v45 would adopt
@@ -392,9 +392,9 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # the repaint has been quiet (omp replays its transcript after a settle),
     # a grow included. A browser on v96 shows omp's replay run past.
     assert "filename='js/terminal-manager.js') }}?v=99" in idx
-    assert "\"filename='css/style.css'\": '?v=72'," in tp
+    assert "\"filename='css/style.css'\": '?v=73'," in tp
     assert "\"filename='js/sftp-file-manager.js'\": '?v=16'," in tp
-    assert "\"filename='js/app.js'\": '?v=98'," in tp
+    assert "\"filename='js/app.js'\": '?v=99'," in tp
     # session-manager v51 -> v52 (S35 P5): restore-driven pane eviction stopped
     # (displaceOccupant:false) and the remembered session selection is applied on
     # arrival. v51 is RELEASED without the fix, so the pin must move.
@@ -411,7 +411,7 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # source changes what a wider pane renders under the S36 minimum).
     assert "\"filename='js/session-manager.js'\": '?v=70'," in tp
     assert "\"filename='js/terminal-manager.js'\": '?v=99'," in tp
-    assert "style.css') }}?v=72\" in template" in tp
+    assert "style.css') }}?v=73\" in template" in tp
 
 
 def test_command_workspace_modal_renamed_to_command_sets():

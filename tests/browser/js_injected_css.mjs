@@ -190,7 +190,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // must move.
         // v68: Phase 2 -- the resync/conflict popover rules are
         // gone with the sheets themselves.
-        ['css/style.css', 72],
+        ['css/style.css', 73],
         // deck.css owns the v5 shell and is edited every bucket, so it needs the
         // same pin contract as style.css. It was missing from this table -- which
         // is exactly the "no pin at all" failure described above.
@@ -198,9 +198,9 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v31: W14 item 2 bounded menus + item 6 broadcast picker.
         // v32: owner batch asset changes.
         // v38: drag-shift / drag-settle transitions for the chip drag.
-        ['css/deck.css', 40],
+        ['css/deck.css', 41],
         ['css/deck-tokens.css', 1],
-        ['css/sftp-file-manager.css', 6],
+        ['css/sftp-file-manager.css', 7],
         // v28: owner batch (terminal-manager untouched by P1 D1-D3,
         // re-pinned to the served version).
         // v29: P1 steps S1/S3-S8 -- strict scrollback sanitizer, wheel sign fix,
@@ -607,7 +607,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // payload, and keeps losing its scrollback when the first attach is the
         // one the server discarded.
         // v97: wakeSocket leaves a socket that is still connecting alone.
-        ['js/app.js', 98],
+        ['js/app.js', 99],
         // v9: 0209f10 raise. v10: P1 D2 trigger-anchored More-sheet position
         // (top = trigger.bottom+1, bottom auto, measured maxHeight) — Entry 27 R4.
         ['js/header-menus.js', 13],

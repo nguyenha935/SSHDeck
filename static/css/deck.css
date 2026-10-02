@@ -607,8 +607,19 @@
     cursor: pointer;
 }
 
-.layout-grid > .touch-layout-option:hover,
 .layout-grid > .touch-layout-option:focus-visible {
+    border-color: var(--tw-accent);
+    background: var(--tw-accent-soft);
+}
+
+@media (hover: hover) {
+    .layout-grid > .touch-layout-option:hover {
+        border-color: var(--tw-accent);
+        background: var(--tw-accent-soft);
+    }
+}
+
+.layout-grid > .touch-layout-option:active {
     border-color: var(--tw-accent);
     background: var(--tw-accent-soft);
 }
@@ -818,8 +829,15 @@
 }
 
 /* Spec line 236: the hover fill is the shared hover token, not a new colour. */
-.header .btn.btn-secondary:hover,
-.header .account-btn-header:hover {
+@media (hover: hover) {
+    .header .btn.btn-secondary:hover,
+    .header .account-btn-header:hover {
+        background: var(--tw-hover);
+    }
+}
+
+.header .btn.btn-secondary:active,
+.header .account-btn-header:active {
     background: var(--tw-hover);
 }
 
@@ -1354,7 +1372,13 @@
 }
 
 /* Spec line 276: .tw5-session-actions>button:hover { background:var(--tw-hover); } */
-.session-action-item:hover:not(:disabled) {
+@media (hover: hover) {
+    .session-action-item:hover:not(:disabled) {
+        background: var(--tw-hover);
+    }
+}
+
+.session-action-item:active:not(:disabled) {
     background: var(--tw-hover);
 }
 
@@ -1662,7 +1686,13 @@
     overflow: hidden;
 }
 
-.broadcast-target-option:hover:not(:disabled) {
+@media (hover: hover) {
+    .broadcast-target-option:hover:not(:disabled) {
+        background: var(--tw-hover);
+    }
+}
+
+.broadcast-target-option:active:not(:disabled) {
     background: var(--tw-hover);
 }
 
@@ -1909,8 +1939,19 @@
     cursor: pointer;
 }
 
-.notepad-close:hover,
 .notepad-close:focus-visible {
+    color: var(--tw-text);
+    background: var(--tw-hover);
+}
+
+@media (hover: hover) {
+    .notepad-close:hover {
+        color: var(--tw-text);
+        background: var(--tw-hover);
+    }
+}
+
+.notepad-close:active {
     color: var(--tw-text);
     background: var(--tw-hover);
 }
@@ -2010,8 +2051,17 @@
     cursor: pointer;
 }
 
-.command-rail-item:hover,
 .command-rail-item:focus-visible {
+    background: var(--tw-hover);
+}
+
+@media (hover: hover) {
+    .command-rail-item:hover {
+        background: var(--tw-hover);
+    }
+}
+
+.command-rail-item:active {
     background: var(--tw-hover);
 }
 
@@ -2433,7 +2483,13 @@
     height: 14px;
 }
 
-#newConnectionBtn.strip-new-connection:hover::before {
+@media (hover: hover) {
+    #newConnectionBtn.strip-new-connection:hover::before {
+        background: color-mix(in srgb, var(--chrome-primary) 88%, var(--tw-text));
+    }
+}
+
+#newConnectionBtn.strip-new-connection:active::before {
     background: color-mix(in srgb, var(--chrome-primary) 88%, var(--tw-text));
 }
 
@@ -2449,8 +2505,17 @@
         background: transparent;
     }
 
-    .header #mobileMoreBtn:hover,
     .header #mobileMoreBtn[aria-expanded="true"] {
+        background: var(--tw-hover);
+    }
+
+    @media (hover: hover) {
+        .header #mobileMoreBtn:hover {
+            background: var(--tw-hover);
+        }
+    }
+
+    .header #mobileMoreBtn:active {
         background: var(--tw-hover);
     }
 

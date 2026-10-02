@@ -783,7 +783,7 @@ check('admin: auth.js loaded for password-toggle hook',
  * bump would fix login and leave admin stale, which is the failure mode a single
  * assertion would miss.
  */
-const AUTH_JS_PIN = 2;
+const AUTH_JS_PIN = 3;
 const ADMIN_JS_PIN = 3;
 for (const [label, src] of [['login', login], ['register', register],
     ['change_password', changePw], ['admin', admin]]) {
