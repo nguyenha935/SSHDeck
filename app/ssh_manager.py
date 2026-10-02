@@ -1532,7 +1532,7 @@ def create_ssh_connection(host, port, username, password=None, key_path=None, ke
                           proxy_jump_password=None, proxy_jump_key_content=None,
                           use_tmux=False, reconnect_tmux_name=None,
                           auth_type='password', startup_commands='',
-                          display_name=None, login_shell=None):
+                          display_name=None, login_shell=None, session_id=None):
     """
     Create a new SSH connection and return session ID.
 
@@ -1548,6 +1548,10 @@ def create_ssh_connection(host, port, username, password=None, key_path=None, ke
         user_id: User ID for session tracking
         proxy_jump_*: Optional jump host (bastion) connection parameters
         auth_type: Target authentication method (password, key, or tailscale)
+        session_id: Register under this id instead of a fresh one. Only for a
+            saved session reattached after a restart; the caller holds that id's
+            reconnect claim (begin_reconnect), and an id still registered here
+            is refused rather than overwritten.
     """
     # S2 step 6 (R6-A): per-user ceiling BEFORE any transport work or global
     # reservation. Count this user's live registry entries under the lock.
@@ -1580,7 +1584,7 @@ def create_ssh_connection(host, port, username, password=None, key_path=None, ke
     use_tmux = transport_result['use_tmux']
     tmux_session_name = transport_result['tmux_session_name']
 
-    session_id = str(uuid.uuid4())
+    session_id = session_id or str(uuid.uuid4())
     # Immutable owner token for SFTP-cache ownership. Assigned ONCE per
     # session registration; survives reuse of the session_id by a different
     # session object. Threaded through claim_reader_death parts and
@@ -1599,7 +1603,10 @@ def create_ssh_connection(host, port, username, password=None, key_path=None, ke
             user_live = sum(
                 1 for s in sessions.values()
                 if str(s.get('user_id')) == str(user_id))
-        if len(sessions) >= config.MAX_SESSIONS:
+        if session_id in sessions:
+            capacity_reached = True
+            capacity_error = "Session is already connected"
+        elif len(sessions) >= config.MAX_SESSIONS:
             capacity_reached = True
             capacity_error = "Maximum number of sessions reached"
         elif user_id is not None and user_live >= config.MAX_SESSIONS_PER_USER:
@@ -2362,6 +2369,21 @@ def session_view_count(session_id):
         return len(session.get('views') or {}) if session else 0
 
 
+def view_size(session_id, socket_sid):
+    """The fit this socket's view of a session is registered at, or None.
+
+    `view_attached` carries it because the view an ack answers for is not
+    always the one registered: two attaches from one socket can both be in
+    flight (a pane hidden and shown again while the first was still opening),
+    and open_session_view keeps whichever registers first -- with ITS size --
+    and drops the other's. The page compares this with what it asked for last.
+    """
+    with sessions_lock:
+        session = sessions.get(session_id)
+        view = (session.get('views') or {}).get(socket_sid) if session else None
+        return {'cols': view['cols'], 'rows': view['rows']} if view else None
+
+
 def _list_client_ttys(session_id):
     """The ttys of every client attached to this session, or None if unreadable."""
     ok, _error, out = _exec_tmux_control(
@@ -2825,7 +2847,8 @@ def open_session_view(session_id, socket_sid, cols, rows,
         views = session.setdefault('views', {})
         if socket_sid in views:
             # Two attaches raced. Keep the registered one and drop this channel;
-            # the other is already being read.
+            # the other is already being read. Its size is what view_attached
+            # reports (view_size), so the page can resize it to this one.
             try:
                 channel.close()
             except Exception:

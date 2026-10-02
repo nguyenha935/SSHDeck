@@ -411,7 +411,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // sends an ssh_resize for a size the server already opened the PTY at.
         // v97: a column change, a grow included, stays covered until the
         // repaint has been quiet (omp replays its transcript after a settle).
-        ['js/terminal-manager.js', 99],
+        ['js/terminal-manager.js', 100],
         ['js/sftp-file-manager.js', 16],
         // v11: S17 FIX 4d completion -- the insert-at-prompt write routes through
         // window.emitTerminalInput, so it is no longer swallowed by tmux copy
@@ -492,7 +492,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // stale offer in place).
         // v68: screen_diagnostic_saved shown as a notification.
         // v69: the chip drag is animated (follow + tilt, displaced chips slide).
-        ['js/session-manager.js', 70],
+        ['js/session-manager.js', 71],
         // v7: W14 item 6 broadcast target picker semantics (allMode/custom
         // subset), stable under the review contract.
         // v8: S17 FIX 4d completion -- sendAll routes each session through
@@ -607,7 +607,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // payload, and keeps losing its scrollback when the first attach is the
         // one the server discarded.
         // v97: wakeSocket leaves a socket that is still connecting alone.
-        ['js/app.js', 99],
+        ['js/app.js', 100],
         // v9: 0209f10 raise. v10: P1 D2 trigger-anchored More-sheet position
         // (top = trigger.bottom+1, bottom auto, measured maxHeight) — Entry 27 R4.
         ['js/header-menus.js', 13],

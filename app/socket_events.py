@@ -498,6 +498,13 @@ def restore_user_sessions(user_id, to_sid=None):
     db.session.commit()
 
     db_sessions = SSHSession.query.filter_by(user_id=user_id, connected=True).all()
+    # Whether any of this account's sessions remembers a pane, offers
+    # included. A page only falls back to putting the first live session in
+    # the first pane when nothing does -- otherwise that pane belongs to a
+    # session still waiting to be reconnected.
+    account_has_panes = SSHSession.query.filter(
+        SSHSession.user_id == user_id,
+        SSHSession.pane_index.isnot(None)).first() is not None
 
     room = to_sid if to_sid is not None else f'user_{user_id}'
 
@@ -508,6 +515,7 @@ def restore_user_sessions(user_id, to_sid=None):
 
         if session and session.get('connected'):
             snapshot = _build_session_snapshot(session_id, db_session)
+            snapshot['account_has_panes'] = account_has_panes
             # key_id is included unconditionally: a restored key session must
             # be able to reconnect silently exactly like a candidate can.
             #
@@ -590,6 +598,9 @@ def handle_ssh_connect(data, current_user=None):
     key_content = None
     bastion_password = None
     bastion_key_content = None
+    # The saved session this connect reattaches under its own id, once its
+    # reconnect claim is held; released in the finally block.
+    reattach_session_id = None
     # Session_id is pre-bound BEFORE client_request_id, and the order
     # matters. The except block drops this session's announce gate, and an
     # exception BEFORE create_ssh_connection returns would otherwise raise
@@ -616,8 +627,11 @@ def handle_ssh_connect(data, current_user=None):
         key_id = data.get('key_id')
         auth_type = data.get('auth_type') or ('key' if key_id else 'password')
 
-        def emit_error(message):
-            emit('ssh_error', {'error': message, 'client_request_id': client_request_id})
+        def emit_error(message, code=None):
+            payload = {'error': message, 'client_request_id': client_request_id}
+            if code:
+                payload['code'] = code
+            emit('ssh_error', payload)
 
         with storage_lock(f'command-config:{current_user.id}'):
             startup_commands, startup_commands_error = (
@@ -745,6 +759,27 @@ def handle_ssh_connect(data, current_user=None):
                            'match the saved session')
                 return
             reconnect_tmux_name = raw_name
+            # AN ACCEPTED OFFER KEEPS ITS IDENTITY. After a restart the row is
+            # disconnected and no transport is registered under its id, so the
+            # reattach takes that same id and the row is updated in place:
+            # everything keyed by the id -- the pane it sits in, the chip's place
+            # in tab_order, the remembered selection, other devices' copies of
+            # the chip -- stays valid. It used to be retired and re-inserted
+            # under a fresh id, which lost the pane and replaced every chip.
+            if (not existing.connected
+                    and ssh_manager.get_session(source_session_id) is None):
+                if not ssh_manager.begin_reconnect(source_session_id):
+                    emit_error('This session is already being reconnected',
+                               code='in_flight')
+                    return
+                reattach_session_id = source_session_id
+            elif data.get('from_candidate') is True:
+                # Another device reattached this offer first: its announcement
+                # has turned (or is turning) the chip live here, so there is
+                # nothing to do -- and a second transport would duplicate it.
+                emit_error('This session has already been reconnected',
+                           code='already_live')
+                return
 
         # Display name is normalized BEFORE the transport is created so the
         # in-RAM session record and the DB row share the exact same value.
@@ -771,6 +806,7 @@ def handle_ssh_connect(data, current_user=None):
             auth_type=auth_type,
             startup_commands='' if reconnect_tmux_name else startup_commands,
             display_name=display_name,
+            session_id=reattach_session_id,
         )
 
         if password:
@@ -788,41 +824,67 @@ def handle_ssh_connect(data, current_user=None):
                 return
             created_tmux_name = created_session.get('tmux_session_name') if use_tmux else None
             replaced_session_id = None
+            row_pane_index = None
 
             try:
                 # Display name and key identity are persisted
                 # UNCONDITIONALLY below. Gating them on use_tmux made a
                 # restored non-tmux session un-renamable and unable to
                 # reconnect silently; identity is not a tmux-only concept.
-                # Clean up the specific old disconnected persistent session when
-                # reconnecting to avoid ghost tabs on refresh.
-                if use_tmux and reconnect_tmux_name:
-                    old_session = SSHSession.query.filter_by(
-                        user_id=current_user.id, host=host, port=port,
-                        is_persistent=True, connected=False,
-                        tmux_session_name=reconnect_tmux_name
-                    ).first()
-                    if old_session:
-                        replaced_session_id = old_session.session_id
-                        db.session.delete(old_session)
-                        log_info(f"Cleaned up old persistent session",
-                                user=current_user.username, host=host,
-                                tmux_session=reconnect_tmux_name)
+                ssh_session = None
+                if reattach_session_id:
+                    ssh_session = SSHSession.query.filter_by(
+                        session_id=reattach_session_id,
+                        user_id=current_user.id).first()
+                if ssh_session is not None:
+                    # The reattach: the same row, now connected again.
+                    ssh_session.connected = True
+                    ssh_session.is_persistent = use_tmux
+                    ssh_session.key_id = key_id
+                    ssh_session.auth_type = auth_type
+                    ssh_session.tmux_session_name = created_tmux_name
+                    if display_name:
+                        ssh_session.display_name = display_name
+                    ssh_session.snapshot_version = 1
+                    log_info("Reattached a saved session under its own id",
+                             user=current_user.username, host=host,
+                             session_id=session_id,
+                             tmux_session=reconnect_tmux_name)
+                else:
+                    carried_pane = None
+                    # Clean up the specific old disconnected persistent session
+                    # when reconnecting to avoid ghost tabs on refresh. Its pane
+                    # goes to the row that replaces it.
+                    if use_tmux and reconnect_tmux_name:
+                        old_session = SSHSession.query.filter_by(
+                            user_id=current_user.id, host=host, port=port,
+                            is_persistent=True, connected=False,
+                            tmux_session_name=reconnect_tmux_name
+                        ).first()
+                        if old_session:
+                            replaced_session_id = old_session.session_id
+                            carried_pane = old_session.pane_index
+                            db.session.delete(old_session)
+                            log_info(f"Cleaned up old persistent session",
+                                    user=current_user.username, host=host,
+                                    tmux_session=reconnect_tmux_name)
 
-                ssh_session = SSHSession(
-                    session_id=session_id,
-                    user_id=current_user.id,
-                    host=host,
-                    port=port,
-                    username=username,
-                    is_persistent=use_tmux,
-                    key_id=key_id,
-                    auth_type=auth_type,
-                    tmux_session_name=created_tmux_name,
-                    display_name=display_name
-                )
-                db.session.add(ssh_session)
+                    ssh_session = SSHSession(
+                        session_id=session_id,
+                        user_id=current_user.id,
+                        host=host,
+                        port=port,
+                        username=username,
+                        is_persistent=use_tmux,
+                        key_id=key_id,
+                        auth_type=auth_type,
+                        tmux_session_name=created_tmux_name,
+                        display_name=display_name,
+                        pane_index=carried_pane
+                    )
+                    db.session.add(ssh_session)
                 db.session.commit()
+                row_pane_index = ssh_session.pane_index
                 _announce_session_to_other_sockets(
                     current_user.id, session_id, ssh_session,
                     replaces_session_id=replaced_session_id)
@@ -854,6 +916,8 @@ def handle_ssh_connect(data, current_user=None):
                 'auth_type': auth_type,
                 'tmux_session_name': created_tmux_name,
                 'display_name': display_name,
+                # Where the row says this session sits; a reattach keeps it.
+                'pane_index': row_pane_index,
                 # True when this connect REATTACHED a pane created before
                 # the locale fix. Its running shell cannot be retrofitted, so
                 # the UI says so instead of promising UTF-8 it cannot deliver.
@@ -878,6 +942,8 @@ def handle_ssh_connect(data, current_user=None):
         key_content = None
         bastion_password = None
         bastion_key_content = None
+        if reattach_session_id:
+            ssh_manager.end_reconnect(reattach_session_id)
 
 @socketio.on('ssh_reconnect')
 @socket_login_required
@@ -1369,7 +1435,17 @@ def handle_view_attach(data, current_user=None):
                                 'error': 'Session not found'})
             return
 
-        session = ssh_manager.get_session(session_id) or {}
+        session = ssh_manager.get_session(session_id)
+        if session is None:
+            # A saved row with no transport (an offer after a restart). The
+            # empty record used to read as "a plain shell" below and answer
+            # view_attached for a client that was never opened -- harmless
+            # while every reattach came back under a new id, but a reattach
+            # now keeps its id, and that false success left the page sure it
+            # was attached while tmux had no client for it.
+            emit('view_error', {'session_id': session_id,
+                                'error': 'Session is not connected'})
+            return
         use_tmux = bool(session.get('use_tmux'))
         if not use_tmux:
             # A plain shell has one PTY that every tab already receives through
@@ -1392,7 +1468,10 @@ def handle_view_attach(data, current_user=None):
                         error=error)
             emit('view_error', {'session_id': session_id, 'error': error})
             return
-        emit('view_attached', {'session_id': session_id})
+        emit('view_attached', {
+            'session_id': session_id,
+            **(ssh_manager.view_size(session_id, request.sid) or {}),
+        })
     except Exception as e:
         log_error("view_attach failed", session_id=session_id, error=str(e))
         emit('view_error', {'session_id': session_id,
@@ -1564,6 +1643,11 @@ def handle_session_pane_index(data, current_user=None):
         db.session.rollback()
         log_error("Failed to record the session's pane",
                   session_id=session_id, error=str(db_err))
+        return
+    # The user's other pages follow at once (owner ruling 2026-10-02): a page
+    # still showing the old split would hold the session at a pane's size.
+    emit('session_pane_index', {'session_id': session_id, 'pane_index': pane_index},
+         room=f'user_{current_user.id}', include_self=False)
 
 
 def _known_tmux_names():

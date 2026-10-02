@@ -57,7 +57,7 @@ def test_all_session_manager_form_prefills_clear_command_set_state_first():
         source.index('    updateSessionStatus(sessionId, status)')
     ]
     prefill = source[source.index('    prefillConnectionForm(sessionId)'):source.index(
-        '    directReconnect(sessionId)'
+        '    directReconnect(sessionId'
     )]
 
     assert password_reconnect.index('window.clearConnectionProfileState();') < password_reconnect.index(

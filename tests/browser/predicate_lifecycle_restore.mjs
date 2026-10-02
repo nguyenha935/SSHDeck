@@ -754,6 +754,19 @@ async function cancelDialog(page) {
     // one-owner predicate; completion retires the offer with zero disconnects.
     const { ctx, page, errors } = await newPage();
     await offerCandidate(page, 'RK', { key_id: 'k1', auth_type: 'key' });
+    // OWNER RULING 2026-10-02: a key offer is reattached by itself on arrival.
+    // That automatic claim is refused here through the app's own ssh_error
+    // handler, so the user's direct route below starts from a free offer.
+    await page.waitForTimeout(20);
+    const auto = await page.evaluate(() => window.__emits
+        .filter(e => e.ev === 'ssh_connect')
+        .map(e => ({ id: e.payload?.session_id, req: e.payload?.client_request_id,
+            fromCandidate: e.payload?.from_candidate })));
+    check('§R2: the key offer is reattached by itself, once, as an offer claim',
+        auto.map(a => [a.id, a.fromCandidate]), [['RK', true]]);
+    await page.evaluate((req) => window.__server('ssh_error', {
+        error: 'Authentication failed', client_request_id: req }), auto[0] && auto[0].req);
+    await resetNotes(page);
     await selectChip(page, 'RK');
     await openSheetByRetap(page, 'RK');
     await resetEmits(page);

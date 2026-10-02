@@ -182,12 +182,18 @@ await page.evaluate((id) => SessionManager.removeSessionUI(id), D);
 st = await state();
 check('§6 solo cleared, split shown with A and C', [st.solo, st.gridClass, st.shown], [null, 'terminal-grid split-2', [short(A), short(C)]]);
 
-// §7 a layout change keeps the leading slots and reports the dropped one
+// §7 a layout change keeps the leading slots and reports NOTHING (restated
+// 2026-10-02): a layout is this device's view of the split, and panes now
+// follow on every open page, so reporting C as unassigned here would take
+// pane 2 from C on the user's other screens. Widening again brings C back.
 await clearEmits();
 await page.evaluate(() => SessionManager.setSplitLayout(1, 'default'));
 st = await state();
 check('§7 single pane keeps A', [st.panes.map(x => x && short(x)), st.shown], [[short(A)], [short(A)]]);
-check('§7 C is reported as unassigned', (await emits('session_pane_index')).map(p => ({ id: short(p.session_id), pane: p.pane_index })), [{ id: short(C), pane: null }]);
+check('§7 a layout change reports nothing', (await emits('session_pane_index')).map(p => ({ id: short(p.session_id), pane: p.pane_index })), []);
+await page.evaluate(() => SessionManager.setSplitLayout(2, 'default'));
+st = await state();
+check('§7 widening again gives C back its pane', st.panes.map(x => x && short(x)), [short(A), short(C)]);
 check('§8 no page errors', errors, []);
 await browser.close();
 server.close();

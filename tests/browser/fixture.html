@@ -97,7 +97,13 @@
        * size instead of sending it -- the ack applies the parked size as one
        * resize -- so a fixture with no server to acknowledge would make every
        * resize assertion below read zero and mean the opposite of what it says.
+       *
+       * The ack answers an attach in flight, as it always does in the app: an
+       * ack for a pane with no attach behind it is a WITHDRAWN attach and is
+       * detached again (see noteViewAttached), and that decision reads
+       * SessionManager, which this fixture does not load.
        */
+      TerminalManager.views[KEY] = 'attaching';
       TerminalManager.noteViewAttached(KEY);
 
       // attachTerminal clears the screen ~50ms after a double-rAF, so write the

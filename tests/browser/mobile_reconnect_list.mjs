@@ -57,6 +57,31 @@ function startServer() {
 let passed = 0;
 let failed = 0;
 
+/*
+ * Settle every automatic reattach in flight as a refused one, exactly as
+ * app.js's ssh_error handler does (abandon the request, release the chip, let
+ * the queue go on), and return the offers it claimed in order. This harness
+ * loads session-manager.js only, so nothing else would ever answer them.
+ */
+async function drainAutoRestore() {
+    const claimed = [];
+    for (let i = 0; i < 20; i++) {
+        await page.waitForTimeout(10);
+        const settled = await page.evaluate(() => {
+            const requestId = SessionManager.autoRestoreRequestId;
+            if (!requestId) return null;
+            const intent = SessionManager.getReconnectIntent(requestId);
+            SessionManager.abandonReconnectRequest(requestId);
+            if (intent) SessionManager.setChipConnecting(intent.sessionId, false);
+            SessionManager.autoRestoreSettled(requestId);
+            return intent ? intent.sessionId : requestId;
+        });
+        if (!settled) break;
+        claimed.push(settled);
+    }
+    return claimed;
+}
+
 function check(name, got, want) {
     const ok = JSON.stringify(got) === JSON.stringify(want);
     if (ok) {
@@ -315,11 +340,19 @@ check('a candidate cannot clear occupied pane zero',
         listInOccupiedPane: false,
     });
 
-//: the live session placed on load reports its pane
-// (session_pane_index); the property under test is that no CONNECT is sent.
-check('occupied-pane candidate arrival does not reconnect automatically',
-    await page.evaluate(() => window.__emitted.map(event => event.name)
-        .filter(name => name !== 'session_pane_index')), []);
+// OWNER RULING 2026-10-02 (restated from "arrival does not reconnect"): a
+// keyless offer is reattached by itself, as a claim on its own row -- and it
+// takes no pane from the live session (above). This harness has no app.js to
+// answer it, so the claim is then settled the way app.js settles a refused one
+// (drainAutoRestore), which leaves the offer for the explicit routes below.
+check('occupied-pane key offer is reattached by itself, as a claim on its own row',
+    await page.evaluate(() => window.__emitted
+        .filter(e => e.name !== 'session_pane_index')
+        .map(e => ({ name: e.name, session_id: e.data && e.data.session_id,
+            from_candidate: e.data && e.data.from_candidate }))),
+    [{ name: 'ssh_connect', session_id: 'occupied-offer', from_candidate: true }]);
+check('the automatic claim, refused, leaves the offer to the user',
+    await drainAutoRestore(), ['occupied-offer']);
 
 // --- Slice B: an occupied phone must still make a red tab actionable -------
 //
@@ -593,10 +626,16 @@ check('every candidate is offered as a chip in the session bar',
         .filter(id => ['s1', 's2', 's3'].includes(id)).sort()),
     ['s1', 's2', 's3']);
 
-// Nothing may connect on its own. The user picks.
-check('no reconnect was sent to the server without the user choosing',
-    await page.evaluate(() => window.__emitted.map(e => e.name)),
-    []);
+// OWNER RULING 2026-10-02 (restated from "nothing may connect on its own"):
+// the key offers come back by themselves, ONE claim at a time, and the
+// password offer never does -- it has no stored secret. Settled as refusals,
+// they stay offers the user can still pick from below.
+check('only the first key offer is claimed until it answers',
+    await page.evaluate(() => window.__emitted.map(e => e.data && e.data.session_id)),
+    ['s1']);
+check('then the next key offer, and never the password offer',
+    await drainAutoRestore(), ['s1', 's2']);
+await page.evaluate(() => { window.__emitted.length = 0; });
 
 // Same readability guarantee, now owned by the chip strip: the candidates are
 // laid out in a real scroller with no chip stacked on top of another. The strip
@@ -639,9 +678,8 @@ check('every candidate chip meets the 44px touch target',
 /*
  * Same guarantee through the replacement route: one tap on the chip selects it
  * AND opens its action menu (defect 5), and Reconnect there connects exactly that
- * session. Identified by host + tmux name rather than session_id, for the reason
- * documented above: a reconnect deliberately does not carry the old id -- the
- * server re-attaches by tmux name and issues a fresh one.
+ * session. Identified by host + tmux name. (The frame also names the session
+ * id, which since 2026-10-02 the server keeps for the reattached session.)
  */
 check('one tap on a candidate chip opens its action menu',
     await page.evaluate(() => {
