@@ -473,6 +473,8 @@ window.__i18n.de = {
         'fm.ctx.preview': 'Vorschau',
         'fm.ctx.download': 'Herunterladen',
         'fm.ctx.transferToOther': 'Zum anderen Bereich übertragen',
+        'fm.ctx.copyPath': 'Pfad kopieren',
+        'fm.moreActions': 'Weitere Aktionen',
         'fm.downloading': 'Lade herunter',
         'fm.downloadingFolder': 'Lade Ordner herunter',
         'fm.uploadingFiles': 'Lade Dateien hoch',

@@ -473,6 +473,8 @@ window.__i18n.zh = {
         'fm.ctx.preview': '预览',
         'fm.ctx.download': '下载',
         'fm.ctx.transferToOther': '传输到另一侧面板',
+        'fm.ctx.copyPath': '复制路径',
+        'fm.moreActions': '更多操作',
         'fm.downloading': '下载中',
         'fm.downloadingFolder': '正在下载文件夹',
         'fm.uploadingFiles': '正在上传文件',

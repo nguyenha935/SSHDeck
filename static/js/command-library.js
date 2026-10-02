@@ -674,7 +674,9 @@ const CommandLibrary = {
     },
 
     spriteIcon(name) {
-        return `<svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-${name}"></use></svg>`;
+        const sprite = document.querySelector('meta[name="icon-sprite"]')?.content
+            || '/static/icons/icons.svg';
+        return `<svg class="icon" aria-hidden="true"><use href="${sprite}#icon-${name}"></use></svg>`;
     }
 };
 
