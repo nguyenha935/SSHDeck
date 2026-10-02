@@ -86,6 +86,7 @@
             this.returnFocus = null;
             this.backArmed = false;
             this.skipPop = false;
+            this.rowMenuAnchor = null;
             // A rotation can cross into or out of the full-screen tier.
             this.onResize = () => {
                 this.setBackgroundInert(false);
@@ -329,7 +330,9 @@
             });
             root.addEventListener('keydown', (e) => this.onKey(e));
             root.addEventListener('pointerdown', (e) => {
-                if (this.menu && !this.menu.contains(e.target) && !e.target.closest('[data-act="menu"]')) {
+                // A press on the control that opened the menu is left to its
+                // click, which closes it (toggleMenu).
+                if (this.menu && !this.menu.contains(e.target) && !this.menuAnchor?.contains(e.target)) {
                     this.closeMenu();
                 }
             });
@@ -1030,6 +1033,13 @@
         openRowMenu(e, index, anchor) {
             const row = this.view[index];
             if (!row || row.parent || row.draft) return;
+            // The ⋮ that opened this row's menu closes it again.
+            if (anchor && this.fm.contextMenu && this.rowMenuAnchor === anchor) {
+                this.fm.closeContextMenu();
+                this.rowMenuAnchor = null;
+                return;
+            }
+            this.rowMenuAnchor = anchor;
             if (!this.selected.has(row.name)) this.selectOnly(index);
             this.focusIndex = index;
             this.syncSelection();
@@ -1070,7 +1080,7 @@
                     return this.fm.refreshPane('inline');
                 case 'crumb': return this.go(button.dataset.path);
                 case 'crumbs-more':
-                    return this.showMenu(button, this.hiddenCrumbs.map(segment => ({
+                    return this.toggleMenu(button, () => this.hiddenCrumbs.map(segment => ({
                         label: segment.path, act: () => this.go(segment.path),
                     })));
                 case 'edit-path': return this.openPathEdit();
@@ -1080,7 +1090,7 @@
                     else this.clearFilter();
                     return undefined;
                 }
-                case 'menu': return this.showMenu(button, this.phoneMenuItems());
+                case 'menu': return this.toggleMenu(button, () => this.phoneMenuItems());
                 case 'hidden': return this.setShowHidden(!this.showHidden);
                 case 'sort': return this.setSort(button.dataset.key);
                 case 'upload': return this.el('fbUploadInput').click();
@@ -1109,6 +1119,11 @@
                 label: this.t('fm.refresh', 'Refresh'),
                 act: () => this.act('refresh'),
             }, {
+                // The panel's Upload / Download (cloud) control, under the
+                // browser while it covers the screen.
+                label: this.t('files.uploadDownload', 'Upload / Download'),
+                act: () => FileTransferManager.openModal(),
+            }, {
                 label: this.t('fb.hiddenFiles', 'Hidden files'), checked: this.showHidden,
                 act: () => this.setShowHidden(!this.showHidden),
             }];
@@ -1120,6 +1135,12 @@
                     act: () => this.setSort(key),
                 }));
             return items;
+        }
+
+        // The control that opened a menu closes it again.
+        toggleMenu(anchor, items) {
+            if (this.menu && this.menuAnchor === anchor) return this.closeMenu();
+            return this.showMenu(anchor, items());
         }
 
         showMenu(anchor, items) {
@@ -1146,6 +1167,10 @@
             const box = this.root.getBoundingClientRect();
             menu.style.top = `${Math.round(at.bottom - box.top + 4)}px`;
             menu.style.right = `${Math.max(8, Math.round(box.right - at.right))}px`;
+            // As tall as the room under its control; past that the list scrolls.
+            // A fixed 60vh cap hid two of the phone menu's seven items in
+            // landscape, with nothing to say they were there.
+            menu.style.maxHeight = `${Math.round(box.bottom - at.bottom - 12)}px`;
             this.menu = menu;
             this.menuAnchor = anchor;
             menu.querySelector('button')?.focus();
