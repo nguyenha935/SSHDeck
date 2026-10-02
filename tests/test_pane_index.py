@@ -113,3 +113,45 @@ def test_another_users_row_is_untouched(app):
     finally:
         owner.disconnect()
         other.disconnect()
+
+
+def _second_socket(app, username):
+    """Another page of the same account (its own login, its own socket)."""
+    http_client = app.test_client()
+    assert http_client.post('/login', data={'username': username,
+                                            'password': 'pane-index-password-123'}
+                            ).status_code == 302
+    socket_client = socketio.test_client(app, flask_test_client=http_client)
+    assert socket_client.is_connected()
+    socket_client.get_received()
+    return socket_client
+
+
+def _pane_events(socket_client):
+    deadline = time.monotonic() + 0.4
+    events = []
+    while time.monotonic() < deadline:
+        events += [e['args'][0] for e in socket_client.get_received()
+                   if e['name'] == 'session_pane_index']
+        socketio.sleep(0.02)
+    return events
+
+
+def test_a_change_reaches_the_users_other_pages_and_no_one_else(app):
+    """Owner ruling 2026-10-02: panes follow on every open page at once."""
+    first, user_id = _authenticated_socket(app, 'pane_sync')
+    second = _second_socket(app, 'pane_sync')
+    stranger, _ = _authenticated_socket(app, 'pane_stranger')
+    try:
+        _seed(app, user_id, 'p4')
+        first.emit('session_pane_index', {'session_id': 'p4', 'pane_index': 2})
+        assert _pane_events(second) == [{'session_id': 'p4', 'pane_index': 2}]
+        assert _pane_events(first) == []
+        assert _pane_events(stranger) == []
+        # Unchanged: nothing to tell anyone.
+        first.emit('session_pane_index', {'session_id': 'p4', 'pane_index': 2})
+        assert _pane_events(second) == []
+    finally:
+        first.disconnect()
+        second.disconnect()
+        stranger.disconnect()

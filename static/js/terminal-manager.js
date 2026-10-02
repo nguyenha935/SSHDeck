@@ -802,6 +802,9 @@ const TerminalManager = {
             || typeof window.socket.emit !== 'function') {
             return false;
         }
+        if (this.isOffer(sessionId)) {
+            return false;
+        }
         const terminalKeys = this.sessionTerminals[sessionId] || [];
         if (terminalKeys.length === 0 || !this.isTerminalVisible(terminalKeys[0])) {
             return false;
@@ -887,11 +890,10 @@ const TerminalManager = {
         if (sessionIds.length === 0) {
             return;
         }
-        const pageHidden = document.visibilityState === 'hidden';
-        const displayed = pageHidden ? {} : this.getDisplayedSessionsMap();
+        const displayed = this.displayedViews();
         const drop = [];
         sessionIds.forEach(sessionId => {
-            const shouldShow = !pageHidden && displayed[sessionId] === true;
+            const shouldShow = displayed[sessionId] === true;
             const state = this.views[sessionId] || 'detached';
             if (shouldShow && state === 'detached') {
                 this.attachView(sessionId);
@@ -900,6 +902,24 @@ const TerminalManager = {
             }
         });
         this.detachViews(drop);
+    },
+
+    // The sessions this page displays right now; none while the document is hidden.
+    displayedViews() {
+        return document.visibilityState === 'hidden' ? {} : this.getDisplayedSessionsMap();
+    },
+
+    /*
+     * An offer -- a saved session waiting to be reattached -- has no transport,
+     * so there is no tmux client to attach for it: the server refuses, and the
+     * refusal started the attach retry cycle against a session that cannot
+     * answer. attachView asks this for every route in (syncViews, a fit), and
+     * the offer attaches once it is promoted (connected again).
+     */
+    isOffer(sessionId) {
+        const session = typeof SessionManager !== 'undefined' && SessionManager.sessions
+            ? SessionManager.sessions[sessionId] : null;
+        return !!(session && session.isPersistentCandidate === true && session.connected !== true);
     },
 
     /*
@@ -924,8 +944,36 @@ const TerminalManager = {
         }
     },
 
-    // The server accepted the attach: this socket now holds a tmux client.
-    noteViewAttached(sessionId) {
+    /*
+     * The server accepted the attach: this socket now holds a tmux client.
+     * `registered` is the size the server holds it at (view_size); it can be
+     * another attach's, see the race below.
+     */
+    noteViewAttached(sessionId, registered) {
+        const state = this.views[sessionId];
+        if (state !== 'attaching' && state !== 'attached'
+                && this.displayedViews()[sessionId] !== true) {
+            /*
+             * A WITHDRAWN attach: the pane was hidden while this attach was in
+             * flight, and detachViews has already sent its view_detach. The
+             * server runs every event in its own greenlet, so that detach can
+             * land before this attach registers -- a no-op that leaves a client
+             * for a pane nobody shows -- or after it, leaving none. Marking the
+             * view attached here, as this used to, turned the second order into
+             * a dead pane: the page sure it was attached, tmux at `clients=0`,
+             * every resize answered "No view for this socket" (measured on a
+             * throwaway instance: a second session connected while the first
+             * one's attach was in flight, then a split -- 1 run in 6 on main).
+             * Detaching again settles both orders; a detach for a client the
+             * server does not hold is a no-op. A pane that is displayed again
+             * by now keeps the client instead: the server holds one this page
+             * wants, which is what an attach timed out and still waiting for
+             * its retry needs.
+             */
+            this.noteTimeline(sessionId, 'attach withdrawn');
+            window.socket.emit('view_detach', { session_ids: [sessionId] });
+            return;
+        }
         this.noteTimeline(sessionId, 'attached');
         if (this.viewAttachTimers[sessionId]) {
             clearTimeout(this.viewAttachTimers[sessionId]);
@@ -943,28 +991,44 @@ const TerminalManager = {
         delete this.pendingViewSizes[sessionId];
         const opened = this.viewAttachSizes[sessionId];
         delete this.viewAttachSizes[sessionId];
-        if (!pending) {
+        const wanted = pending || opened;
+        if (!wanted) {
             return;
         }
-        // A fit landed while the attach was in flight. Record it either way, so
-        // the dedupe in reportLocalFit knows what the server is holding.
-        this.reportedSizes[sessionId] = {
-            cols: pending.cols, rows: pending.rows, epoch: this.socketEpoch };
-        if (opened && opened.cols === pending.cols && opened.rows === pending.rows) {
+        if (pending) {
+            // A fit landed while the attach was in flight. Record it either
+            // way, so the dedupe in reportLocalFit knows what the server holds.
+            this.reportedSizes[sessionId] = {
+                cols: pending.cols, rows: pending.rows, epoch: this.socketEpoch };
+        }
+        /*
+         * What the server holds is what it says it registered, when it says.
+         * That is not always the size the last attach carried: when a pane is
+         * hidden and shown again while its first attach is still opening, both
+         * attaches are in flight, the server keeps the one that registers
+         * first and drops the other's size -- measured on a throwaway
+         * instance, a split made right after a connect left the pane's client
+         * at the full-width 167 columns while the pane fitted 83, the text
+         * drawn shrunk to fit.
+         */
+        const held = registered && registered.cols > 0 && registered.rows > 0
+            ? registered : opened;
+        if (held && held.cols === wanted.cols && held.rows === wanted.rows) {
             /*
-             * The attach already opened the PTY at exactly this size, so the
-             * resize would change nothing and cost a redraw: the server answers
-             * every ssh_resize with a tmux `refresh-client`, which is an exec
-             * channel at 432-472ms measured, on every pane of the session.
+             * The server already holds exactly this size, so the resize would
+             * change nothing and cost a redraw: the server answers every
+             * ssh_resize with a tmux `refresh-client`, which is an exec channel
+             * at 432-472ms measured, on every pane of the session.
              */
             return;
         }
         // Send it now, as one resize on the client that just opened.
-        this.reportedSizes[sessionId].at = Date.now();
+        this.reportedSizes[sessionId] = {
+            cols: wanted.cols, rows: wanted.rows, epoch: this.socketEpoch, at: Date.now() };
         window.socket.emit('ssh_resize', {
             session_id: sessionId,
-            rows: pending.rows,
-            cols: pending.cols,
+            rows: wanted.rows,
+            cols: wanted.cols,
         });
     },
 

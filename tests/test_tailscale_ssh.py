@@ -282,18 +282,22 @@ def test_tailscale_tmux_reconnect_survives_sshdeck_restart(app, monkeypatch):
         db.session.commit()
 
     calls = []
+    registered = {}
 
     def fake_create_ssh_connection(**kwargs):
         calls.append(kwargs)
-        return 'new-tailscale-session', None
-
-    def fake_get_session(session_id):
-        assert session_id == 'new-tailscale-session'
-        return {
+        session_id = kwargs.get('session_id') or 'new-tailscale-session'
+        registered[session_id] = {
             'connected': True,
             'auth_type': 'tailscale',
             'tmux_session_name': 'sshdeck_tiny_root',
         }
+        return session_id, None
+
+    def fake_get_session(session_id):
+        # The restart emptied the in-memory registry: nothing answers for the
+        # saved id until the reattach registers it.
+        return registered.get(session_id)
 
     monkeypatch.setattr(ssh_manager, 'create_ssh_connection', fake_create_ssh_connection)
     monkeypatch.setattr(ssh_manager, 'get_session', fake_get_session)
@@ -336,11 +340,17 @@ def test_tailscale_tmux_reconnect_survives_sshdeck_restart(app, monkeypatch):
     assert connected['auth_type'] == 'tailscale'
     assert calls[0]['auth_type'] == 'tailscale'
     assert calls[0]['reconnect_tmux_name'] == 'sshdeck_tiny_root'
+    # Owner ruling 2026-10-02: the offer keeps its identity across the
+    # restart -- the same id, the same row (it used to be re-inserted under a
+    # fresh id, which lost the pane and replaced the chip on every device).
+    assert calls[0]['session_id'] == 'old-tailscale-session'
+    assert connected['session_id'] == 'old-tailscale-session'
 
     with app.app_context():
-        restored = SSHSession.query.filter_by(session_id='new-tailscale-session').one()
-        assert restored.auth_type == 'tailscale'
-        assert SSHSession.query.filter_by(session_id='old-tailscale-session').first() is None
+        rows = SSHSession.query.filter_by(user_id=user_id).all()
+        assert [row.session_id for row in rows] == ['old-tailscale-session']
+        assert rows[0].auth_type == 'tailscale'
+        assert rows[0].connected is True
 
 
 def test_socket_rejects_invalid_startup_commands_before_connect(app, monkeypatch):

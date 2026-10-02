@@ -309,6 +309,63 @@ def test_a_second_attach_from_the_same_socket_resizes_instead(
     assert views_of()['sid-A']['rows'] == 40
 
 
+
+def test_two_attaches_in_flight_keep_the_first_and_report_its_size(
+        quiet_threads, no_tmux_commands, monkeypatch):
+    """A pane hidden and shown again while its first attach is still opening
+    sends a second attach for the same socket, at its new size. Both pass the
+    "already attached?" check before either registers; the session's control
+    lock lets the first finish, and the second finds it registered and drops
+    its own channel -- and its size. view_size reports the size that was KEPT,
+    which is what view_attached carries so the page can correct it (measured
+    on a throwaway instance: the pane's client stayed at 167 columns while the
+    pane fitted 83).
+    """
+    import threading
+
+    transport = install_session()
+    socketio = FakeSocketIO()
+    first_in_io = threading.Event()
+    release_first = threading.Event()
+    second_waits = threading.Event()
+    real_open = transport.open_session
+    real_lock = ssh_manager._get_tmux_control_lock
+
+    def open_first_slowly(timeout=None):
+        if not transport.channels:
+            first_in_io.set()
+            assert release_first.wait(5)
+        return real_open(timeout=timeout)
+
+    def watch_lock(session_id):
+        if threading.current_thread().name == 'second':
+            second_waits.set()
+        return real_lock(session_id)
+
+    transport.open_session = open_first_slowly
+    monkeypatch.setattr(ssh_manager, '_get_tmux_control_lock', watch_lock)
+    results = {}
+
+    def attach(name, cols):
+        results[name] = ssh_manager.open_session_view(
+            'sess-views', 'sid-A', cols, 48, socketio, object())
+
+    first = threading.Thread(target=attach, args=('first', 167), name='first')
+    second = threading.Thread(target=attach, args=('second', 83), name='second')
+    first.start()
+    assert first_in_io.wait(5)
+    second.start()
+    assert second_waits.wait(5)
+    release_first.set()
+    first.join(5)
+    second.join(5)
+
+    assert results == {'first': (True, None), 'second': (True, None)}
+    assert len(transport.channels) == 2
+    assert transport.channels[1].closed is True
+    assert ssh_manager.view_size('sess-views', 'sid-A') == {'cols': 167, 'rows': 48}
+    assert ssh_manager.view_size('sess-views', 'sid-B') is None
+
 def test_two_sockets_get_two_clients(quiet_threads, no_tmux_commands):
     transport = install_session()
     socketio = FakeSocketIO()

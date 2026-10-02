@@ -488,6 +488,31 @@ async function removeFocusSentinels(page) {
 // On a coarse/touch shell focusActivePane() returns at its isTouchShell() guard
 // before line 1523, so zero terminal focus calls is the only correct
 // expectation for every touch action. No exceptions.
+/*
+ * Settle every automatic reattach in flight as a refused one, exactly as
+ * app.js's ssh_error handler does, and return the offers it claimed in order.
+ * Nothing in this harness answers a claim, and an unanswered one would hold
+ * the queue and release it in the middle of some later section.
+ */
+async function drainAutoRestore(page) {
+    const claimed = [];
+    for (let i = 0; i < 20; i++) {
+        await page.waitForTimeout(10);
+        const settled = await page.evaluate(() => {
+            const requestId = SessionManager.autoRestoreRequestId;
+            if (!requestId) return null;
+            const intent = SessionManager.getReconnectIntent(requestId);
+            SessionManager.abandonReconnectRequest(requestId);
+            if (intent) SessionManager.setChipConnecting(intent.sessionId, false);
+            SessionManager.autoRestoreSettled(requestId);
+            return intent ? intent.sessionId : requestId;
+        });
+        if (!settled) break;
+        claimed.push(settled);
+    }
+    return claimed;
+}
+
 async function armSpies(page) {
     return await page.evaluate(() => {
         const TM = window.TerminalManager;
@@ -2744,8 +2769,15 @@ for (const [label, w, h] of [
             arrival.arrivedInPane, false);
         check(`§5 background-arrival (${selectedId}): arrival focuses nothing`,
             arrival.focusEvents, '');
-        check(`§5 background-arrival (${selectedId}): arrival emits nothing`,
-            await page.evaluate(() => window.__connectEmits.length), emitsBefore);
+        // OWNER RULING 2026-10-02 (restated from "arrival emits nothing"): key
+        // offers are reattached by themselves, one claim at a time -- and, as
+        // the rows above pin, without touching the selection, a pane or focus.
+        check(`§5 background-arrival (${selectedId}): arrival sends one reattach claim, for an arrived offer`,
+            await page.evaluate(n => window.__connectEmits.slice(n)
+                .map(e => (e.session_id || '').replace(/-\d$/, '-n')), emitsBefore),
+            [`bg-cand-${selectedId}-n`]);
+        check(`§5 background-arrival (${selectedId}): the queue claims the other only after it answers`,
+            await drainAutoRestore(page), [`bg-cand-${selectedId}-1`, `bg-cand-${selectedId}-2`]);
 
         // Pre-existing sessions are untouched, and each keeps its pane index.
         // The two arrivals are new ids, so they are excluded from the
@@ -3005,6 +3037,9 @@ for (const [label, w, h] of [
     const selLRecCancel = await selectChip(page, 'L');
     checkSelectionClean('§5 L-Reconnect declined selection', selLRecCancel, 'L');
     const beforeLRecCancel = await snapshotSessions(page);
+    // Counted from here: earlier sections legitimately send ssh_connect (the
+    // keyless background arrivals reattach by themselves since 2026-10-02).
+    const connectsBeforeLRecCancel = await page.evaluate(() => window.__connectEmits.length);
     await armSpies(page);
     await invokeAction(page, 'L', 'reconnect');
     // Was `window.__confirmCalls === 1`. The live arm now raises the in-app
@@ -3014,10 +3049,10 @@ for (const [label, w, h] of [
     const lRecCancelAnswered = await answerConfirm(page, false);
     await page.waitForTimeout(120);
     const lRecCancelSpies = await readSpies(page);
-    const lReconnectCancel = await page.evaluate(() => ({
-        emits: window.__connectEmits.length,
+    const lReconnectCancel = await page.evaluate((before) => ({
+        emits: window.__connectEmits.length - before,
         stillThere: !!SessionManager.sessions['L'],
-    }));
+    }), connectsBeforeLRecCancel);
     check('§5 L-Reconnect: the live arm asks for confirmation',
         lRecCancelAsked, true);
     check('§5 L-Reconnect: the dialog was answered by a real click',
@@ -3830,8 +3865,14 @@ for (const [label, w, h] of [
     check('§6 static: setActivePane calls the sole setter',
         /if \(!preserveLifecycleTarget\) \{\s*\n\s*this\.setLifecycleActionTarget\(sessionId\);/
             .test(paneBody), true);
+    // Counted inside removeSessionUI, which is what this row is about: other
+    // placements (an offer back in its remembered pane, a pane change from
+    // another page) preserve the selection too, and are not removal.
+    const removalStart = smSrc.indexOf('removeSessionUI(sessionId) {');
+    const removalBody = smSrc.slice(removalStart,
+        smSrc.indexOf('notifyActiveSessionChanged(', removalStart));
     check('§6 static: removal pane maintenance preserves lifecycle selection',
-        (smSrc.match(/setActivePane\([^;]+preserveLifecycleTarget: true/g) || []).length,
+        (removalBody.match(/setActivePane\([^;]+preserveLifecycleTarget: true/g) || []).length,
         3);
     const pendingStart = smSrc.indexOf('setPendingLifecycleTarget(requestId) {');
     const pendingEnd = smSrc.indexOf('dispatchLifecycleAction(action) {', pendingStart);

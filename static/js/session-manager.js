@@ -39,9 +39,13 @@ const SessionManager = {
     // item C). Ids not listed keep arrival order after the listed.
     tabOrder: [],
     tabDragging: false,
-    // pane_index values already sent to the server, so a restore or a
-    // no-op re-render never re-emits what the row already says.
-    sentPaneIndex: {},
+    // Every session's pane as its server row says it (see reportPane).
+    paneMemory: {},
+    // Keyless offers waiting to be reattached, one at a time
+    // (pumpAutoRestore), and the request of the one in flight.
+    autoRestoreQueue: [],
+    autoRestoreRequestId: null,
+    autoRestoreScheduled: false,
     // One-shot guard so a load applies the remembered session
     // selection at most once. Reset never needed within a document -- the
     // marker it gates is itself read-once per load.
@@ -64,6 +68,12 @@ const SessionManager = {
             window.socket.on('tab_order', (data) => {
                 this.tabOrder = Array.isArray(data && data.order) ? data.order.slice() : [];
                 this.applyTabOrder();
+            });
+            // Another page of this account moved a session between panes.
+            window.socket.on('session_pane_index', (data) => {
+                if (data && typeof data.session_id === 'string') {
+                    this.applyRemotePane(data.session_id, data.pane_index ?? null);
+                }
             });
             window.socket.on('tmux_orphans', (data) => this.renderTmuxOrphans(data));
             window.socket.on('tmux_orphan_killed', (data) => this.onTmuxOrphanKilled(data));
@@ -90,7 +100,7 @@ const SessionManager = {
              */
             window.socket.on('view_attached', (data) => {
                 if (!data || !data.session_id) return;
-                TerminalManager.noteViewAttached(data.session_id);
+                TerminalManager.noteViewAttached(data.session_id, data);
             });
             window.socket.on('view_closed', (data) => {
                 if (!data || !data.session_id) return;
@@ -183,7 +193,12 @@ const SessionManager = {
 
         console.log(`[RESTORE] Restoring SSH session: ${sessionId}`, data);
 
-        if (this.sessions[sessionId]) {
+        // A session this page already holds is skipped -- unless it holds it as
+        // an offer and the snapshot is live: the server reattaches under the
+        // same id, so this is that offer back, promoted in place by
+        // createSession below.
+        const known = this.sessions[sessionId];
+        if (known && (known.connected || data.connected !== true)) {
             console.log(`[RESTORE] Session ${sessionId} already exists, skipping restore`);
             return;
         }
@@ -269,7 +284,7 @@ const SessionManager = {
          * assignments drift on every reload.
          */
         const persistedPane = data.pane_index;
-        this.sentPaneIndex[restoredId] = Number.isInteger(persistedPane) ? persistedPane : null;
+        this.paneMemory[restoredId] = Number.isInteger(persistedPane) ? persistedPane : null;
         if (Number.isInteger(persistedPane) && persistedPane >= 0
             && persistedPane < this.paneAssignments.length
             && !this.paneAssignments[persistedPane]) {
@@ -279,6 +294,7 @@ const SessionManager = {
                 displaceOccupant: false,
             });
         } else if (!this.soloSessionId && !this.paneAssignments.some(Boolean)
+            && data.account_has_panes !== true
             && this.sessions[restoredId] && this.sessions[restoredId].connected
             && this.getFirstEmptyPaneIndex() !== -1) {
             // Nothing on screen yet (a first load after the upgrade, or no
@@ -286,10 +302,16 @@ const SessionManager = {
             // first pane so the workspace is never blank, and that becomes
             // its remembered pane from here on. Exactly one session per load
             // can land this way; every later one waits for an explicit act.
-            this.assignSessionToPane(restoredId, this.getFirstEmptyPaneIndex(), {
+            // Not when any row remembers a pane (account_has_panes): that
+            // pane belongs to a session still waiting to be reattached, and
+            // taking it is how the first auto-restored session used to end up
+            // in someone else's pane after a restart.
+            const firstPane = this.getFirstEmptyPaneIndex();
+            this.assignSessionToPane(restoredId, firstPane, {
                 declareInteraction: false,
                 displaceOccupant: false,
             });
+            this.reportPane(restoredId, firstPane);
         }
 
         /*
@@ -452,6 +474,7 @@ const SessionManager = {
          * so the user-driven Reconnect path still has something to reattach to.
          * A record that already describes a candidate is genuinely nothing new.
          */
+        this.paneMemory[session_id] = Number.isInteger(data.pane_index) ? data.pane_index : null;
         const existing = this.sessions[session_id];
         if (existing) {
             if (existing.connected || !existing.isPersistentCandidate) {
@@ -533,11 +556,13 @@ const SessionManager = {
         this.createSessionTab(session_id, host, username);
         this.updateSessionStatus(session_id, 'disconnected');
 
-        // Deliberately NOT assigned to a pane. A candidate is an offer, not a
-        // session: putting it in a pane made every arrival evict the previous
-        // one (assignSessionToPane parks the current holder and takes over), and
-        // on a phone -- layout 1, so one pane -- that meant only the last of N
-        // candidates stayed visible. The list below holds all of them instead.
+        // An offer goes back to the pane its row remembers when this layout has
+        // it and nothing holds it -- never by evicting (the old
+        // assignSessionToPane route parked the holder, and on a one-pane phone
+        // only the last of N offers stayed visible). Holding the pane keeps the
+        // live session restored first from taking it, and the reattach, which
+        // keeps this id, lands right here.
+        this.placeRemembered(session_id);
         this.renderReconnectList();
 
         console.log(`[PERSISTENT] Offering tmux session: ${host}:${port} (${session_id})`);
@@ -576,6 +601,9 @@ const SessionManager = {
 
     createSession(sessionData, pending) {
         const { session_id, host, port, username, display_name } = sessionData;
+        if (this.sessions[session_id]) {
+            return this.promoteSession(sessionData, pending);
+        }
 
         const terminalId = `terminal-${session_id}`;
         const terminalContainer = document.createElement('div');
@@ -583,43 +611,7 @@ const SessionManager = {
         terminalContainer.className = 'terminal-wrapper unassigned';
         document.getElementById('terminalsContainer').appendChild(terminalContainer);
 
-        TerminalManager.createTerminal(session_id);
-        TerminalManager.attachTerminal(session_id, terminalId);
-        TerminalManager.setupInputHandler(session_id, (data) => {
-            if (window.socket) {
-                // Filter out Device Attributes responses (ESC[c sequences only).
-                // Bare-pattern regexes were removed because they corrupt legitimate input.
-                data = data.replace(/\x1b\[[?>]?[0-9;]*c/g, '');
-                if (data) {
-                    /*
-                     * The completion: xterm's own onData is the MOST used
-                     * write path -- every character typed directly into the
-                     * terminal -- and it was bypassing the funnel. A desktop
-                     * wheel scroll with tmux `mouse on` enters copy mode exactly
-                     * as a touch swipe does, and tmux then DISCARDS every byte
-                     * written to the attached client's channel (measured), so
-                     * typing into the terminal after scrolling back was silently
-                     * eaten. The funnel carries the leave_scroll advisory and
-                     * reconciles the local viewport afterwards.
-                     *
-                     * GUARDED, not reordered: this file loads at index.html:1694
-                     * and app.js (which defines window.emitTerminalInput) at
-                     * 1704, so the function does not exist while this file is
-                     * parsed. It always exists by the time this CALLBACK runs, but
-                     * the fallback keeps a keystroke from being lost if that ever
-                     * stops being true -- losing bytes is the defect being fixed.
-                     */
-                    if (typeof window.emitTerminalInput === 'function') {
-                        window.emitTerminalInput(session_id, data);
-                    } else {
-                        window.socket.emit('ssh_input', {
-                            session_id: session_id,
-                            data: data
-                        });
-                    }
-                }
-            }
-        });
+        this.buildTerminal(session_id, terminalId);
 
         const sessionBar = document.getElementById('sessionBar');
         if (sessionBar) {
@@ -682,6 +674,94 @@ const SessionManager = {
         this.hideReconnectOverlay(session_id);
 
         return session_id;
+    },
+
+    /*
+     * The xterm for a session, built into its wrapper and wired to the socket.
+     * Shared by createSession and by promoteSession for an offer that never had
+     * a terminal.
+     */
+    buildTerminal(session_id, terminalId) {
+        TerminalManager.createTerminal(session_id);
+        TerminalManager.attachTerminal(session_id, terminalId);
+        TerminalManager.setupInputHandler(session_id, (data) => {
+            if (window.socket) {
+                // Filter out Device Attributes responses (ESC[c sequences only).
+                // Bare-pattern regexes were removed because they corrupt legitimate input.
+                data = data.replace(/\x1b\[[?>]?[0-9;]*c/g, '');
+                if (data) {
+                    /*
+                     * The completion: xterm's own onData is the MOST used
+                     * write path -- every character typed directly into the
+                     * terminal -- and it was bypassing the funnel. A desktop
+                     * wheel scroll with tmux `mouse on` enters copy mode exactly
+                     * as a touch swipe does, and tmux then DISCARDS every byte
+                     * written to the attached client's channel (measured), so
+                     * typing into the terminal after scrolling back was silently
+                     * eaten. The funnel carries the leave_scroll advisory and
+                     * reconciles the local viewport afterwards.
+                     *
+                     * GUARDED, not reordered: this file loads at index.html:1694
+                     * and app.js (which defines window.emitTerminalInput) at
+                     * 1704, so the function does not exist while this file is
+                     * parsed. It always exists by the time this CALLBACK runs, but
+                     * the fallback keeps a keystroke from being lost if that ever
+                     * stops being true -- losing bytes is the defect being fixed.
+                     */
+                    if (typeof window.emitTerminalInput === 'function') {
+                        window.emitTerminalInput(session_id, data);
+                    } else {
+                        window.socket.emit('ssh_input', {
+                            session_id: session_id,
+                            data: data
+                        });
+                    }
+                }
+            }
+        });
+    },
+
+    /*
+     * A KNOWN SESSION COMES BACK LIVE UNDER ITS OWN ID.
+     *
+     * The server reattaches a saved session under the id it always had
+     * (socket_events.handle_ssh_connect), so a connect -- this page's own, or
+     * another device's announced here -- can name a session this page already
+     * holds as an offer. That record is promoted where it stands: the same chip,
+     * the same pane, the same wrapper, and a terminal built into it if the offer
+     * never had one. A second record under the same id would duplicate the chip
+     * and the wrapper. Measured before (2026-10-02): every reattach after a
+     * restart arrived under a new id, its chip was replaced and its pane lost.
+     */
+    promoteSession(sessionData, pending) {
+        const sessionId = sessionData.session_id;
+        const session = this.sessions[sessionId];
+        if (!(TerminalManager.sessionTerminals[sessionId] || []).length) {
+            this.buildTerminal(sessionId, session.terminalId);
+        }
+        Object.assign(session, {
+            host: sessionData.host ?? session.host,
+            port: sessionData.port ?? session.port,
+            username: sessionData.username ?? session.username,
+            isPersistentCandidate: false,
+            displayName: sessionData.display_name || (pending && pending.displayName)
+                || session.displayName || null,
+            viaJump: sessionData.via_jump || null,
+            useTmux: sessionData.use_tmux || false,
+            tmuxSessionName: sessionData.tmux_session_name || session.tmuxSessionName || null,
+            keyId: sessionData.key_id || (pending && pending.keyId) || session.keyId || null,
+            authType: sessionData.auth_type || (pending && pending.authType)
+                || session.authType || 'password',
+            jumpHostId: (pending && pending.jumpHostId) || session.jumpHostId || null,
+            legacyTmuxLocale: sessionData.legacy_tmux_locale ?? null,
+        });
+        this.updateSessionStatus(sessionId, 'connected');
+        const pane = this.paneAssignments.indexOf(sessionId);
+        if (pane !== -1) {
+            this.renderPane(pane);
+        }
+        TerminalManager.syncViews();
+        return sessionId;
     },
 
     createSessionTab(sessionId, host, username) {
@@ -1393,7 +1473,7 @@ const SessionManager = {
         if (this.soloSessionId === sessionId) {
             this.soloSessionId = null;
         }
-        delete this.sentPaneIndex[sessionId];
+        delete this.paneMemory[sessionId];
         const wasCandidate = this.sessions[sessionId].isPersistentCandidate;
         const wasSendable = this.isSendableSession(this.sessions[sessionId]);
         delete this.sessions[sessionId];
@@ -1576,7 +1656,7 @@ const SessionManager = {
      *     can cancel it explicitly.
      */
     beginReconnectIntent(sessionId, { ownsModal = false,
-        retireOnSuccess = true } = {}) {
+        retireOnSuccess = true, automatic = false } = {}) {
         const session = this.sessions[sessionId];
         if (!session) return null;
         if (this.reconnectingSessions && this.reconnectingSessions[sessionId]) {
@@ -1606,6 +1686,8 @@ const SessionManager = {
             // left exactly as it shipped: it has never retired its old chip, and
             // changing that is an owner decision, not a side effect of this fix.
             retireOnSuccess: retireOnSuccess === true,
+            // The background restore, not the user (maybeAutoRestore).
+            automatic: automatic === true,
         };
         this.reconnectIntents[requestId] = intent;
         this.reconnectingSessions = this.reconnectingSessions || {};
@@ -4034,6 +4116,14 @@ const SessionManager = {
         for (let i = 0; i < layout; i++) {
             this.paneAssignments[i] = previousAssignments[i] || null;
         }
+        // A layout is this device's view of the split, never a change to it:
+        // nothing is reported, and a pane that comes back into view gets back
+        // the session that remembers it.
+        this.paneAssignments.forEach((held, index) => {
+            if (!held) {
+                this.paneAssignments[index] = this.rememberedOwner(index);
+            }
+        });
         this.soloSessionId = null;
         this.renderWorkspace();
         if (this.activePaneIndex >= layout) {
@@ -4041,7 +4131,6 @@ const SessionManager = {
         }
         this.setActivePane(this.activePaneIndex);
         this.saveLayoutPreference();
-        this.persistPaneIndexes();
     },
 
     /*
@@ -4098,28 +4187,125 @@ const SessionManager = {
         this.updateSplitControls();
     },
 
-    // The row remembers its pane (owner ruling: pane_index lives on
-    // the server so every device restores the same split). Only changes are
-    // sent; a restore seeds sentPaneIndex from the row it came from.
-    persistPaneIndexes() {
-        if (!window.socket || typeof window.socket.emit !== 'function') {
+    /*
+     * PANE MEMORY: where each session sits, as its server row says.
+     *
+     * `paneMemory` mirrors every row's pane_index -- restores, offers, replies
+     * and other pages' changes write it -- and paneAssignments is THIS page's
+     * projection of it onto its own layout: a remembered pane the layout lacks,
+     * or one already held, is simply not shown here. Only a user's act on this
+     * page reports a change (reportPane); a placement this page could not make
+     * is never sent back. Sending it back is how a one-pane page used to erase
+     * the desktop's second pane (measured 2026-10-02: a fresh one-pane page
+     * rewrote a session's pane 1 to 0).
+     */
+    reportPane(sessionId, value) {
+        const known = Object.prototype.hasOwnProperty.call(this.paneMemory, sessionId)
+            ? this.paneMemory[sessionId] : null;
+        if (known === value) {
             return;
         }
-        Object.keys(this.sessions).forEach(sessionId => {
-            const index = this.paneAssignments.indexOf(sessionId);
-            const value = index === -1 ? null : index;
-            // A session never reported is "no pane" on the server already.
-            const previous = Object.prototype.hasOwnProperty.call(this.sentPaneIndex, sessionId)
-                ? this.sentPaneIndex[sessionId] : null;
-            if (previous === value) {
-                return;
-            }
-            this.sentPaneIndex[sessionId] = value;
+        this.paneMemory[sessionId] = value;
+        if (window.socket && typeof window.socket.emit === 'function') {
             window.socket.emit('session_pane_index', {
                 session_id: sessionId, pane_index: value,
             });
-        });
+        }
     },
+
+    // The session that remembers this pane and is not placed yet, if any.
+    rememberedOwner(paneIndex) {
+        return Object.keys(this.sessions).find(sessionId =>
+            this.paneMemory[sessionId] === paneIndex
+            && !this.paneAssignments.includes(sessionId)) || null;
+    },
+
+    // Put a session in the pane it remembers, if this layout has that pane and
+    // it is free. Placement only: nothing is reported, nothing is evicted, and
+    // the view moves only when that pane is the one already active.
+    placeRemembered(sessionId) {
+        const pane = this.paneMemory[sessionId];
+        if (!this.sessions[sessionId] || !Number.isInteger(pane) || pane < 0
+            || pane >= this.paneAssignments.length || this.paneAssignments[pane]
+            || this.paneAssignments.includes(sessionId)) {
+            return false;
+        }
+        this.paneAssignments[pane] = sessionId;
+        this.renderPane(pane);
+        if (!this.soloSessionId && pane === this.activePaneIndex) {
+            this.setActivePane(pane, { declareInteraction: false, preserveLifecycleTarget: true });
+        }
+        return true;
+    },
+
+    /*
+     * Another page of this account moved a session (owner ruling 2026-10-02:
+     * the split follows on every open page at once). The server is the truth,
+     * so the session goes where it says on this layout -- out of whatever pane
+     * held it here, into the named one if this layout has it, displacing what
+     * this page showed there -- and nothing is echoed back.
+     */
+    applyRemotePane(sessionId, paneIndex) {
+        this.paneMemory[sessionId] = Number.isInteger(paneIndex) ? paneIndex : null;
+        if (!this.sessions[sessionId]) {
+            return;
+        }
+        const current = this.paneAssignments.indexOf(sessionId);
+        const target = Number.isInteger(paneIndex) && paneIndex >= 0
+            && paneIndex < this.paneAssignments.length ? paneIndex : -1;
+        if (current === target) {
+            return;
+        }
+        const touched = [];
+        if (current !== -1) {
+            this.paneAssignments[current] = null;
+            touched.push(current);
+        }
+        if (target !== -1) {
+            const occupant = this.paneAssignments[target];
+            const wrapper = occupant && this.sessions[occupant]
+                ? document.getElementById(this.sessions[occupant].terminalId) : null;
+            if (wrapper) {
+                wrapper.classList.add('unassigned');
+            }
+            this.paneAssignments[target] = sessionId;
+            touched.push(target);
+        }
+        touched.forEach(index => this.renderPane(index));
+        if (!this.soloSessionId && touched.includes(this.activePaneIndex)) {
+            this.setActivePane(this.activePaneIndex,
+                { declareInteraction: false, preserveLifecycleTarget: true });
+        } else {
+            TerminalManager.syncViews();
+        }
+    },
+
+    /*
+     * Where a session reattached under its own id is shown. It already holds
+     * its chip, and its pane when this page placed the offer there; otherwise
+     * it goes to the pane it remembers when free. A background reattach stops
+     * there. The user's own reconnect also brings it into view: its pane is
+     * activated, or it is shown solo when it has none here.
+     */
+    placeReconnected(sessionId, { automatic = false, pane = null } = {}) {
+        if (Number.isInteger(pane)) {
+            this.paneMemory[sessionId] = pane;
+        }
+        if (this.paneAssignments.indexOf(sessionId) === -1) {
+            this.placeRemembered(sessionId);
+        }
+        if (automatic) {
+            TerminalManager.syncViews();
+            return;
+        }
+        const index = this.paneAssignments.indexOf(sessionId);
+        if (index !== -1) {
+            this.setActivePane(index);
+        } else {
+            this.setSolo(sessionId);
+        }
+    },
+
     gridClassName() {
         const base = `terminal-grid split-${this.layout}`;
         return this.layoutVariant === 'default'
@@ -4273,6 +4459,7 @@ const SessionManager = {
         }
 
         const clearedIndices = [];
+        let displaced = null;
         this.paneAssignments = this.paneAssignments.map((existing, index) => {
             if (existing === sessionId) {
                 clearedIndices.push(index);
@@ -4319,6 +4506,7 @@ const SessionManager = {
                 return;
             }
             const oldSessionId = this.paneAssignments[paneIndex];
+            displaced = oldSessionId;
             const oldSession = this.sessions[oldSessionId];
             if (oldSession) {
                 const wrapper = document.getElementById(oldSession.terminalId);
@@ -4339,7 +4527,14 @@ const SessionManager = {
                 this.renderPane(index);
             }
         });
-        this.persistPaneIndexes();
+        if (declareInteraction) {
+            // A user's act, so the rows follow: the session remembers this pane,
+            // and the one it took the pane from remembers none.
+            if (displaced) {
+                this.reportPane(displaced, null);
+            }
+            this.reportPane(sessionId, paneIndex);
+        }
         /*
          * A RESTORE is not the user turning to a pane.
          *
@@ -4864,62 +5059,100 @@ const SessionManager = {
      * The pair "arrival emitted" + "the user's own control emitted nothing" is
      * the signature of the stolen intent, not of two separate bugs.
      *
-     * THREE CONDITIONS, each closing one of those rows:
+     * OWNER RULING 2026-10-02: after a restart every keyless offer comes back by
+     * itself. The stolen intent above is avoided by ORDER, not by doing less:
+     * offers are reattached ONE AT A TIME through a queue (pumpAutoRestore), the
+     * session the user was on first; an offer the user is already reconnecting
+     * is skipped, because that intent is the user's; and a password offer never
+     * enters the queue, having no stored secret. Each reattach keeps the
+     * session's id (the server updates its row in place), so it lands in the
+     * chip and the pane it already holds, and it is marked `automatic`, so it
+     * never moves the user's view, closes the connection form or advances the
+     * pane queue.
      *
-     *  1. CREDENTIALLESS ONLY. A password candidate has no stored secret, so it
-     *     was always user-driven and stays so.
-     *
-     *  2. ONLY THE SESSION THE USER WAS ACTUALLY ON. `activeSessionId` in
-     *     localStorage is the app's own record of the last active pane
-     *     (saveActiveSessionPreference / readActiveSessionPreference). Restoring
-     *     Exactly that one keeps the feature the user asked for -- come back and
-     *     the session you were using is live -- while the rest stay OFFERS the
-     *     user can accept. With no stored preference nothing is restored
-     *     automatically, which is the honest default: the app does not know which
-     *     session the user meant.
-     *
-     *  3. NEVER WHILE A USER-DRIVEN RECONNECT IS IN FLIGHT. If an intent is
-     *     already active, the user is mid-action and the automatic path must not
-     *     compete for the lifecycle it would win by arriving first.
-     *
-     * Deferred with setTimeout exactly as before, so the caller finishes building
-     * the candidate record before any emit reads it.
+     * Deferred with setTimeout so the caller finishes building the candidate
+     * record before any emit reads it.
      */
     maybeAutoRestore(sessionId, authType) {
         if (authType !== 'key' && authType !== 'tailscale') return false;
         const session = this.sessions[sessionId];
         if (!session || !session.isPersistentCandidate) return false;
-        // (3) the user owns the lifecycle whenever they are already using it
-        if (this.activeReconnectIntent()) return false;
-        // (2) exactly the session the user was on, never the whole list
-        const preferred = this.readActiveSessionPreference();
-        if (!preferred || preferred !== sessionId) return false;
-        setTimeout(() => {
-            // Re-check on the deferred turn: an offer can be accepted by hand, or
-            // another reconnect can start, between scheduling and running.
-            const still = this.sessions[sessionId];
-            if (!still || !still.isPersistentCandidate) return;
-            if (this.activeReconnectIntent()) return;
-            this.directReconnect(sessionId);
-        }, 0);
+        // Without a valid tmux name the reattach is refused with an error toast
+        // (refuseReconnectWithoutTmuxIdentity): right for a press, wrong for a
+        // page that is merely loading. Such an offer waits for the user.
+        if (!this.hasValidTmuxIdentity(session)) return false;
+        if (!this.autoRestoreQueue.includes(sessionId)) {
+            if (this.readActiveSessionPreference() === sessionId) {
+                this.autoRestoreQueue.unshift(sessionId);
+            } else {
+                this.autoRestoreQueue.push(sessionId);
+            }
+        }
+        this.pumpAutoRestore();
         return true;
     },
 
-    directReconnect(sessionId) {
+    pumpAutoRestore() {
+        if (this.autoRestoreRequestId || this.autoRestoreScheduled) return;
+        this.autoRestoreScheduled = true;
+        setTimeout(() => {
+            this.autoRestoreScheduled = false;
+            while (!this.autoRestoreRequestId && this.autoRestoreQueue.length) {
+                const sessionId = this.autoRestoreQueue.shift();
+                const session = this.sessions[sessionId];
+                if (!session || !session.isPersistentCandidate) continue;
+                if (this.reconnectingSessions && this.reconnectingSessions[sessionId]) continue;
+                const intent = this.directReconnect(sessionId, { automatic: true });
+                if (intent) {
+                    this.autoRestoreRequestId = intent.requestId;
+                }
+            }
+        }, 0);
+    },
+
+    // The reattach in flight answered (ssh_connected or ssh_error): the next one.
+    autoRestoreSettled(requestId) {
+        if (!requestId || requestId !== this.autoRestoreRequestId) return;
+        this.autoRestoreRequestId = null;
+        this.pumpAutoRestore();
+    },
+
+    // The socket went away, so the reply can no longer come. Its claim is
+    // dropped too: the offers re-sent on reconnect must be able to queue again.
+    abortAutoRestore() {
+        if (this.autoRestoreRequestId) {
+            this.cancelReconnectIntent(this.autoRestoreRequestId);
+            this.clearPendingConnection(this.autoRestoreRequestId);
+        }
+        this.autoRestoreRequestId = null;
+        this.autoRestoreQueue = [];
+    },
+
+    // An offer being reattached shows it on its own chip: the dot turns to the
+    // connecting state instead of a second "Connecting" chip appearing beside it.
+    setChipConnecting(sessionId, on) {
+        const session = this.sessions[sessionId];
+        const dot = document.getElementById(`tab-${sessionId}`)?.querySelector('.status-dot');
+        if (!dot || !session || session.connected) return;
+        dot.classList.toggle('connecting', on);
+        dot.classList.toggle('disconnected', !on);
+    },
+
+    directReconnect(sessionId, { automatic = false } = {}) {
         const session = this.sessions[sessionId];
         if (!session || !session.isPersistentCandidate) {
-            return;
+            return null;
         }
-        if (!window.socket) return;
+        if (!window.socket) return null;
         // Same boundary as the credential route: no valid tmux name, no
         // reconnect. Emitting use_tmux:true with a null name would create a NEW
         // tmux session -- Reset's outcome under Reconnect's label.
-        if (!this.refuseReconnectWithoutTmuxIdentity(sessionId)) return;
+        if (!this.refuseReconnectWithoutTmuxIdentity(sessionId)) return null;
         // One lifecycle owner: a second press while this reconnect is in flight
         // must not emit a second ssh_connect for the same tmux session. The
         // registry refuses to arm a second intent for a claimed session.
-        const intent = this.beginReconnectIntent(sessionId);
-        if (!intent) return;
+        const intent = this.beginReconnectIntent(sessionId, { automatic });
+        if (!intent) return null;
 
         const host = session.host;
         const port = session.port;
@@ -4949,7 +5182,10 @@ const SessionManager = {
             // source session id", so the direct route must carry it exactly as
             // the credential-form route does (app.js).
             session_id: sessionId,
-            display_name: displayName
+            display_name: displayName,
+            // An offer's claim: refused (already_live) when another page has
+            // already reattached it, instead of opening a duplicate transport.
+            from_candidate: true
         };
         if (authType === 'key') {
             connectionData.key_id = keyId;
@@ -4958,16 +5194,21 @@ const SessionManager = {
         // round trip, so no global handoff is needed: ssh_connected consumes it
         // by client_request_id (takePendingConnection), which is the same
         // correlation the intent registry uses.
-        this.createPendingConnection(intent.requestId, host, username, port, {
-            authType, keyId: keyId || null,
+        // The record only: the offer's own chip shows the connecting state.
+        this.pendingConnections[intent.requestId] = {
+            host, username, port, authType, keyId: keyId || null,
             jumpHostId: session.jumpHostId || null, displayName,
-        });
+        };
+        this.setChipConnecting(sessionId, true);
         window.socket.emit('ssh_connect', connectionData);
-        const label = this.getDisplayLabel(sessionId, username, host);
-        const message = window.i18n
-            ? i18n.t('session.reconnecting').replace('{label}', label)
-            : `Reconnecting to ${label}...`;
-        window.showNotification(message, 'info');
+        if (!automatic) {
+            const label = this.getDisplayLabel(sessionId, username, host);
+            const message = window.i18n
+                ? i18n.t('session.reconnecting').replace('{label}', label)
+                : `Reconnecting to ${label}...`;
+            window.showNotification(message, 'info');
+        }
+        return intent;
     },
 
     // Set ONLY by requestResetSession's modal path; { sessionId, requestId,
@@ -5514,6 +5755,7 @@ const SessionManager = {
                 next[index] = sessionId;
             }
         });
+        const before = this.paneAssignments.slice();
         this.paneAssignments = next;
         this.soloSessionId = null;
         this.renderWorkspace();
@@ -5522,6 +5764,17 @@ const SessionManager = {
         }
         this.setActivePane(this.activePaneIndex);
         this.saveLayoutPreference();
-        this.persistPaneIndexes();
+        // The user chose every slot: a chosen session remembers its slot, and
+        // one this page showed in a pane but no longer places remembers none.
+        next.forEach((sessionId, index) => {
+            if (sessionId) {
+                this.reportPane(sessionId, index);
+            }
+        });
+        before.forEach(sessionId => {
+            if (sessionId && !next.includes(sessionId)) {
+                this.reportPane(sessionId, null);
+            }
+        });
     }
 };

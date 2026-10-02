@@ -1139,6 +1139,7 @@
          */
         SessionManager.abortPendingCandidateRetirements();
         SessionManager.abortInFlightCandidateResets();
+        SessionManager.abortAutoRestore();
     });
 
     socket.on('ssh_connected', (data) => {
@@ -1151,17 +1152,24 @@
             ? SessionManager.takePendingConnection(data.client_request_id)
             : null;
 
-        if (connectTimer) {
-            clearInterval(connectTimer);
-            connectTimer = null;
-            const connectBtn = document.getElementById('connectBtn');
-            if (connectBtn) {
-                connectBtn.textContent = 'Connect';
+        // A reattach of a session this page holds. A background one (the
+        // automatic restore) is not the form's connect: the form's spinner and
+        // request belong to whatever the user is doing there.
+        const reconnectIntent = SessionManager.getReconnectIntent(data.client_request_id);
+        const automatic = !!(reconnectIntent && reconnectIntent.automatic);
+        if (!automatic) {
+            if (connectTimer) {
+                clearInterval(connectTimer);
+                connectTimer = null;
+                const connectBtn = document.getElementById('connectBtn');
+                if (connectBtn) {
+                    connectBtn.textContent = 'Connect';
+                }
             }
-        }
 
-        setConnectLoading(false);
-        currentConnectRequestId = null;
+            setConnectLoading(false);
+            currentConnectRequestId = null;
+        }
 
         /*
          * W14 item 8: complete a pending save-as-profile on SUCCESS.
@@ -1228,6 +1236,10 @@
          * changes nothing -- so responses arriving in any order cannot retire or
          * adopt the wrong candidate.
          */
+        // The pane a reconnected session held before a NEW id replaced it (a
+        // reattach under its own id keeps it), read before the old is retired.
+        const previousPane = reconnectIntent && reconnectIntent.sessionId !== sessionId
+            ? SessionManager.paneAssignments.indexOf(reconnectIntent.sessionId) : -1;
         SessionManager.completePendingReconnect(sessionId, data.client_request_id);
         /*
          * A CANDIDATE Reset completes here too, and only here.
@@ -1246,32 +1258,40 @@
          */
         SessionManager.completePendingReset(sessionId, data.client_request_id);
 
-        let targetPane = null;
-        if (data.client_request_id && pendingRequestPaneMap.has(data.client_request_id)) {
-            targetPane = pendingRequestPaneMap.get(data.client_request_id);
-            pendingRequestPaneMap.delete(data.client_request_id);
-        }
-        if (targetPane === null || targetPane === undefined) {
-            const emptyIndex = SessionManager.getFirstEmptyPaneIndex();
-            targetPane = emptyIndex !== -1 ? emptyIndex : null;
-        }
-        // No free pane: the new session is shown solo. It never evicts a
-        // pane's session.
-        if (targetPane === null) {
-            SessionManager.setSolo(sessionId);
+        if (reconnectIntent && reconnectIntent.sessionId === sessionId) {
+            // Reattached under its own id: it is already where it was -- its
+            // chip, and its pane if this page shows one for it.
+            SessionManager.placeReconnected(sessionId, { automatic, pane: data.pane_index });
         } else {
-            SessionManager.assignSessionToPane(sessionId, targetPane);
+            let targetPane = previousPane !== -1 ? previousPane : null;
+            if (data.client_request_id && pendingRequestPaneMap.has(data.client_request_id)) {
+                targetPane = pendingRequestPaneMap.get(data.client_request_id);
+                pendingRequestPaneMap.delete(data.client_request_id);
+            }
+            if (targetPane === null || targetPane === undefined) {
+                const emptyIndex = SessionManager.getFirstEmptyPaneIndex();
+                targetPane = emptyIndex !== -1 ? emptyIndex : null;
+            }
+            // No free pane: the new session is shown solo. It never evicts a
+            // pane's session.
+            if (targetPane === null) {
+                SessionManager.setSolo(sessionId);
+            } else {
+                SessionManager.assignSessionToPane(sessionId, targetPane);
+            }
         }
 
-        window.ModalManager.close(document.getElementById('connectionModal'));
-        processPaneQueue();
+        if (!automatic) {
+            window.ModalManager.close(document.getElementById('connectionModal'));
+            processPaneQueue();
 
-        const connMsg = data.via_jump
-            ? `Connected to ${data.username}@${data.host} via ${data.via_jump}`
-            : `Connected to ${data.username}@${data.host}`;
-        showNotification(connMsg, 'success');
+            const connMsg = data.via_jump
+                ? `Connected to ${data.username}@${data.host} via ${data.via_jump}`
+                : `Connected to ${data.username}@${data.host}`;
+            showNotification(connMsg, 'success');
 
-        ConnectionHistory.addConnection(data.host, data.port, data.username);
+            ConnectionHistory.addConnection(data.host, data.port, data.username);
+        }
 
         FileTransferManager.updateSessionSelects();
 
@@ -1279,6 +1299,7 @@
         // transport to time. Idempotent -- startLatencyPolling returns early if
         // the timer already exists.
         SessionManager.startLatencyPolling();
+        SessionManager.autoRestoreSettled(data.client_request_id);
     });
 
     // Mockup line 87: each chip's <small> reads "user · NN ms", and the
@@ -1315,18 +1336,32 @@
 
     socket.on('ssh_error', (data) => {
         console.error('SSH error:', data);
-        showNotification(`SSH Error: ${data.error}`, 'error');
-
-        if (connectTimer) {
-            clearInterval(connectTimer);
-            connectTimer = null;
-            const connectBtn = document.getElementById('connectBtn');
-            if (connectBtn) {
-                connectBtn.textContent = 'Connect';
-            }
+        const failedIntent = data.client_request_id
+            ? SessionManager.getReconnectIntent(data.client_request_id) : null;
+        const automatic = !!(failedIntent && failedIntent.automatic);
+        // already_live / in_flight: another page reattached this offer, or is
+        // doing so, and its announcement turns the chip live here. Nothing
+        // failed, so nothing is reported.
+        const superseded = data.code === 'already_live' || data.code === 'in_flight';
+        if (!superseded) {
+            showNotification(`SSH Error: ${data.error}`, 'error');
+        }
+        if (failedIntent) {
+            SessionManager.setChipConnecting(failedIntent.sessionId, false);
         }
 
-        setConnectLoading(false);
+        if (!automatic) {
+            if (connectTimer) {
+                clearInterval(connectTimer);
+                connectTimer = null;
+                const connectBtn = document.getElementById('connectBtn');
+                if (connectBtn) {
+                    connectBtn.textContent = 'Connect';
+                }
+            }
+
+            setConnectLoading(false);
+        }
         /*
          * `requestId` here is the LENIENT id, and it stays lenient ONLY for the
          * pending-chip and pane-map bookkeeping below: an old server that echoed
@@ -1383,6 +1418,7 @@
             // candidate itself was deliberately preserved through the attempt, so
             // the offer, its chip and its label are still there to try again.
             SessionManager.abandonResetRequest(data.client_request_id);
+            SessionManager.autoRestoreSettled(data.client_request_id);
         }
     });
 
@@ -4780,6 +4816,9 @@
                     // name that belongs to any other session rather than
                     // dropping it and connecting fresh under Reconnect's label.
                     connectionData.session_id = reconnectMeta.sessionId;
+                    if (reconnectMeta.fromCandidate) {
+                        connectionData.from_candidate = true;
+                    }
                 }
                 if (reconnectMeta.displayName) {
                     connectionData.display_name = reconnectMeta.displayName;
