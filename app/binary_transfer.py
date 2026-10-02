@@ -16,7 +16,8 @@ import io
 from . import sftp_handler
 import config
 
-def handle_binary_upload(session_id, filename, binary_data, remote_path, socketio_instance=None):
+def handle_binary_upload(session_id, filename, binary_data, remote_path, socketio_instance=None,
+                         to_sid=None):
     """
     Upload binary data directly to SFTP without base64 encoding.
 
@@ -26,6 +27,7 @@ def handle_binary_upload(session_id, filename, binary_data, remote_path, socketi
         binary_data (bytes): Raw binary file data
         remote_path (str): Target path on remote server
         socketio_instance: SocketIO instance for progress updates
+        to_sid (str): the requesting socket; the only recipient of them
 
     Returns:
         tuple: (success: bool, error: str or None)
@@ -56,24 +58,21 @@ def handle_binary_upload(session_id, filename, binary_data, remote_path, socketi
                     remote_file.write(chunk)
                     transferred += len(chunk)
 
-                    if socketio_instance:
-                        percent = int((transferred / total_size) * 100)
-                        socketio_instance.emit('file_progress', {
-                            'session_id': session_id,
-                            'type': 'upload',
-                            'filename': filename,
-                            'transferred': transferred,
-                            'total': total_size,
-                            'percent': percent
-                        })
+                    sftp_handler.emit_transfer_event(socketio_instance, to_sid, 'file_progress', {
+                        'session_id': session_id,
+                        'type': 'upload',
+                        'filename': filename,
+                        'transferred': transferred,
+                        'total': total_size,
+                        'percent': int((transferred / total_size) * 100)
+                    })
 
-            if socketio_instance:
-                socketio_instance.emit('file_complete', {
-                    'session_id': session_id,
-                    'type': 'upload',
-                    'filename': filename,
-                    'remote_path': safe_path
-                })
+            sftp_handler.emit_transfer_event(socketio_instance, to_sid, 'file_complete', {
+                'session_id': session_id,
+                'type': 'upload',
+                'filename': filename,
+                'remote_path': safe_path
+            })
 
         return True, None
 
@@ -86,7 +85,7 @@ def handle_binary_upload(session_id, filename, binary_data, remote_path, socketi
     except Exception as e:
         return False, str(e)
 
-def handle_binary_download(session_id, remote_path, socketio_instance=None):
+def handle_binary_download(session_id, remote_path, socketio_instance=None, to_sid=None):
     """
     Download file as binary data without base64 encoding.
 
@@ -94,6 +93,7 @@ def handle_binary_download(session_id, remote_path, socketio_instance=None):
         session_id (str): SSH session ID or connection ID (for Quick Connect)
         remote_path (str): Path to file on remote server
         socketio_instance: SocketIO instance for progress updates
+        to_sid (str): the requesting socket; the only recipient of them
 
     Returns:
         tuple: (binary_data: bytes or None, error: str or None)
@@ -129,16 +129,14 @@ def handle_binary_download(session_id, remote_path, socketio_instance=None):
                     binary_data.write(chunk)
                     transferred += len(chunk)
 
-                    if socketio_instance:
-                        percent = int((transferred / file_size) * 100)
-                        socketio_instance.emit('file_progress', {
-                            'session_id': session_id,
-                            'type': 'download',
-                            'filename': filename,
-                            'transferred': transferred,
-                            'total': file_size,
-                            'percent': percent
-                        })
+                    sftp_handler.emit_transfer_event(socketio_instance, to_sid, 'file_progress', {
+                        'session_id': session_id,
+                        'type': 'download',
+                        'filename': filename,
+                        'transferred': transferred,
+                        'total': file_size,
+                        'percent': int((transferred / file_size) * 100)
+                    })
 
             return binary_data.getvalue(), None
 

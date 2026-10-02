@@ -122,7 +122,9 @@ const ProfileManager = {
         glyph.setAttribute('class', 'icon');
         glyph.setAttribute('aria-hidden', 'true');
         const use = document.createElementNS(SVG_NS, 'use');
-        use.setAttribute('href', '/static/icons/icons.svg?v=2#icon-square-terminal');
+        const sprite = document.querySelector('meta[name="icon-sprite"]')?.content
+            || '/static/icons/icons.svg';
+        use.setAttribute('href', `${sprite}#icon-square-terminal`);
         glyph.appendChild(use);
         icon.appendChild(glyph);
         empty.appendChild(icon);

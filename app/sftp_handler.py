@@ -347,7 +347,20 @@ def create_directory(session_id, remote_path):
     except Exception as e:
         return False, str(e)
 
-def upload_file_chunked(session_id, filename, chunks, remote_path, socketio_instance=None):
+def emit_transfer_event(socketio_instance, to_sid, event, payload):
+    """Send a transfer's progress or completion to the ONE socket that asked.
+
+    These events used to be emitted with no recipient, which Flask-SocketIO
+    broadcasts to every connected client: each signed-in user received every
+    transfer's file name, remote path and session id, and the file manager
+    counted another user's uploads against its own batch. No socket, no event.
+    """
+    if socketio_instance is not None and to_sid:
+        socketio_instance.emit(event, payload, to=to_sid)
+
+
+def upload_file_chunked(session_id, filename, chunks, remote_path, socketio_instance=None,
+                        to_sid=None):
     """Upload file from chunks sent by client."""
     try:
         safe_path = sanitize_path(remote_path)
@@ -363,24 +376,21 @@ def upload_file_chunked(session_id, filename, chunks, remote_path, socketio_inst
                     remote_file.write(chunk)
                     transferred += len(chunk)
 
-                    if socketio_instance:
-                        percent = int((transferred / total_size) * 100)
-                        socketio_instance.emit('file_progress', {
-                            'session_id': session_id,
-                            'type': 'upload',
-                            'filename': filename,
-                            'transferred': transferred,
-                            'total': total_size,
-                            'percent': percent
-                        })
+                    emit_transfer_event(socketio_instance, to_sid, 'file_progress', {
+                        'session_id': session_id,
+                        'type': 'upload',
+                        'filename': filename,
+                        'transferred': transferred,
+                        'total': total_size,
+                        'percent': int((transferred / total_size) * 100)
+                    })
 
-        if socketio_instance:
-            socketio_instance.emit('file_complete', {
-                'session_id': session_id,
-                'type': 'upload',
-                'filename': filename,
-                'remote_path': safe_path
-            })
+        emit_transfer_event(socketio_instance, to_sid, 'file_complete', {
+            'session_id': session_id,
+            'type': 'upload',
+            'filename': filename,
+            'remote_path': safe_path
+        })
 
         return True, None
     except SFTPOperationError as e:
@@ -388,7 +398,7 @@ def upload_file_chunked(session_id, filename, chunks, remote_path, socketio_inst
     except Exception as e:
         return False, str(e)
 
-def download_file_chunked(session_id, remote_path, socketio_instance=None):
+def download_file_chunked(session_id, remote_path, socketio_instance=None, to_sid=None):
     """Download file and send in chunks to client."""
     try:
         safe_path = sanitize_path(remote_path)
@@ -415,16 +425,14 @@ def download_file_chunked(session_id, remote_path, socketio_instance=None):
                     chunks.append(chunk)
                     transferred += len(chunk)
 
-                    if socketio_instance:
-                        percent = int((transferred / file_size) * 100)
-                        socketio_instance.emit('file_progress', {
-                            'session_id': session_id,
-                            'type': 'download',
-                            'filename': filename,
-                            'transferred': transferred,
-                            'total': file_size,
-                            'percent': percent
-                        })
+                    emit_transfer_event(socketio_instance, to_sid, 'file_progress', {
+                        'session_id': session_id,
+                        'type': 'download',
+                        'filename': filename,
+                        'transferred': transferred,
+                        'total': file_size,
+                        'percent': int((transferred / file_size) * 100)
+                    })
 
         return {'filename': filename, 'chunks': chunks, 'size': file_size}, None
     except SFTPOperationError as e:

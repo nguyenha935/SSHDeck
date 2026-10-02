@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg">
 <!--
-  SSHDeck icon sprite - 52 Lucide glyphs (ISC).
+  SSHDeck icon sprite - 62 Lucide glyphs (ISC).
   Source: lucide-static 1.28.0, sprite.svg, subset to icons actually referenced
   by this app plus every icon in the authoritative v5 mockup
   (docs/spec/sshdeck-ui-plan-v5.html), deduplicated.
@@ -13,7 +13,7 @@
   Required presentation (set in style.css): fill:none; stroke:currentColor;
   stroke-width:2; stroke-linecap:round; stroke-linejoin:round.
 
-  Usage: <svg class="icon" aria-hidden="true"><use href=".../static/icons/icons.svg?v=2#icon-NAME"/></svg>
+  Usage: <svg class="icon" aria-hidden="true"><use href=".../static/icons/icons.svg?v=3#icon-NAME"/></svg>
 -->
   <defs>
     <symbol id="icon-arrow-down" viewBox="0 0 24 24">
@@ -93,6 +93,11 @@
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
       <path d="m7 10 5 5 5-5" />
     </symbol>
+    <symbol id="icon-ellipsis-vertical" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="12" cy="5" r="1" />
+      <circle cx="12" cy="19" r="1" />
+    </symbol>
     <symbol id="icon-eye" viewBox="0 0 24 24">
       <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
       <circle cx="12" cy="12" r="3" />
@@ -107,11 +112,71 @@
       <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" />
       <path d="M14 2v5a1 1 0 0 0 1 1h5" />
     </symbol>
+    <symbol id="icon-file-archive" viewBox="0 0 24 24">
+      <path d="M13.659 22H18a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v11.5" />
+      <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+      <path d="M8 12v-1" />
+      <path d="M8 18v-2" />
+      <path d="M8 7V6" />
+      <circle cx="8" cy="20" r="2" />
+    </symbol>
+    <symbol id="icon-file-code" viewBox="0 0 24 24">
+      <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" />
+      <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+      <path d="M10 12.5 8 15l2 2.5" />
+      <path d="m14 12.5 2 2.5-2 2.5" />
+    </symbol>
     <symbol id="icon-file-down" viewBox="0 0 24 24">
       <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" />
       <path d="M14 2v5a1 1 0 0 0 1 1h5" />
       <path d="M12 18v-6" />
       <path d="m9 15 3 3 3-3" />
+    </symbol>
+    <symbol id="icon-file-image" viewBox="0 0 24 24">
+      <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" />
+      <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+      <circle cx="10" cy="12" r="2" />
+      <path d="m20 17-1.296-1.296a2.41 2.41 0 0 0-3.408 0L9 22" />
+    </symbol>
+    <symbol id="icon-file-key" viewBox="0 0 24 24">
+      <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+      <path d="M4 12v6" />
+      <path d="M4 14h2" />
+      <path d="M9.65 22H18a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v4" />
+      <circle cx="4" cy="20" r="2" />
+    </symbol>
+    <symbol id="icon-file-music" viewBox="0 0 24 24">
+      <path d="M11.65 22H18a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v10.35" />
+      <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+      <path d="M8 20v-7l3 1.474" />
+      <circle cx="6" cy="20" r="2" />
+    </symbol>
+    <symbol id="icon-file-spreadsheet" viewBox="0 0 24 24">
+      <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" />
+      <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+      <path d="M8 13h2" />
+      <path d="M14 13h2" />
+      <path d="M8 17h2" />
+      <path d="M14 17h2" />
+    </symbol>
+    <symbol id="icon-file-terminal" viewBox="0 0 24 24">
+      <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" />
+      <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+      <path d="m8 16 2-2-2-2" />
+      <path d="M12 18h4" />
+    </symbol>
+    <symbol id="icon-file-text" viewBox="0 0 24 24">
+      <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" />
+      <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+      <path d="M10 9H8" />
+      <path d="M16 13H8" />
+      <path d="M16 17H8" />
+    </symbol>
+    <symbol id="icon-file-video-camera" viewBox="0 0 24 24">
+      <path d="M4 12V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2" />
+      <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+      <path d="m10 17.843 3.033-1.755a.64.64 0 0 1 .967.56v4.704a.65.65 0 0 1-.967.56L10 20.157" />
+      <rect width="7" height="6" x="3" y="16" rx="1" />
     </symbol>
     <symbol id="icon-folder" viewBox="0 0 24 24">
       <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />

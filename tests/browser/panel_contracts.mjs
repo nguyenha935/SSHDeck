@@ -1805,7 +1805,8 @@ const SEED_INLINE = `
 
     // A directory response can match legacy and inline pane state at once. Only
     // the surface that is actually open should rebuild DOM; hidden panes cache
-    // the state and paint it when their own surface opens.
+    // the state. (The Files panel paints that cache when it opens; the modal
+    // resets its panes on open.)
     const hiddenRender = await page.evaluate(() => {
         const fm = window.sftpFileManager;
         fm.panes.left.type = 'ssh';
@@ -1831,7 +1832,6 @@ const SEED_INLINE = `
             rendered,
             hiddenPath: fm.panes.left.path,
             hiddenFiles: fm.panes.left.files.length,
-            refreshOnOpen: fm.panes.left.refreshOnOpen,
             inlinePath: fm.panes.inline.path,
         };
     });
@@ -1841,8 +1841,13 @@ const SEED_INLINE = `
         hiddenRender.rendered.join(','), 'inline');
     check('§7 hidden matching pane still caches fresh state',
         `${hiddenRender.hiddenPath}|${hiddenRender.hiddenFiles}`, '/fresh|1');
-    check('§7 hidden matching pane marks one refresh for its next open',
-        hiddenRender.refreshOnOpen, true);
+    /*
+     * Restated 2026-10-02 (files panel, batch 1): a row here asserted
+     * `refreshOnOpen === true` on the hidden pane. Nothing ever read that flag
+     * (main included) -- openInline paints its cache unconditionally and the
+     * modal's open() resets its panes -- so the flag was removed. The contract
+     * stays pinned by the two rows around this one.
+     */
     check('§7 visible inline pane receives the same fresh response',
         hiddenRender.inlinePath, '/fresh');
 
@@ -1971,8 +1976,16 @@ for (const vp of [
         };
     });
     check(`§7 ${vp.label}: the panel opens`, box.display, 'flex');
+    /*
+     * Not collapsed, and in the layout of its tier. Restated 2026-10-02 (files
+     * panel, batch 1): this expected 'flex' everywhere, which stood for "not
+     * display:none" while the pane had one layout. The phone sheet now lays the
+     * pane out as a grid that puts the actions in the head row
+     * (sftp-file-manager.css, [INF-FILES-1]); the overlay tier keeps its flex
+     * column. The height row below still measures that it is really there.
+     */
     check(`§7 ${vp.label}: the pane inside it is not collapsed`,
-        box.paneDisplay, 'flex');
+        box.paneDisplay, vp.overlay ? 'flex' : 'grid');
     atLeast(`§7 ${vp.label}: the pane has real height`, box.paneHeight, 120, 'px');
     check(`§7 ${vp.label}: it is an overlay, not a grid track`,
         box.position, 'absolute');

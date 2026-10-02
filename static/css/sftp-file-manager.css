@@ -2201,6 +2201,78 @@
     display: flex;
 }
 
+/* The panel's one pane takes the panel's whole height. .fm-pane had neither
+   flex nor min-height, so in this column it was sized by its content and the
+   list ended where its rows did: measured at 834x1194, an 837px pane in a
+   1019px panel; at 844x390, a list one row (44px) tall. */
+.sftp-panel > .fm-pane {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+/* Each row's actions control (renderPane): rename, delete, download, preview
+   and copy path, which were reachable only by right-click. */
+#fmInlinePane .fm-file-item {
+    grid-template-columns: 24px minmax(0, 1fr) auto auto;
+}
+
+/* 28px: under a two-line row's own 29px of text, so a mouse row keeps its
+   height (a 32px control grew every row by 3px). Touch raises it to 44px. */
+.fm-row-more {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm, 5px);
+    background: transparent;
+    color: var(--tw-muted, var(--text-muted));
+    cursor: pointer;
+}
+
+.fm-row-more .icon {
+    width: 16px;
+    height: 16px;
+}
+
+@media (hover: hover) {
+    .fm-row-more:hover {
+        background: var(--tw-hover, var(--bg-hover));
+        color: var(--tw-text, var(--text-primary));
+    }
+}
+
+.fm-row-more:active {
+    background: var(--tw-hover, var(--bg-hover));
+    color: var(--tw-text, var(--text-primary));
+}
+
+.fm-row-more:focus-visible {
+    outline: 2px solid var(--tw-accent, var(--accent-primary));
+    outline-offset: 1px;
+}
+
+/* Touch: the control and the panel's navigation meet the 44px floor. The row
+   gives back the height its padding took, so a row stays one touch target
+   tall instead of growing to 60px. */
+@media (pointer: coarse) {
+    .fm-row-more {
+        width: 44px;
+        height: 44px;
+    }
+
+    #fmInlinePane .fm-file-item {
+        padding-block: 1px;
+    }
+
+    #fmInlinePane .fm-nav-btn {
+        min-width: 44px;
+        min-height: 44px;
+    }
+}
+
 /* Close button inside the fm-panel-head uses the icon-button pattern. */
 .sftp-inline-close {
     display: inline-flex;
@@ -2271,9 +2343,15 @@
     }
 }
 
-/* Coarse ≤767px (phone): bottom sheet, spec line 356.
-   Mirrors .notepad-panel bottom-sheet rules in style.css. */
-@media (pointer: coarse) and (hover: none) and (max-width: 767px) {
+/* ≤767px (phone, or any window that narrow): bottom sheet, spec line 356.
+   Mirrors .notepad-panel bottom-sheet rules in style.css, including their
+   pointer-agnostic width term: gated on `pointer: coarse` alone, a desktop
+   window dragged under 768px kept the panel in grid column 2, whose track is
+   0px at that width, so the panel was drawn outside the workspace.
+   `height`, not only max-height: a sheet sized by its content was a sliver
+   while loading or on a short folder (owner ruling 2026-10-02: a fixed 54%,
+   and the Expand view for more). */
+@media (max-width: 767px) {
     .sftp-panel.sftp-panel-open {
         grid-column: 1;
         grid-row: auto;
@@ -2285,6 +2363,7 @@
         z-index: 7;
         width: auto;
         min-width: 0;
+        height: 54%;
         max-height: 54%;
         border-left: none;
         border-top: 1px solid var(--tw-border, var(--border-color));
@@ -2301,5 +2380,125 @@
     /* Status footer wastes height on phone; hide it. */
     .sftp-panel .fm-pane-footer {
         display: none;
+    }
+}
+
+/* Compact Files panel: phone sheet and short landscape. [INF-FILES-1]
+   The mockup (line 182) stacks head, actions row and list. In a 54% sheet
+   that left 178px of list at 390x844 (2.5 rows), and in the 254px landscape
+   overlay at 844x390 it left one row. The actions move up into the head row,
+   between the title and the close button -- placed by the grid, so the
+   markup and every id stay as they are -- and the upload label is visually
+   hidden (the button keeps its aria-label). */
+@media (max-width: 767px), (pointer: coarse) and (hover: none) and (max-height: 500px) {
+    #fmInlinePane {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        grid-template-rows: auto auto minmax(0, 1fr) auto;
+    }
+
+    #fmInlinePane > .fm-panel-head {
+        display: contents;
+    }
+
+    #fmInlinePane > .fm-panel-head > div {
+        grid-area: 1 / 1;
+        align-self: center;
+        padding: 4px 0 4px 9px;
+    }
+
+    #fmInlinePane > .fm-file-actions {
+        grid-area: 1 / 2;
+        align-items: center;
+        padding: 4px;
+    }
+
+    #fmInlinePane > .fm-panel-head > .sftp-inline-close {
+        grid-area: 1 / 3;
+        align-self: center;
+        margin-right: 4px;
+    }
+
+    #fmInlinePane > .fm-pane-nav {
+        grid-area: 2 / 1 / 3 / -1;
+        padding: 2px 6px;
+        border-top: 1px solid var(--tw-border, var(--border-color));
+    }
+
+    #fmInlinePane > .fm-file-list {
+        grid-area: 3 / 1 / 4 / -1;
+        min-height: 0;
+        /* 16px of whitespace around the rows was a third of a row here. */
+        padding-block: 2px;
+    }
+
+    #fmInlinePane > .fm-pane-footer {
+        grid-area: 4 / 1 / 5 / -1;
+    }
+
+    #fmInlinePane .fm-upload-btn {
+        flex: 0 0 auto;
+        width: 44px;
+        padding-inline: 0;
+    }
+
+    #fmInlinePane .fm-upload-btn > span {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+}
+
+/* Short landscape: the status footer goes too, as it already does on a phone. */
+@media (pointer: coarse) and (hover: none) and (max-height: 500px) {
+    .sftp-panel .fm-pane-footer {
+        display: none;
+    }
+}
+
+/* The Files panel's menu at phone width is a bottom sheet (showContextMenu).
+   Two classes, so it outranks the `.fm-context-menu { display:none !important }`
+   that keeps the transfer modal on its own action sheet at this width. */
+@media (max-width: 767px) {
+    .fm-context-menu.fm-context-sheet {
+        display: block !important;
+        top: auto;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        min-width: 0;
+        max-height: 80%;
+        overflow-y: auto;
+        padding: 8px 8px max(8px, env(safe-area-inset-bottom));
+        border-radius: 16px 16px 0 0;
+        animation: none;
+    }
+
+    .fm-context-sheet .fm-context-item {
+        min-height: 48px;
+        font-size: 15px;
+        border-radius: 8px;
+    }
+
+    .fm-context-sheet .fm-context-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 44px;
+        padding: 0 16px 6px;
+        margin-bottom: 6px;
+        border-bottom: 1px solid var(--border-color);
+        font-size: 13px;
+        color: var(--text-secondary);
+    }
+
+    .fm-context-title span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 }

@@ -63,7 +63,7 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # v70: owner ruling -- the phone-landscape 40px band, the dock slots
         # for the strip and the brand, and the 40px --shell-strip are gone; phone
         # landscape takes the >=768 touch tier (the min-height: 501px terms dropped).
-        "filename='css/style.css'": '?v=73',
+        "filename='css/style.css'": '?v=74',
         # v30: W13-A4 legacy tmux locale chip badge (.chip-locale-warning).
         # v31: W14 item 2 bounded menus + item 6 broadcast picker.
         # v35: the drag-armed chip's lift was a black rgba() literal -- the one
@@ -81,7 +81,7 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # New: the --tw-* bridge moved out of deck.css so every page
         # can read the ten themes, not just the shell.
         "filename='css/deck-tokens.css'": '?v=1',
-        "filename='css/sftp-file-manager.css'": '?v=7',
+        "filename='css/sftp-file-manager.css'": '?v=8',
         # v36: W13-A4 session.legacyTmuxLocale / .legacyTmuxLocaleShort keys
         # in all six locales.
         # v37: W13-B5 session.reconnectRetainBody key in all six locales.
@@ -109,12 +109,12 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # auth.logoutLosesSessions in all six locales.
         "filename='js/i18n.js'": '?v=52',
         "filename='js/command-workspace.js'": '?v=4',
-        "filename='js/profile-manager.js'": '?v=4',
+        "filename='js/profile-manager.js'": '?v=5',
         "filename='js/jump-host-manager.js'": '?v=4',
         # v11: S17 FIX 4d completion -- the insert-at-prompt write goes through
         # window.emitTerminalInput, so it is no longer swallowed by tmux copy
         # mode. v10 is RELEASED, so the pin must move or the fix ships invisibly.
-        "filename='js/command-library.js'": '?v=11',
+        "filename='js/command-library.js'": '?v=12',
         "filename='js/command-set-manager.js'": '?v=2',
         # v45: W13-B5 reconnect payload carries the SOURCE session id so the
         # server can bind the reattach claim to the exact saved row.
@@ -238,7 +238,7 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # handshake is in flight (the server refused it and the page went on
         # reporting itself connected).
         "filename='js/app.js'": '?v=100',
-        "filename='js/sftp-file-manager.js'": '?v=16',
+        "filename='js/sftp-file-manager.js'": '?v=17',
         # Extracted from a 146-line inline <script> in index.html. Inline script
         # cannot be cache-busted at all -- it ships inside the cached HTML -- so
         # pinning it is the point of moving it out.
@@ -658,7 +658,7 @@ def test_profile_launcher_stylesheet_uses_current_cache_version():
     # test_merged_profile_frontend_assets_have_distinct_cache_versions above --
     # this file states the style.css pin TWICE, so a raise must move both or one
     # row goes red while the other passes.
-    assert "filename='css/style.css') }}?v=73" in template
+    assert "filename='css/style.css') }}?v=74" in template
 
 
 def test_retired_upload_modules_are_fully_gone():

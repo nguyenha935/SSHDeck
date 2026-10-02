@@ -2060,7 +2060,8 @@ def handle_upload_file(data, current_user=None):
             filename=filename,
             chunks=chunks,
             remote_path=remote_path,
-            socketio_instance=socketio
+            socketio_instance=socketio,
+            to_sid=request.sid
         )
 
         if error:
@@ -2093,7 +2094,8 @@ def handle_download_file(data, current_user=None):
         result, error = sftp_handler.download_file_chunked(
             session_id=session_id,
             remote_path=remote_path,
-            socketio_instance=socketio
+            socketio_instance=socketio,
+            to_sid=request.sid
         )
 
         if error:
@@ -2862,7 +2864,8 @@ def handle_upload_file_binary(data, current_user=None):
             filename=filename,
             binary_data=file_data,
             remote_path=remote_path,
-            socketio_instance=socketio
+            socketio_instance=socketio,
+            to_sid=request.sid
         )
 
         if error:
@@ -2896,7 +2899,8 @@ def handle_download_file_binary(data, current_user=None):
         binary_data, error = binary_transfer.handle_binary_download(
             session_id=session_id,
             remote_path=remote_path,
-            socketio_instance=socketio
+            socketio_instance=socketio,
+            to_sid=request.sid
         )
 
         if error:

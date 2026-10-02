@@ -485,6 +485,8 @@ window.__i18n.es = {
         'fm.ctx.preview': 'Vista previa',
         'fm.ctx.download': 'Descargar',
         'fm.ctx.transferToOther': 'Transferir al otro panel',
+        'fm.ctx.copyPath': 'Copiar ruta',
+        'fm.moreActions': 'Más acciones',
         'fm.downloading': 'Descargando',
         'fm.downloadingFolder': 'Descargando carpeta',
         'fm.uploadingFiles': 'Subiendo archivos',

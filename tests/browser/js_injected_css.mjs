@@ -190,7 +190,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // must move.
         // v68: Phase 2 -- the resync/conflict popover rules are
         // gone with the sheets themselves.
-        ['css/style.css', 73],
+        ['css/style.css', 74],
         // deck.css owns the v5 shell and is edited every bucket, so it needs the
         // same pin contract as style.css. It was missing from this table -- which
         // is exactly the "no pin at all" failure described above.
@@ -200,7 +200,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v38: drag-shift / drag-settle transitions for the chip drag.
         ['css/deck.css', 41],
         ['css/deck-tokens.css', 1],
-        ['css/sftp-file-manager.css', 7],
+        ['css/sftp-file-manager.css', 8],
         // v28: owner batch (terminal-manager untouched by P1 D1-D3,
         // re-pinned to the served version).
         // v29: P1 steps S1/S3-S8 -- strict scrollback sanitizer, wheel sign fix,
@@ -412,11 +412,11 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v97: a column change, a grow included, stays covered until the
         // repaint has been quiet (omp replays its transcript after a settle).
         ['js/terminal-manager.js', 100],
-        ['js/sftp-file-manager.js', 16],
+        ['js/sftp-file-manager.js', 17],
         // v11: S17 FIX 4d completion -- the insert-at-prompt write routes through
         // window.emitTerminalInput, so it is no longer swallowed by tmux copy
         // mode. v10 is RELEASED, so the pin must move or the fix ships invisibly.
-        ['js/command-library.js', 11],
+        ['js/command-library.js', 12],
         // v36: W13-A4 session.legacyTmuxLocale keys in all six locales.
         // v37: W13-B5 session.reconnectRetainBody key in all six locales.
         // v39: W14 items 5/6 keys in all six locales.

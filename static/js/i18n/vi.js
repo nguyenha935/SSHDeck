@@ -400,6 +400,8 @@ window.__i18n.vi = {
         'fm.ctx.preview': 'Xem trước',
         'fm.ctx.download': 'Tải xuống',
         'fm.ctx.transferToOther': 'Truyền sang khung khác',
+        'fm.ctx.copyPath': 'Chép đường dẫn',
+        'fm.moreActions': 'Thao tác khác',
         'fm.downloading': 'Đang tải xuống',
         'fm.downloadingFolder': 'Đang tải xuống thư mục',
         'fm.uploadingFiles': 'Đang tải lên các tệp',

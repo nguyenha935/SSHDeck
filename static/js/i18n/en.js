@@ -403,6 +403,8 @@ window.__i18n.en = {
         'fm.ctx.preview': 'Preview',
         'fm.ctx.download': 'Download',
         'fm.ctx.transferToOther': 'Transfer to other pane',
+        'fm.ctx.copyPath': 'Copy path',
+        'fm.moreActions': 'More actions',
         'fm.downloading': 'Downloading',
         'fm.downloadingFolder': 'Downloading folder',
         'fm.uploadingFiles': 'Uploading files',

@@ -7175,6 +7175,17 @@ body.keyboard-open.notepad-focused .notepad-panel {
         grid-template-columns: minmax(0, 1fr) 0px !important;
     }
 
+    /* The Files panel is an overlay here too (sftp-file-manager.css), so it
+       must not hold the track either. The rule that sizes the track for it
+       on desktop (above, 0,5,0) also matches touch widths and outranked the
+       0,3,0 resets; this is the same selector, so it wins on order.
+       Measured before: at 834x1194 the terminal lost an empty 340px track
+       under the overlay -- 65 columns instead of the pane's 110, and so for
+       every device watching the session. */
+    .workspace:has(.sftp-panel.sftp-panel-open):not(:has(.command-rail.aux-open)) {
+        grid-template-columns: minmax(0, 1fr) 0px !important;
+    }
+
     .command-rail {
         grid-column: 1;
         grid-row: auto;

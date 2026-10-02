@@ -2,6 +2,43 @@
 class SFTPFileManager {
     constructor() {
         this.socket = window.socket;
+        /*
+         * The sprite every icon this class builds points into, from the page's
+         * `icon-sprite` meta (templates/index.html). It used to be a literal
+         * root-relative path with its ?v= pin, repeated in 44 strings: under a
+         * sub-path deployment each of those icons 404'd, and adding a symbol
+         * meant raising the pin in every one of them.
+         */
+        this.sprite = document.querySelector('meta[name="icon-sprite"]')?.content
+            || '/static/icons/icons.svg';
+
+        /*
+         * A file row's glyph, by extension (getFileIcon). Every value is a
+         * symbol in static/icons/icons.svg; tests/test_icon_references.py
+         * holds the table to that. The table this replaces returned Ant Design
+         * names -- code, picture, key, file-text -- which the move to Lucide
+         * renamed in markup but not here, so source files, images, keys and
+         * documents all drew an empty box.
+         */
+        this.fileIcons = new Map(Object.entries({
+            'file-code': ['c', 'cc', 'conf', 'cpp', 'cs', 'css', 'go', 'h', 'hpp',
+                'htm', 'html', 'ini', 'java', 'js', 'json', 'jsx', 'kt', 'less',
+                'lua', 'mjs', 'php', 'py', 'rb', 'rs', 'sass', 'scss', 'sql',
+                'swift', 'toml', 'ts', 'tsx', 'vue', 'xml', 'yaml', 'yml'],
+            'file-terminal': ['bash', 'bat', 'cmd', 'fish', 'ps1', 'sh', 'zsh'],
+            'file-image': ['avif', 'bmp', 'gif', 'heic', 'ico', 'jpeg', 'jpg',
+                'png', 'svg', 'tif', 'tiff', 'webp'],
+            'file-video-camera': ['avi', 'm4v', 'mkv', 'mov', 'mp4', 'mpeg',
+                'webm', 'wmv'],
+            'file-music': ['aac', 'flac', 'm4a', 'mp3', 'ogg', 'opus', 'wav'],
+            'file-archive': ['7z', 'bz2', 'deb', 'gz', 'iso', 'jar', 'rar', 'rpm',
+                'tar', 'tgz', 'xz', 'zip', 'zst'],
+            'file-spreadsheet': ['csv', 'ods', 'tsv', 'xls', 'xlsx'],
+            'file-key': ['cer', 'crt', 'der', 'key', 'p12', 'pem', 'pfx', 'pub'],
+            'file-text': ['doc', 'docx', 'log', 'md', 'odt', 'pdf', 'rst', 'rtf',
+                'txt'],
+            'lock': ['lock'],
+        }).flatMap(([icon, extensions]) => extensions.map(ext => [ext, icon])));
         this.modal = null;
         this.isOpen = false;
 
@@ -93,7 +130,6 @@ class SFTPFileManager {
             hostInfo: null,
             loading: false,
             loadingTimeout: null,
-            refreshOnOpen: false,
             /*
              * THE PATH THIS PANE LAST ASKED FOR — the correlation key for
              * directory_listing, which is otherwise applied on session id alone.
@@ -114,6 +150,13 @@ class SFTPFileManager {
              * whether anyone has asked for a specific directory yet.
              */
             pendingPath: null,
+            // Listed, so a reset forgets them with everything else: a $HOME or
+            // a row order kept from the host the pane showed before is wrong
+            // on the next one.
+            homePath: null,
+            displayOrder: null,
+            // A pane bound to a session but never listed (see bindInlineSession).
+            needsListing: false,
             error: null
         };
     }
@@ -134,7 +177,7 @@ class SFTPFileManager {
 
     spriteIcon(name, classes = '') {
         const className = ['icon', classes].filter(Boolean).join(' ');
-        return `<svg class="${className}" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-${name}"></use></svg>`;
+        return `<svg class="${className}" aria-hidden="true"><use href="${this.sprite}#icon-${name}"></use></svg>`;
     }
 
     init() {
@@ -143,8 +186,12 @@ class SFTPFileManager {
         this.setupKeyboardShortcuts();
 
         // Rebind inline SFTP pane when active SSH connection changes.
+        // The event names the new session `currentSessionId`
+        // (SessionManager.notifyActiveSessionChanged). This read `sessionId`,
+        // always undefined, and worked only through the getActiveSession()
+        // fallback in handleActiveSessionChanged.
         document.addEventListener('sshdeck:active-session-changed', (e) => {
-            this.handleActiveSessionChanged(e.detail?.sessionId);
+            this.handleActiveSessionChanged(e.detail?.currentSessionId);
         });
 
         /*
@@ -181,7 +228,7 @@ class SFTPFileManager {
                          It read "File Manager" — the name of the per-session
                          inline browser — so the two features shared one name and
                          neither said what it did. Owner ruling, Entry 40. -->
-                    <h2 id="fmModalTitle"><svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-arrow-right-left"></use></svg> <span data-i18n="fm.title">File Transfer</span></h2>
+                    <h2 id="fmModalTitle"><svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-arrow-right-left"></use></svg> <span data-i18n="fm.title">File Transfer</span></h2>
                     <span class="close" id="fmClose" aria-label="Close" data-i18n-aria-label="common.close">&times;</span>
                 </div>
                 <div class="modal-body">
@@ -189,28 +236,28 @@ class SFTPFileManager {
                     <div class="fm-toolbar">
                         <div class="fm-toolbar-left">
                             <button class="btn btn-secondary btn-sm" id="fmRefresh" data-i18n-title="fm.refresh">
-                                <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-refresh-cw"></use></svg>
+                                <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-refresh-cw"></use></svg>
                             </button>
                             <button class="btn btn-secondary btn-sm" id="fmNewFolder" data-i18n-title="fm.newFolder">
-                                <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-folder-plus"></use></svg>
+                                <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-folder-plus"></use></svg>
                                 <span class="btn-text" data-i18n="fm.newFolder">New Folder</span>
                             </button>
                         </div>
                         <div class="fm-toolbar-center">
                             <button class="btn btn-primary btn-sm" id="fmTransfer" data-i18n-title="fm.transfer">
-                                <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-arrow-right-left"></use></svg>
+                                <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-arrow-right-left"></use></svg>
                                 <span class="btn-text" data-i18n="fm.transfer">Transfer</span>
                             </button>
                         </div>
                         <div class="fm-toolbar-right">
                             <button class="btn btn-secondary btn-sm" id="fmDownload" data-i18n-title="fm.download">
-                                <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-download"></use></svg>
+                                <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-download"></use></svg>
                             </button>
                             <button class="btn btn-secondary btn-sm" id="fmRename" data-i18n-title="fm.rename">
-                                <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-pencil"></use></svg>
+                                <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-pencil"></use></svg>
                             </button>
                             <button class="btn btn-danger btn-sm" id="fmDelete" data-i18n-title="fm.delete">
-                                <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-trash-2"></use></svg>
+                                <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-trash-2"></use></svg>
                             </button>
                         </div>
                     </div>
@@ -228,13 +275,13 @@ class SFTPFileManager {
                                 role="tab" id="fmPaneTabLeft"
                                 aria-selected="true" aria-controls="fmLeftPane"
                                 tabindex="0">
-                            <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-folder"></use></svg> <span data-i18n="fm.sourcePane">Source</span>
+                            <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-folder"></use></svg> <span data-i18n="fm.sourcePane">Source</span>
                         </button>
                         <button class="fm-pane-tab" data-pane="right" type="button"
                                 role="tab" id="fmPaneTabRight"
                                 aria-selected="false" aria-controls="fmRightPane"
                                 tabindex="-1">
-                            <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-folder"></use></svg> <span data-i18n="fm.destinationPane">Destination</span>
+                            <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-folder"></use></svg> <span data-i18n="fm.destinationPane">Destination</span>
                         </button>
                     </div>
 
@@ -269,30 +316,30 @@ class SFTPFileManager {
                             </div>
                             <div class="fm-file-actions">
                                 <button class="btn btn-secondary fm-upload-btn" id="fmLeftUpload" data-i18n-title="fm.upload">
-                                    <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-upload"></use></svg>
+                                    <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-upload"></use></svg>
                                     <span data-i18n="fm.upload">Upload</span>
                                 </button>
                                 <button class="btn btn-secondary fm-icon-action" id="fmLeftNewFolder" data-i18n-title="fm.newFolder" data-i18n-aria-label="fm.newFolder" aria-label="New Folder">
-                                    <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-folder-plus"></use></svg>
+                                    <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-folder-plus"></use></svg>
                                 </button>
                             </div>
                             <div class="fm-pane-nav">
                                 <button class="fm-nav-btn" id="fmLeftUp" data-i18n-title="fm.goUp">
-                                    <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-arrow-up"></use></svg>
+                                    <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-arrow-up"></use></svg>
                                 </button>
                                 <button class="fm-nav-btn" id="fmLeftHome" data-i18n-title="fm.goHome">
-                                    <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-house"></use></svg>
+                                    <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-house"></use></svg>
                                 </button>
                                 <div class="fm-breadcrumb" id="fmLeftBreadcrumb">
                                     <input type="text" class="fm-path-input" id="fmLeftPath" value="/" placeholder="/path">
                                 </div>
                                 <button class="fm-nav-btn" id="fmLeftRefresh" data-i18n-title="fm.refresh">
-                                    <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-refresh-cw"></use></svg>
+                                    <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-refresh-cw"></use></svg>
                                 </button>
                             </div>
                             <div class="fm-file-list" id="fmLeftList">
                                 <div class="fm-empty">
-                                    <svg class="icon fm-empty-icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-folder-open"></use></svg>
+                                    <svg class="icon fm-empty-icon" aria-hidden="true"><use href="${this.sprite}#icon-folder-open"></use></svg>
                                     <div class="fm-empty-text" data-i18n="fm.selectSourceAbove">Select a source above</div>
                                 </div>
                             </div>
@@ -339,30 +386,30 @@ class SFTPFileManager {
                             </div>
                             <div class="fm-file-actions">
                                 <button class="btn btn-secondary fm-upload-btn" id="fmRightUpload" data-i18n-title="fm.upload">
-                                    <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-upload"></use></svg>
+                                    <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-upload"></use></svg>
                                     <span data-i18n="fm.upload">Upload</span>
                                 </button>
                                 <button class="btn btn-secondary fm-icon-action" id="fmRightNewFolder" data-i18n-title="fm.newFolder" data-i18n-aria-label="fm.newFolder" aria-label="New Folder">
-                                    <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-folder-plus"></use></svg>
+                                    <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-folder-plus"></use></svg>
                                 </button>
                             </div>
                             <div class="fm-pane-nav">
                                 <button class="fm-nav-btn" id="fmRightUp" data-i18n-title="fm.goUp">
-                                    <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-arrow-up"></use></svg>
+                                    <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-arrow-up"></use></svg>
                                 </button>
                                 <button class="fm-nav-btn" id="fmRightHome" data-i18n-title="fm.goHome">
-                                    <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-house"></use></svg>
+                                    <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-house"></use></svg>
                                 </button>
                                 <div class="fm-breadcrumb" id="fmRightBreadcrumb">
                                     <input type="text" class="fm-path-input" id="fmRightPath" value="/" placeholder="/path">
                                 </div>
                                 <button class="fm-nav-btn" id="fmRightRefresh" data-i18n-title="fm.refresh">
-                                    <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-refresh-cw"></use></svg>
+                                    <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-refresh-cw"></use></svg>
                                 </button>
                             </div>
                             <div class="fm-file-list" id="fmRightList">
                                 <div class="fm-empty">
-                                    <svg class="icon fm-empty-icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-folder-open"></use></svg>
+                                    <svg class="icon fm-empty-icon" aria-hidden="true"><use href="${this.sprite}#icon-folder-open"></use></svg>
                                     <!-- Destination end: the empty state must not tell the
                                          user to select a SOURCE here either. -->
                                     <div class="fm-empty-text" data-i18n="fm.selectDestinationAbove">Select a destination above</div>
@@ -382,17 +429,17 @@ class SFTPFileManager {
                     <div class="fm-queue" id="fmQueue">
                         <div class="fm-queue-header" id="fmQueueHeader">
                             <div class="fm-queue-title">
-                                <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-refresh-cw"></use></svg>
+                                <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-refresh-cw"></use></svg>
                                 <span data-i18n="fm.transfers">Transfers</span> <span class="fm-queue-badge" id="fmQueueBadge">0</span>
                             </div>
-                            <svg class="icon fm-queue-toggle" id="fmQueueToggle" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-chevron-down"></use></svg>
+                            <svg class="icon fm-queue-toggle" id="fmQueueToggle" aria-hidden="true"><use href="${this.sprite}#icon-chevron-down"></use></svg>
                         </div>
                         <div class="fm-queue-list" id="fmQueueList"></div>
                     </div>
 
                     <!-- Mobile Upload Button -->
                     <div class="fm-mobile-upload" id="fmMobileUpload">
-                        <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-cloud-upload"></use></svg>
+                        <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-cloud-upload"></use></svg>
                         <!-- data-i18n, not a literal: applyTranslations() re-walks
                              the DOM on every language change, so the key is what
                              makes this row follow a runtime locale switch. The
@@ -408,31 +455,31 @@ class SFTPFileManager {
                      action sheet from a Vietnamese screen (Entry 40). -->
                 <div class="fm-action-sheet" id="fmActionSheet">
                     <div class="fm-action-sheet-item" data-action="open">
-                        <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-folder-open"></use></svg>
+                        <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-folder-open"></use></svg>
                         <span data-i18n="fm.open">Open</span>
                     </div>
                     <div class="fm-action-sheet-item" data-action="download">
-                        <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-download"></use></svg>
+                        <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-download"></use></svg>
                         <span data-i18n="fm.download">Download</span>
                     </div>
                     <div class="fm-action-sheet-item" data-action="transfer">
-                        <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-arrow-right-left"></use></svg>
+                        <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-arrow-right-left"></use></svg>
                         <span data-i18n="fm.transfer">Transfer</span>
                     </div>
                     <div class="fm-action-sheet-item" data-action="rename">
-                        <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-pencil"></use></svg>
+                        <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-pencil"></use></svg>
                         <span data-i18n="fm.rename">Rename</span>
                     </div>
                     <div class="fm-action-sheet-item" data-action="newfolder">
-                        <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-folder-plus"></use></svg>
+                        <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-folder-plus"></use></svg>
                         <span data-i18n="fm.newFolder">New Folder</span>
                     </div>
                     <div class="fm-action-sheet-item danger" data-action="delete">
-                        <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-trash-2"></use></svg>
+                        <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-trash-2"></use></svg>
                         <span data-i18n="fm.delete">Delete</span>
                     </div>
                     <div class="fm-action-sheet-cancel fm-action-sheet-item" data-action="cancel">
-                        <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-x"></use></svg>
+                        <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-x"></use></svg>
                         <span data-i18n="common.cancel">Cancel</span>
                     </div>
                 </div>
@@ -510,7 +557,7 @@ class SFTPFileManager {
                             <div class="input-wrapper with-toggle">
                                 <input type="password" id="fmQcPassword" class="form-control" placeholder="Enter password">
                                 <button type="button" class="password-toggle" id="fmQcPwToggle" aria-label="Toggle password visibility">
-                                    <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-eye"></use></svg>
+                                    <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-eye"></use></svg>
                                 </button>
                             </div>
                         </div>
@@ -552,10 +599,10 @@ class SFTPFileManager {
             const icon = document.querySelector('#fmQcPwToggle use');
             if (pwInput.type === 'password') {
                 pwInput.type = 'text';
-                icon?.setAttribute('href', '/static/icons/icons.svg?v=2#icon-eye-off');
+                icon?.setAttribute('href', `${this.sprite}#icon-eye-off`);
             } else {
                 pwInput.type = 'password';
-                icon?.setAttribute('href', '/static/icons/icons.svg?v=2#icon-eye');
+                icon?.setAttribute('href', `${this.sprite}#icon-eye`);
             }
         });
 
@@ -578,7 +625,7 @@ class SFTPFileManager {
             if (e.target === this.modal) this.close();
         });
 
-        document.getElementById('fmRefresh').addEventListener('click', () => this.refreshBothPanes());
+        document.getElementById('fmRefresh').addEventListener('click', () => this.refreshOpenPanes());
         document.getElementById('fmNewFolder').addEventListener('click', () => this.createNewFolder());
         document.getElementById('fmTransfer').addEventListener('click', () => this.executeTransfer());
         document.getElementById('fmDownload').addEventListener('click', () => this.downloadSelected());
@@ -787,8 +834,7 @@ class SFTPFileManager {
 
         this.socket.on('directory_listing', (data) => {
             // Gate: either the legacy modal is open OR the inline panel is visible.
-            const inlinePanel = document.getElementById('sftpPanel');
-            const inlineOpen = inlinePanel && inlinePanel.classList.contains('sftp-panel-open');
+            const inlineOpen = this.isInlineOpen();
             if (!this.isOpen && !inlineOpen) return;
 
             ['left', 'right', 'inline'].forEach(pane => {
@@ -820,7 +866,6 @@ class SFTPFileManager {
                     state.path = data.path;
                     state.loading = false;
                     state.error = null;
-                    state.refreshOnOpen = !visible;
                     if (visible) {
                         this.updatePathInput(pane, data.path);
                         this.renderPane(pane);
@@ -866,17 +911,17 @@ class SFTPFileManager {
             if (!this.currentUploadBatch) {
                 this.showNotification(`${this.t('fm.folderCreated', 'Folder created')}: ${data.path}`, 'success');
             }
-            this.refreshBothPanes();
+            this.refreshOpenPanes();
         });
 
         this.socket.on('file_renamed', (data) => {
             this.showNotification(this.t('fm.renamedSuccess', 'Renamed successfully'), 'success');
-            this.refreshBothPanes();
+            this.refreshOpenPanes();
         });
 
         this.socket.on('item_deleted', (data) => {
             this.showNotification(`${this.t('fm.deleted', 'Deleted')}: ${data.path}`, 'success');
-            this.refreshBothPanes();
+            this.refreshOpenPanes();
         });
 
         this.socket.on('file_progress', (data) => {
@@ -951,9 +996,11 @@ class SFTPFileManager {
             const errorMsg = data.error || data.message || 'Unknown error';
             console.error('[FM] SFTP Error received:', errorMsg, data);
 
-            ['left', 'right'].forEach(pane => {
+            // 'inline' too: the Files panel otherwise sat on its spinner until
+            // the 10s loading timeout. The panel exists only once opened.
+            ['left', 'right', 'inline'].forEach(pane => {
                 const state = this.panes[pane];
-                if (state.loading && state.type === 'ssh') {
+                if (state?.loading && state.type === 'ssh') {
                     if (state.loadingTimeout) {
                         clearTimeout(state.loadingTimeout);
                         state.loadingTimeout = null;
@@ -1157,15 +1204,36 @@ class SFTPFileManager {
         if (!state || !targetSessionId || state.sessionId === targetSessionId) {
             return;
         }
+        this.bindInlineSession(targetSessionId);
+        if (this.isInlineOpen()) {
+            this.loadInlineDefault();
+        }
+    }
 
-        state.type = 'ssh';
-        state.sessionId = targetSessionId;
-        state.path = '/';
-        state.pendingPath = null;
-        state.files = [];
-
-        if (typeof SessionManager !== 'undefined') {
-            const sess = SessionManager.sessions[targetSessionId];
+    /*
+     * Point the Files panel at a session, from a clean slate: no files, path,
+     * selection, error or $HOME carried over from the session it showed
+     * before. homePath used to survive a switch, so Home led to the previous
+     * host's home directory. The pane is left needing its first listing,
+     * which openInline honours -- a switch made while the panel was closed
+     * used to open it on an empty "Empty directory" that was never listed.
+     */
+    bindInlineSession(sessionId) {
+        const state = this.panes.inline;
+        if (state.loadingTimeout) {
+            clearTimeout(state.loadingTimeout);
+        }
+        Object.assign(state, this.createEmptyPaneState(), {
+            type: 'ssh',
+            sessionId,
+            needsListing: true,
+        });
+        const known = ['left', 'right'].map(pane => this.panes[pane])
+            .find(pane => pane.sessionId === sessionId && pane.hostInfo);
+        if (known) {
+            state.hostInfo = known.hostInfo;
+        } else if (typeof SessionManager !== 'undefined') {
+            const sess = SessionManager.sessions[sessionId];
             if (sess) {
                 state.hostInfo = {
                     host: sess.displayName || sess.host,
@@ -1174,23 +1242,29 @@ class SFTPFileManager {
                 };
             }
         }
+    }
 
-        const inlinePanel = document.getElementById('sftpPanel');
-        const inlineOpen = inlinePanel && inlinePanel.classList.contains('sftp-panel-open');
-        if (inlineOpen) {
-            state.loading = true;
-            this.updatePaneBadge('inline');
-            this.renderPane('inline');
-            // The rebind's own opening listing is a DEFAULT too -- see
-            // the note in openInline. Recording intent here would make the
-            // rebound pane refuse every later unsolicited refresh.
-            this.socket.emit('list_directory',
-                this.remoteFilesystemPayload('inline', targetSessionId,
-                    { remote_path: state.path }));
-            this.setLoadingTimeout('inline');
-        } else {
-            state.refreshOnOpen = true;
-        }
+    /*
+     * The Files panel's opening listing, the way onSourceChange opens a modal
+     * pane: '/' as a DEFAULT, so there is something to show, plus
+     * get_home_directory, whose reply moves the pane to $HOME unless the user
+     * has asked for a directory by then (guard 2, home_directory handler). The
+     * panel used to send the '/' listing alone, so it always opened at the
+     * root and Home went to '/'. The '/' listing records no pendingPath: that
+     * would make the pane refuse every later unsolicited refresh (Entry 51 D3).
+     */
+    loadInlineDefault() {
+        const state = this.panes.inline;
+        state.needsListing = false;
+        state.loading = true;
+        this.updatePaneBadge('inline');
+        this.renderPane('inline');
+        this.socket.emit('get_home_directory',
+            this.remoteFilesystemPayload('inline', state.sessionId));
+        this.socket.emit('list_directory',
+            this.remoteFilesystemPayload('inline', state.sessionId,
+                { remote_path: '/' }));
+        this.setLoadingTimeout('inline');
     }
 
     // ─── openInline ────────────────────────────────────────────────────────
@@ -1239,7 +1313,6 @@ class SFTPFileManager {
 
         // Seed the panel with the compact v5 markup if it has not been rendered.
         if (!panel.querySelector('#fmInlinePane')) {
-            const iconBase = '/static/icons/icons.svg?v=2';
             panel.innerHTML = `
                 <!-- sftpPanel compact inline surface, v5 spec line 182 -->
                 <div class="fm-pane" id="fmInlinePane" data-pane="inline">
@@ -1255,7 +1328,7 @@ class SFTPFileManager {
                                 aria-label="Close"
                                 data-i18n-aria-label="common.close">
                             <svg class="icon" aria-hidden="true">
-                                <use href="${iconBase}#icon-x"></use>
+                                <use href="${this.sprite}#icon-x"></use>
                             </svg>
                         </button>
                     </div>
@@ -1272,14 +1345,14 @@ class SFTPFileManager {
                                 data-i18n-title="fm.goUp" data-i18n-aria-label="fm.goUp"
                                 aria-label="Up">
                             <svg class="icon" aria-hidden="true">
-                                <use href="${iconBase}#icon-arrow-up"></use>
+                                <use href="${this.sprite}#icon-arrow-up"></use>
                             </svg>
                         </button>
                         <button class="fm-nav-btn" id="fmInlineHome" type="button"
                                 data-i18n-title="fm.goHome" data-i18n-aria-label="fm.goHome"
                                 aria-label="Home">
                             <svg class="icon" aria-hidden="true">
-                                <use href="${iconBase}#icon-house"></use>
+                                <use href="${this.sprite}#icon-house"></use>
                             </svg>
                         </button>
                         <div class="fm-breadcrumb" id="fmInlineBreadcrumb">
@@ -1291,17 +1364,21 @@ class SFTPFileManager {
                                 data-i18n-title="fm.refresh" data-i18n-aria-label="fm.refresh"
                                 aria-label="Refresh">
                             <svg class="icon" aria-hidden="true">
-                                <use href="${iconBase}#icon-refresh-cw"></use>
+                                <use href="${this.sprite}#icon-refresh-cw"></use>
                             </svg>
                         </button>
                     </div>
                     <!-- P3 / spec 300: file actions — upload + new folder -->
                     <div class="fm-file-actions">
+                        <!-- aria-label: on a phone and in short landscape the
+                             label is hidden and the button is its icon. -->
                         <button class="btn btn-secondary fm-upload-btn"
                                 id="fmInlineUpload"
-                                data-i18n-title="fm.upload" type="button">
+                                data-i18n-title="fm.upload"
+                                data-i18n-aria-label="fm.upload"
+                                aria-label="Upload" type="button">
                             <svg class="icon" aria-hidden="true">
-                                <use href="${iconBase}#icon-upload"></use>
+                                <use href="${this.sprite}#icon-upload"></use>
                             </svg>
                             <span data-i18n="fm.upload">Upload</span>
                         </button>
@@ -1311,7 +1388,7 @@ class SFTPFileManager {
                                 data-i18n-aria-label="fm.newFolder"
                                 aria-label="New Folder" type="button">
                             <svg class="icon" aria-hidden="true">
-                                <use href="${iconBase}#icon-folder-plus"></use>
+                                <use href="${this.sprite}#icon-folder-plus"></use>
                             </svg>
                         </button>
                         <!-- Upload / Download (owner ruling 2026-08-10, Entry 40).
@@ -1328,7 +1405,7 @@ class SFTPFileManager {
                                 data-i18n-aria-label="files.uploadDownload"
                                 aria-label="Upload / Download" type="button">
                             <svg class="icon" aria-hidden="true">
-                                <use href="${iconBase}#icon-cloud-upload"></use>
+                                <use href="${this.sprite}#icon-cloud-upload"></use>
                             </svg>
                         </button>
                     </div>
@@ -1336,7 +1413,7 @@ class SFTPFileManager {
                     <div class="fm-file-list" id="fmInlineList">
                         <div class="fm-empty">
                             <svg class="icon fm-empty-icon" aria-hidden="true">
-                                <use href="${iconBase}#icon-folder-open"></use>
+                                <use href="${this.sprite}#icon-folder-open"></use>
                             </svg>
                             <div class="fm-empty-text"
                                  data-i18n="fm.selectSourceAbove">
@@ -1416,7 +1493,7 @@ class SFTPFileManager {
                     const sessionId = state.sessionId || state.connectionId;
                     if (!sessionId) return;
                     [...e.target.files].forEach(file => {
-                        this.uploadFileToBrowser(file, state.path || '/', sessionId);
+                        this.uploadFileToBrowser(file, state.path || '/', sessionId, 'inline');
                     });
                     e.target.value = '';
                 });
@@ -1461,64 +1538,16 @@ class SFTPFileManager {
             ? SessionManager.getActiveSession()
             : null;
 
-        if (currentSessionId && (!this.panes['inline'].type || this.panes['inline'].sessionId !== currentSessionId)) {
-            const state = this.panes['inline'];
-            state.type = 'ssh';
-            state.sessionId = currentSessionId;
-
-            // hostInfo lookup: clone from an already-resolved left/right pane
-            // if available; otherwise build from SessionManager.
-            const existing = this.panes['left'].sessionId === currentSessionId
-                ? this.panes['left'].hostInfo
-                : this.panes['right'].sessionId === currentSessionId
-                    ? this.panes['right'].hostInfo
-                    : null;
-
-            if (existing) {
-                state.hostInfo = existing;
-            } else if (typeof SessionManager !== 'undefined') {
-                const sess = SessionManager.sessions[currentSessionId];
-                if (sess) {
-                    state.hostInfo = {
-                        host: sess.displayName || sess.host,
-                        username: sess.username,
-                        port: sess.port,
-                    };
-                }
-            }
-
-            state.loading = true;
-            this.updatePaneBadge('inline');
-            this.renderPane('inline');
-
-            /*
-             * This '/' listing is a DEFAULT, not a navigation request,
-             * so it must NOT record pendingPath -- exactly the distinction
-             * onSourceChange documents for its own opening listing.
-             *
-             * It briefly went through requestPaneListing, which records intent.
-             * Nothing ever clears the inline pane's intent (onSourceChange only
-             * touches left/right), so guard 1 in the directory_listing handler
-             * `pendingPath !== null && data.path !== pendingPath` -- then
-             * rejected every reply for any other path: an unsolicited refresh, a
-             * server push, another client's change. The pane sat on whatever it
-             * had opened with, and guard 2's home auto-landing (which requires
-             * pendingPath === null) could never fire either.
-             *
-             * An explicit navigation still records intent, through
-             * navigatePaneTo/refreshPane -> requestPaneListing, which is what
-             * makes the correlation guard work where correlation is meaningful.
-             */
-            this.socket.emit('list_directory',
-                this.remoteFilesystemPayload('inline', currentSessionId,
-                    { remote_path: state.path || '/' }));
-            this.setLoadingTimeout('inline');
+        const state = this.panes.inline;
+        if (currentSessionId && state.sessionId !== currentSessionId) {
+            this.bindInlineSession(currentSessionId);
+        }
+        if (state.type && state.needsListing) {
+            this.loadInlineDefault();
         } else {
-            // Pane already has state: refresh the head and list. If a listing
+            // Pane already listed: refresh the head and list. If a listing
             // arrived while this panel was hidden, paint its cached state once
             // now rather than rebuilding hidden DOM at response time.
-            const state = this.panes.inline;
-            state.refreshOnOpen = false;
             this.updatePathInput('inline', state.path);
             this.updatePaneBadge('inline');
             this.renderPane('inline');
@@ -1582,6 +1611,25 @@ class SFTPFileManager {
                 this.resetPane(pane);
             }
         });
+        /*
+         * The Files panel keeps its session and says why it is empty. A saved
+         * session comes back under its own id, so Retry lists it again; if it
+         * is still gone, refreshPane resets the pane.
+         */
+        const inline = this.panes.inline;
+        if (inline?.type === 'ssh' && inline.sessionId === sessionId) {
+            if (inline.loadingTimeout) {
+                clearTimeout(inline.loadingTimeout);
+                inline.loadingTimeout = null;
+            }
+            inline.loading = false;
+            inline.files = [];
+            inline.selected.clear();
+            inline.error = this.t('fm.noActiveConnection', 'No active connection');
+            if (this.isInlineOpen()) {
+                this.renderPane('inline');
+            }
+        }
         this.updateSessionLists();
     }
 
@@ -1781,7 +1829,17 @@ class SFTPFileManager {
             this.updatePathInput(pane, state.path || '/');
         }
         if (path) {
-            path.textContent = state.type ? (state.path || '/') : '';
+            /*
+             * The read-out is clipped from the LEFT (direction: rtl in the
+             * stylesheet) so a deep path keeps its leaf, but the text itself
+             * runs left to right. Written straight into the rtl box, the
+             * slashes -- direction-neutral -- took the box's direction and the
+             * leading '/' was drawn at the end: "opt/sshdeck/".
+             */
+            const text = document.createElement('bdi');
+            text.dir = 'ltr';
+            text.textContent = state.type ? (state.path || '/') : '';
+            path.replaceChildren(text);
         }
     }
 
@@ -2090,9 +2148,26 @@ class SFTPFileManager {
         }
     }
 
-    refreshBothPanes() {
-        this.refreshPane('left');
-        this.refreshPane('right');
+    isInlineOpen() {
+        return !!document.getElementById('sftpPanel')?.classList.contains('sftp-panel-open');
+    }
+
+    /*
+     * Refresh every file surface that is showing: the transfer modal's two
+     * panes while it is open, the Files panel while it is open. This was
+     * refreshBothPanes and covered the modal only, so the Files panel kept
+     * listing a folder after it was created, renamed or deleted from that same
+     * panel. A closed surface is left alone: the directory_listing gate drops
+     * replies for it, which would leave it marked loading.
+     */
+    refreshOpenPanes() {
+        if (this.isOpen) {
+            this.refreshPane('left');
+            this.refreshPane('right');
+        }
+        if (this.isInlineOpen()) {
+            this.refreshPane('inline');
+        }
     }
 
     resetPane(pane) {
@@ -2109,8 +2184,7 @@ class SFTPFileManager {
     }
 
     updatePathInput(pane, path) {
-        // The inline pane has no editable path input (the path is a read-only
-        // head element); the existing panes have fm${cap}Path text inputs.
+        // Every pane, the Files panel's included, has an fm<Pane>Path input.
         const el = document.getElementById(`fm${this.capitalize(pane)}Path`);
         if (el) el.value = path;
     }
@@ -2133,10 +2207,10 @@ class SFTPFileManager {
         if (state.error) {
             container.innerHTML = `
                 <div class="fm-error">
-                    <svg class="icon fm-error-icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-circle-alert"></use></svg>
+                    <svg class="icon fm-error-icon" aria-hidden="true"><use href="${this.sprite}#icon-circle-alert"></use></svg>
                     <div class="fm-error-text">${this.escapeHtml(state.error)}</div>
                     <button class="btn btn-secondary btn-sm fm-error-retry" data-pane="${pane}">
-                        <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-refresh-cw"></use></svg>
+                        <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-refresh-cw"></use></svg>
                         ${this.t('fm.retry', 'Retry')}
                     </button>
                 </div>
@@ -2151,13 +2225,16 @@ class SFTPFileManager {
 
         if (!state.type) {
             // Per-END wording: the right pane is the DESTINATION, so its empty
-            // state must not ask for a source.
-            const prompt = pane === 'right'
+            // state must not ask for a source. The Files panel has no source
+            // selector at all; it follows the active session.
+            const prompt = pane === 'inline'
+                ? this.t('fm.noActiveConnection', 'No active connection')
+                : pane === 'right'
                 ? this.t('fm.selectDestinationAbove', 'Select a destination above')
                 : this.t('fm.selectSourceAbove', 'Select a source above');
             container.innerHTML = `
                 <div class="fm-empty">
-                    <svg class="icon fm-empty-icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-folder-open"></use></svg>
+                    <svg class="icon fm-empty-icon" aria-hidden="true"><use href="${this.sprite}#icon-folder-open"></use></svg>
                     <div class="fm-empty-text">${this.escapeHtml(prompt)}</div>
                 </div>
             `;
@@ -2168,7 +2245,7 @@ class SFTPFileManager {
         if (state.files.length === 0) {
             container.innerHTML = `
                 <div class="fm-empty">
-                    <svg class="icon fm-empty-icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-folder-open"></use></svg>
+                    <svg class="icon fm-empty-icon" aria-hidden="true"><use href="${this.sprite}#icon-folder-open"></use></svg>
                     <div class="fm-empty-text">${this.t('fm.emptyDirectory', 'Empty directory')}</div>
                 </div>
             `;
@@ -2176,24 +2253,26 @@ class SFTPFileManager {
             return;
         }
 
-        const sortedFiles = [...state.files].sort((a, b) => {
-            if (a.is_dir && !b.is_dir) return -1;
-            if (!a.is_dir && b.is_dir) return 1;
-            return a.name.localeCompare(b.name);
+        /*
+         * Indexes into state.files, folders first then by name: the order rows
+         * are drawn in, and the order a Shift-click range walks. The range used
+         * to walk the server's order, so it selected files that were not
+         * between the two clicked rows on screen.
+         */
+        state.displayOrder = state.files.map((_, i) => i).sort((a, b) => {
+            const first = state.files[a];
+            const second = state.files[b];
+            if (!!first.is_dir !== !!second.is_dir) return first.is_dir ? -1 : 1;
+            return first.name.localeCompare(second.name);
         });
-
-        const indexMap = new Map();
-        sortedFiles.forEach((file, sortedIndex) => {
-            const originalIndex = state.files.indexOf(file);
-            indexMap.set(sortedIndex, originalIndex);
-        });
+        const moreLabel = this.escapeHtml(this.t('fm.moreActions', 'More actions'));
 
         let html = '';
 
         if (state.path !== '/' && !(state.type === 'browser-local' && this.browserFS.pathStack.length <= 1)) {
             html += `
                 <div class="fm-file-item directory" data-index="-1" data-type="parent">
-                    <svg class="icon fm-file-icon parent" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-arrow-up"></use></svg>
+                    <svg class="icon fm-file-icon parent" aria-hidden="true"><use href="${this.sprite}#icon-arrow-up"></use></svg>
                     <div class="fm-file-info">
                         <strong class="fm-file-name">..</strong>
                         <small class="fm-file-meta">${this.t('fm.parentDirectory', 'Parent directory')}</small>
@@ -2203,12 +2282,22 @@ class SFTPFileManager {
             `;
         }
 
-        html += sortedFiles.map((file, sortedIndex) => {
-            const originalIndex = indexMap.get(sortedIndex);
+        html += state.displayOrder.map((index) => {
+            const file = state.files[index];
             const icon = file.is_dir ? 'folder' : this.getFileIcon(file.name);
+            /*
+             * The Files panel's rows carry their own actions control. Its only
+             * other route to rename / delete / download / preview was the
+             * right-click menu, which a touch screen does not have.
+             */
+            const more = pane === 'inline' ? `
+                    <button type="button" class="fm-row-more" data-index="${index}"
+                            title="${moreLabel}" aria-label="${moreLabel}">
+                        ${this.spriteIcon('ellipsis-vertical')}
+                    </button>` : '';
             return `
-                <div class="fm-file-item ${file.is_dir ? 'directory' : ''} ${state.selected.has(originalIndex) ? 'selected' : ''}"
-                     data-index="${originalIndex}"
+                <div class="fm-file-item ${file.is_dir ? 'directory' : ''} ${state.selected.has(index) ? 'selected' : ''}"
+                     data-index="${index}"
                      data-type="${file.is_dir ? 'directory' : 'file'}"
                      draggable="true">
                     ${this.spriteIcon(icon, `fm-file-icon ${file.is_dir ? 'folder' : 'file'}`)}
@@ -2221,7 +2310,7 @@ class SFTPFileManager {
                     </div>
                     ${file.is_dir
                         ? this.spriteIcon('chevron-right', 'fm-file-chevron')
-                        : '<span class="fm-file-chevron-spacer" aria-hidden="true"></span>'}
+                        : '<span class="fm-file-chevron-spacer" aria-hidden="true"></span>'}${more}
                 </div>
             `;
         }).join('');
@@ -2234,10 +2323,24 @@ class SFTPFileManager {
             item.addEventListener('dblclick', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                // A quick double tap on the actions control is not "open".
+                if (e.target.closest('.fm-row-more')) return;
                 this.handleItemDblClick(pane, index);
             });
             item.addEventListener('contextmenu', (e) => this.showContextMenu(e, pane, index));
             item.addEventListener('dragstart', (e) => this.handleDragStart(e, pane, index));
+        });
+
+        container.querySelectorAll('.fm-row-more').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const index = parseInt(button.dataset.index);
+                this.setActivePane(pane);
+                state.selected.clear();
+                state.selected.add(index);
+                state.lastSelected = index;
+                this.updateSelectionVisual(pane);
+                this.showContextMenu(e, pane, index, button);
+            });
         });
 
         this.updatePaneStatus(pane);
@@ -2258,10 +2361,13 @@ class SFTPFileManager {
                 state.selected.add(index);
             }
         } else if (e.shiftKey && state.lastSelected !== -1) {
-            const start = Math.min(state.lastSelected, index);
-            const end = Math.max(state.lastSelected, index);
-            for (let i = start; i <= end; i++) {
-                state.selected.add(i);
+            // The range is between the two rows as drawn (see displayOrder).
+            const order = state.displayOrder || state.files.map((_, i) => i);
+            const from = order.indexOf(state.lastSelected);
+            const to = order.indexOf(index);
+            if (from !== -1 && to !== -1) {
+                order.slice(Math.min(from, to), Math.max(from, to) + 1)
+                    .forEach(i => state.selected.add(i));
             }
         } else {
             state.selected.clear();
@@ -2331,8 +2437,14 @@ class SFTPFileManager {
          * user must still be able to reach the source pane, so the pane tabs
          * choose which of the two is showing. Only outside transfer mode does
          * the phone pin itself to the single right-hand pane.
+         *
+         * The pin is about the modal's two panes. It used to catch the Files
+         * panel's 'inline' too, so a row click there made 'right' the active
+         * pane on every phone, and every window under 620px tall -- rename,
+         * delete, download and upload's refresh then acted on the modal's
+         * hidden pane instead of the panel the user was touching.
          */
-        if (this.isMobile() && !this.isTransferMode()) {
+        if (pane !== 'inline' && this.isMobile() && !this.isTransferMode()) {
             pane = 'right';
         }
 
@@ -2432,16 +2544,14 @@ class SFTPFileManager {
         this.hideActionSheet();
 
         switch (action) {
-            case 'open':
+            case 'open': {
+                // navigateToFile, which this called, never existed: Open threw.
                 const state = this.panes[this.activePane];
                 if (state.selected.size === 1) {
-                    const index = Array.from(state.selected)[0];
-                    const file = state.files[index];
-                    if (file && file.is_dir) {
-                        this.navigateToFile(this.activePane, file);
-                    }
+                    this.handleItemDblClick(this.activePane, Array.from(state.selected)[0]);
                 }
                 break;
+            }
             case 'download':
                 this.downloadSelected();
                 break;
@@ -2499,7 +2609,9 @@ class SFTPFileManager {
         e.target.value = '';
     }
 
-    uploadFileToBrowser(file, remotePath, sessionId) {
+    // `pane` is the surface that started the upload, which is the one to
+    // refresh when it lands -- activePane may have moved on by then.
+    uploadFileToBrowser(file, remotePath, sessionId, pane = this.activePane) {
         const self = this;
 
         const fullRemotePath = remotePath.endsWith('/')
@@ -2540,7 +2652,7 @@ class SFTPFileManager {
         .then(({ status, data }) => {
             if (status === 200 && data.success) {
                 self.completeTransferById(transferId);
-                self.refreshPane(self.activePane);
+                self.refreshPane(pane);
                 self.showNotification(`${file.name} ${self.t('fm.uploaded', 'uploaded')}`, 'success');
             } else {
                 self.failTransferById(transferId, data.error || 'Upload failed');
@@ -3035,7 +3147,7 @@ class SFTPFileManager {
     // buffer drain runs exactly the same code an on-time event would.
     applyS2SComplete(data) {
         this.showNotification(`${this.t('fm.transferComplete', 'Transfer complete')}: ${data.filename}`, 'success');
-        this.refreshBothPanes();
+        this.refreshOpenPanes();
         this.completeS2STransfer(data);
     }
 
@@ -3389,7 +3501,7 @@ class SFTPFileManager {
             this.activeTransfers.delete(transfer.id);
             this.isTransferring = false;
             this.renderTransferQueue();
-            this.refreshBothPanes();
+            this.refreshOpenPanes();
             setTimeout(() => this.processTransferQueue(), 100);
         }
     }
@@ -3656,7 +3768,7 @@ class SFTPFileManager {
         container.innerHTML = this.transferQueue.slice(-20).map(t => `
             <div class="fm-transfer-item ${t.status}" data-transfer-type="${this.escapeHtml(String(t.type || ''))}">
                 <div class="fm-transfer-icon ${t.type}">
-                    ${this.spriteIcon(t.type === 'upload' ? 'cloud-upload' : t.type === 'download' ? 'download' : 'swap')}
+                    ${this.spriteIcon(t.type === 'upload' ? 'cloud-upload' : t.type === 'download' ? 'download' : 'arrow-right-left')}
                 </div>
                 <div class="fm-transfer-info">
                     <div class="fm-transfer-name">${this.escapeHtml(t.filename)}</div>
@@ -3696,10 +3808,22 @@ class SFTPFileManager {
         const collapsed = document.getElementById('fmQueue').classList.toggle('collapsed');
         const toggle = document.getElementById('fmQueueToggle');
         toggle.querySelector('use')?.setAttribute(
-            'href', `/static/icons/icons.svg?v=2#icon-chevron-${collapsed ? 'up' : 'down'}`);
+            'href', `${this.sprite}#icon-chevron-${collapsed ? 'up' : 'down'}`);
     }
 
-    showContextMenu(e, pane, index) {
+    /*
+     * `anchor` is the row's ⋮ button when the menu is opened from it rather
+     * than by a right-click: the menu then hangs off the button, since a
+     * keyboard press has no pointer position to place it at.
+     *
+     * The Files panel's menu is a BOTTOM SHEET at phone width. The context
+     * menu is hidden outright there (display:none below 768px) because the
+     * transfer modal has its own long-press action sheet -- which left the
+     * panel, the only file manager on a phone, with no way to rename, delete,
+     * download or preview anything. `fm-context-sheet` is scoped to the
+     * panel's pane so the modal keeps the arrangement it has.
+     */
+    showContextMenu(e, pane, index, anchor = null) {
         e.preventDefault();
         e.stopPropagation();
         this.closeContextMenu();
@@ -3709,6 +3833,10 @@ class SFTPFileManager {
 
         const menu = document.createElement('div');
         menu.className = 'fm-context-menu';
+        const sheet = pane === 'inline' && window.matchMedia('(max-width: 767px)').matches;
+        if (sheet) {
+            menu.classList.add('fm-context-sheet');
+        }
 
         let items = [];
 
@@ -3724,22 +3852,32 @@ class SFTPFileManager {
                     items.push({ action: 'download', icon: 'download', text: this.t('fm.ctx.download', 'Download') });
                 }
             }
-            if (!this.isMobile()) {
-                items.push({ action: 'transfer', icon: 'swap', text: this.t('fm.ctx.transferToOther', 'Transfer to other pane') });
+            // The Files panel has no other pane to transfer to.
+            if (!this.isMobile() && pane !== 'inline') {
+                items.push({ action: 'transfer', icon: 'arrow-right-left', text: this.t('fm.ctx.transferToOther', 'Transfer to other pane') });
+            }
+            if (state.type === 'ssh') {
+                items.push({ action: 'copypath', icon: 'copy', text: this.t('fm.ctx.copyPath', 'Copy path') });
             }
             items.push({ divider: true });
-            items.push({ action: 'rename', icon: 'edit', text: this.t('fm.rename', 'Rename') });
+            items.push({ action: 'rename', icon: 'pencil', text: this.t('fm.rename', 'Rename') });
         }
 
-        items.push({ action: 'newfolder', icon: 'folder-add', text: this.t('fm.newFolder', 'New Folder') });
-        items.push({ action: 'refresh', icon: 'reload', text: this.t('fm.refresh', 'Refresh') });
+        items.push({ action: 'newfolder', icon: 'folder-plus', text: this.t('fm.newFolder', 'New Folder') });
+        items.push({ action: 'refresh', icon: 'refresh-cw', text: this.t('fm.refresh', 'Refresh') });
 
         if (file) {
             items.push({ divider: true });
-            items.push({ action: 'delete', icon: 'delete', text: this.t('fm.delete', 'Delete'), danger: true });
+            items.push({ action: 'delete', icon: 'trash-2', text: this.t('fm.delete', 'Delete'), danger: true });
         }
 
-        menu.innerHTML = items.map(item => {
+        // A sheet covers the row it was opened from, so it names the file.
+        const title = sheet && file
+            ? `<div class="fm-context-title">${this.spriteIcon(
+                file.is_dir ? 'folder' : this.getFileIcon(file.name), 'fm-context-icon')}`
+              + `<span>${this.escapeHtml(file.name)}</span></div>`
+            : '';
+        menu.innerHTML = title + items.map(item => {
             if (item.divider) {
                 return '<div class="fm-context-divider"></div>';
             }
@@ -3753,8 +3891,17 @@ class SFTPFileManager {
         document.body.appendChild(menu);
         this.contextMenu = menu;
 
-        menu.style.left = `${Math.min(e.clientX, window.innerWidth - 200)}px`;
-        menu.style.top = `${Math.min(e.clientY, window.innerHeight - 200)}px`;
+        if (!sheet) {
+            // Measured after insertion, so a menu taller or wider than the
+            // room below the pointer is pulled back inside the viewport
+            // rather than assumed to be 200px.
+            const box = menu.getBoundingClientRect();
+            const at = anchor ? anchor.getBoundingClientRect() : null;
+            const x = at ? at.right - box.width : e.clientX;
+            const y = at ? at.bottom : e.clientY;
+            menu.style.left = `${Math.max(0, Math.min(x, window.innerWidth - box.width))}px`;
+            menu.style.top = `${Math.max(0, Math.min(y, window.innerHeight - box.height))}px`;
+        }
 
         menu.querySelectorAll('.fm-context-item').forEach(item => {
             item.addEventListener('click', (ev) => {
@@ -3806,6 +3953,14 @@ class SFTPFileManager {
                     state.selected.clear();
                     state.selected.add(index);
                     this.renameSelected();
+                }
+                break;
+            case 'copypath':
+                if (index >= 0 && state.files[index]
+                        && typeof TerminalManager !== 'undefined') {
+                    // Toasts the real outcome: iOS can refuse the write.
+                    TerminalManager.reportCopyResult(
+                        this.joinPath(state.path, state.files[index].name));
                 }
                 break;
             case 'newfolder':
@@ -3915,21 +4070,11 @@ class SFTPFileManager {
         return cleanBase + '/' + filename;
     }
 
+    // A name with no dot, or only a leading one (.bashrc), has no extension.
     getFileIcon(filename) {
-        const ext = filename.split('.').pop()?.toLowerCase();
-        const source = new Set([
-            'c', 'cpp', 'css', 'go', 'h', 'htm', 'html', 'java', 'js', 'jsx',
-            'json', 'kt', 'less', 'php', 'py', 'rb', 'rs', 'sass', 'scss', 'sh',
-            'sql', 'swift', 'ts', 'tsx', 'xml', 'yaml', 'yml', 'zsh',
-        ]);
-        const images = new Set(['bmp', 'gif', 'ico', 'jpeg', 'jpg', 'png', 'svg', 'webp']);
-        const keys = new Set(['key', 'pem', 'pub']);
-        if (source.has(ext)) return 'code';
-        if (images.has(ext)) return 'picture';
-        if (keys.has(ext)) return 'key';
-        if (ext === 'lock') return 'lock';
-        if (['doc', 'docx', 'log', 'md', 'pdf', 'rtf', 'txt'].includes(ext)) return 'file-text';
-        return 'file';
+        const dot = filename.lastIndexOf('.');
+        const ext = dot > 0 ? filename.slice(dot + 1).toLowerCase() : '';
+        return this.fileIcons.get(ext) || 'file';
     }
 
     escapeHtml(text) {
@@ -3950,7 +4095,7 @@ class SFTPFileManager {
             this.uploadProgressNotification.innerHTML = `
                 <div class="upload-progress-content">
                     <div class="upload-progress-icon">
-                        <svg class="icon spinning" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-cloud-upload"></use></svg>
+                        <svg class="icon spinning" aria-hidden="true"><use href="${this.sprite}#icon-cloud-upload"></use></svg>
                     </div>
                     <div class="upload-progress-info">
                         <div class="upload-progress-text">${this.t('fm.uploadingFiles', 'Uploading files')}...</div>
@@ -3989,7 +4134,7 @@ class SFTPFileManager {
         this.uploadProgressNotification.innerHTML = `
             <div class="upload-progress-content">
                 <div class="upload-progress-icon success">
-                    <svg class="icon" aria-hidden="true"><use href="/static/icons/icons.svg?v=2#icon-circle-check"></use></svg>
+                    <svg class="icon" aria-hidden="true"><use href="${this.sprite}#icon-circle-check"></use></svg>
                 </div>
                 <div class="upload-progress-info">
                     <div class="upload-progress-text">${this.t('fm.uploadComplete', 'Upload complete')}!</div>
@@ -4041,9 +4186,9 @@ let sftpFileManager = null;
 // Surfaces are distinct features and both ship.
 //
 // The panel is the `<aside id="sftpPanel">` permanent workspace child added
-// to index.html.  This function renders into it using IDs that are prefixed
-// `sftp-inline-` to avoid any collision with the lazily-created modal's own
-// IDs (`fmLeft*`, `fmRight*`).  All file operations still flow through the
+// to index.html.  openInline renders into it with `fmInline*` IDs -- the pane
+// key is 'inline', beside the modal's `fmLeft*` / `fmRight*` -- so every
+// fm<Pane> helper resolves them.  All file operations still flow through the
 // existing manager methods; the only difference is the DOM host.
 //
 // Mutual exclusion: the same `sshdeck:aux-panel-opening` event that closes
