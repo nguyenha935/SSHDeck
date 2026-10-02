@@ -132,7 +132,11 @@
     white-space: nowrap;
 }
 
-.a5-lang:hover { background: var(--tw-hover); color: var(--tw-text); }
+@media (hover: hover) {
+    .a5-lang:hover { background: var(--tw-hover); color: var(--tw-text); }
+}
+
+.a5-lang:active { background: var(--tw-hover); color: var(--tw-text); }
 .a5-lang:focus-visible {
     outline: 2px solid var(--tw-accent);
     outline-offset: 2px;
@@ -371,7 +375,11 @@
 }
 
 .a5-toggle svg { width: 18px; height: 18px; }
-.a5-toggle:hover { color: var(--tw-accent); }
+@media (hover: hover) {
+    .a5-toggle:hover { color: var(--tw-accent); }
+}
+
+.a5-toggle:active { color: var(--tw-accent); }
 .a5-toggle:focus-visible {
     outline: 2px solid var(--tw-accent);
     outline-offset: -2px;
@@ -487,7 +495,11 @@
 }
 
 .a5-submit svg { width: 18px; height: 18px; }
-.a5-submit:hover { background: color-mix(in srgb, var(--tw-accent) 88%, var(--tw-text)); }
+@media (hover: hover) {
+    .a5-submit:hover { background: color-mix(in srgb, var(--tw-accent) 88%, var(--tw-text)); }
+}
+
+.a5-submit:active { background: color-mix(in srgb, var(--tw-accent) 88%, var(--tw-text)); }
 .a5-submit:focus-visible {
     outline: 2px solid var(--tw-accent);
     outline-offset: 2px;
@@ -513,14 +525,24 @@
 }
 
 .a5-btn svg { width: 16px; height: 16px; }
-.a5-btn:hover { background: var(--tw-hover); }
+@media (hover: hover) {
+    .a5-btn:hover { background: var(--tw-hover); }
+}
+
+.a5-btn:active { background: var(--tw-hover); }
 .a5-btn:focus-visible {
     outline: 2px solid var(--tw-accent);
     outline-offset: 2px;
 }
 
 .a5-btn-danger { color: var(--tw-danger); }
-.a5-btn-danger:hover {
+@media (hover: hover) {
+    .a5-btn-danger:hover {
+        background: color-mix(in srgb, var(--tw-danger) 14%, transparent);
+    }
+}
+
+.a5-btn-danger:active {
     background: color-mix(in srgb, var(--tw-danger) 14%, transparent);
 }
 
@@ -609,7 +631,11 @@
 
 /* Hover thickens rather than toggling the underline on, so the link does not
  * change geometry under the cursor. */
-.a5-footer a:hover { text-decoration-thickness: max(2px, 0.1em); }
+@media (hover: hover) {
+    .a5-footer a:hover { text-decoration-thickness: max(2px, 0.1em); }
+}
+
+.a5-footer a:active { text-decoration-thickness: max(2px, 0.1em); }
 .a5-footer a:focus-visible {
     outline: 2px solid var(--tw-accent);
     outline-offset: 2px;
@@ -756,7 +782,9 @@
 }
 
 .a5-table tbody tr:last-child td { border-bottom: 0; }
-.a5-table tbody tr:hover { background: var(--tw-hover); }
+@media (hover: hover) {
+    .a5-table tbody tr:hover { background: var(--tw-hover); }
+}
 
 /* Every table row action stays a real 44px target. */
 .a5-table td .a5-btn { min-height: var(--a5-touch); }
@@ -919,7 +947,11 @@
     cursor: pointer;
 }
 
-.a5-lang-option:hover { background: var(--tw-hover); }
+@media (hover: hover) {
+    .a5-lang-option:hover { background: var(--tw-hover); }
+}
+
+.a5-lang-option:active { background: var(--tw-hover); }
 .a5-lang-option.active {
     color: var(--tw-accent);
     background: var(--tw-accent-soft);
@@ -986,7 +1018,11 @@
     cursor: pointer;
 }
 
-.a5-tab:hover { background: var(--tw-hover); color: var(--tw-text); }
+@media (hover: hover) {
+    .a5-tab:hover { background: var(--tw-hover); color: var(--tw-text); }
+}
+
+.a5-tab:active { background: var(--tw-hover); color: var(--tw-text); }
 .a5-tab:focus-visible { outline: 2px solid var(--tw-accent); outline-offset: 2px; }
 .a5-tab.active {
     color: var(--tw-accent);
@@ -1035,7 +1071,11 @@
     border-color: transparent;
     font-weight: 600;
 }
-.a5-btn-primary:hover { background: color-mix(in srgb, var(--tw-accent) 88%, var(--tw-text)); }
+@media (hover: hover) {
+    .a5-btn-primary:hover { background: color-mix(in srgb, var(--tw-accent) 88%, var(--tw-text)); }
+}
+
+.a5-btn-primary:active { background: color-mix(in srgb, var(--tw-accent) 88%, var(--tw-text)); }
 
 .a5-pagination {
     display: flex;

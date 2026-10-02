@@ -1,6 +1,12 @@
 (function() {
     'use strict';
 
+    // A press on a touch screen shows each control's :active look: hover looks
+    // are gated to (hover: hover), because a tap left them stuck on until the
+    // next tap elsewhere. iOS Safari applies :active only while a touchstart
+    // listener exists on the element or an ancestor; this one does nothing else.
+    document.addEventListener('touchstart', () => {}, { passive: true });
+
     function setFieldState(input, hintEl, message, isValid) {
         if (!input || !hintEl) {
             return;

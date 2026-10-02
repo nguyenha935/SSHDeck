@@ -10,6 +10,12 @@
         console.error('[SSHDeck] Uncaught error:', e.message, e.filename, e.lineno);
     });
 
+    // A press on a touch screen shows each control's :active look: hover looks
+    // are gated to (hover: hover), because a tap left them stuck on until the
+    // next tap elsewhere. iOS Safari applies :active only while a touchstart
+    // listener exists on the element or an ancestor; this one does nothing else.
+    document.addEventListener('touchstart', () => {}, { passive: true });
+
     const APP_ROOT = document.querySelector('meta[name="app-root"]')?.content || '';
     window.APP_ROOT = APP_ROOT;
     window.socket = io({ path: APP_ROOT + '/socket.io' });
