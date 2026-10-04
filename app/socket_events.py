@@ -2379,6 +2379,36 @@ def handle_kbdebug_log(data, current_user=None):
                  line=str(line)[:400])
 
 
+PERF_REPORT_RATELIMIT = '6 per minute'
+PERF_REPORT_MAX_KEYS = 40
+
+
+@socketio.on('perf_report')
+@socket_login_required
+def handle_perf_report(data, current_user=None):
+    """Record one minute of a browser's performance (`?perf=1`).
+
+    Audit 2026-10-04: typing and scrolling stutter on the owner's Windows PC
+    whatever the browser, less on a Mac, not at all on a phone. What decides
+    it -- the connection, the GPU, the fonts, how long a frame takes -- can
+    only be seen on that machine, so static/js/perf-probe.js counts it there
+    and this writes the minute's numbers as one log line. Off unless the page
+    was opened with `?perf=1`; numbers and short strings only, no content.
+
+    The ack is the round trip the page times for the next report.
+    """
+    if check_socket_rate_limit(current_user.id, 'perf_report',
+                               PERF_REPORT_RATELIMIT):
+        return {'ok': False}
+    report = data.get('report')
+    if not isinstance(report, dict):
+        return {'ok': False}
+    log_info("perf-report", user=current_user.username,
+             agent=str(data.get('agent', ''))[:200],
+             perf=_bounded_flat(report, PERF_REPORT_MAX_KEYS))
+    return {'ok': True}
+
+
 SCREEN_DIAGNOSTIC_TAIL_MAX = 65536
 SCREEN_DIAGNOSTIC_ROWS_MAX = 500
 SCREEN_DIAGNOSTIC_ROW_CHARS = 1024
