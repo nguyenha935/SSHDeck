@@ -110,7 +110,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
 // ------------------------------------------------------- no injection -----
 {
     console.log('--- the CSS no longer ships from JavaScript ---');
-    const files = ['sftp-file-manager.js', 'files-browser.js', 'session-manager.js',
+    const files = ['sftp-file-manager.js', 'files-browser.js', 'perf-probe.js', 'session-manager.js',
                    'header-menus.js', 'app.js'];
     for (const f of files) {
         const src = fs.readFileSync(path.join(ROOT, 'static/js', f), 'utf8');
@@ -420,6 +420,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v2: the control that opened a menu closes it; Upload / Download in
         // the phone's menu.
         ['js/files-browser.js', 2],
+        ['js/perf-probe.js', 1],
         // v11: S17 FIX 4d completion -- the insert-at-prompt write routes through
         // window.emitTerminalInput, so it is no longer swallowed by tmux copy
         // mode. v10 is RELEASED, so the pin must move or the fix ships invisibly.

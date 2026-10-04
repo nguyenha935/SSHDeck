@@ -252,6 +252,8 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # v2: the control that opened a menu closes it; Upload / Download in
         # the phone's menu.
         "filename='js/files-browser.js'": '?v=2',
+        # New: the `?perf=1` performance probe (audit 2026-10-04).
+        "filename='js/perf-probe.js'": '?v=1',
         # Extracted from a 146-line inline <script> in index.html. Inline script
         # cannot be cache-busted at all -- it ships inside the cached HTML -- so
         # pinning it is the point of moving it out.
