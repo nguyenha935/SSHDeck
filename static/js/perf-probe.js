@@ -16,12 +16,20 @@
  * a wheel listener, the browser's frame observers. Once a minute with
  * activity it sends one flat record of numbers to the server log
  * (handle_perf_report). No keystroke or output content leaves the page.
+ *
+ * v2 (the first readings): Windows frames ran at ~600 ms with almost no
+ * script or layout inside them, which says where the time is NOT, not where
+ * it is. So a record now also says whether the main thread was blocked or
+ * waiting (`lb`, and `lag`: how late a 100 ms timer fires), how much of the
+ * minute the window had focus, and which renderer drew (`rend`, the WebGL
+ * trial in terminal-manager.js).
  */
 (() => {
     const STORE = 'sshdeck.perf';
     const REPORT_MS = 60000;
     const ECHO_TIMEOUT_MS = 3000;
     const ACTIVE_MS = 1500;
+    const LAG_MS = 100;
     // Short codes: the server keeps 60 characters of a string.
     const FONT_CODES = {
         'IBM Plex Mono': 'plex', 'JetBrains Mono': 'jb', 'Source Code Pro': 'scp',
@@ -51,10 +59,12 @@
     const now = () => performance.now();
     const fresh = () => ({
         keys: 0, echo: [], paint: [], outBytes: 0, outMsgs: 0, wheels: 0, frames: [],
-        loaf: [0, 0, 0, 0], glyph: [0, 0, 0, 0], active: false,
+        loaf: [0, 0, 0, 0], lb: [0, 0, 0, 0], lag: [], glyph: [0, 0, 0, 0],
+        focusMs: 0, start: now(), active: false,
     });
     let win = fresh();
     let rtt = null;
+    let focusedAt = document.hasFocus() ? now() : null;
     let mouseReportsSeen = mouseReports();
     let env = null;
     const pending = new Map();
@@ -87,7 +97,12 @@
         }
     }
 
-    // Long animation frames (Chromium 123+): how long, and in what.
+    /*
+     * Long animation frames (Chromium 123+): how long, and in what. `loaf` is
+     * [count, total, script, style+layout]; `lb` is [blocking, rendering,
+     * frames that never rendered, longest]. A long frame whose blocking time
+     * is small was WAITING (for the next frame to be granted), not working.
+     */
     if (PerformanceObserver.supportedEntryTypes?.includes('long-animation-frame')) {
         new PerformanceObserver((list) => list.getEntries().forEach((entry) => {
             const end = entry.startTime + entry.duration;
@@ -95,8 +110,36 @@
             win.loaf[1] += entry.duration;
             win.loaf[2] += (entry.scripts || []).reduce((sum, s) => sum + s.duration, 0);
             if (entry.styleAndLayoutStart) win.loaf[3] += end - entry.styleAndLayoutStart;
+            win.lb[0] += entry.blockingDuration || 0;
+            if (entry.renderStart) {
+                win.lb[1] += end - entry.renderStart;
+            } else {
+                win.lb[2] += 1;
+            }
+            win.lb[3] = Math.max(win.lb[3], entry.duration);
         })).observe({ type: 'long-animation-frame' });
     }
+
+    // How late a 100 ms timer fires: the main thread's own answer to "was I
+    // busy". Not counted while hidden, where the browser throttles timers.
+    let lagDue = now() + LAG_MS;
+    const lagTick = () => {
+        const t = now();
+        if (!document.hidden) win.lag.push(Math.max(0, t - lagDue));
+        lagDue = t + LAG_MS;
+        setTimeout(lagTick, LAG_MS);
+    };
+    setTimeout(lagTick, LAG_MS);
+
+    window.addEventListener('focus', () => {
+        if (focusedAt === null) focusedAt = now();
+    });
+    window.addEventListener('blur', () => {
+        if (focusedAt !== null) {
+            win.focusMs += now() - focusedAt;
+            focusedAt = null;
+        }
+    });
 
     // ── input to echo ──────────────────────────────────────────────────
     socket.onAnyOutgoing((event, payload) => {
@@ -206,8 +249,10 @@
         const at = now();
         pending.forEach((sent, id) => { if (at - sent > ECHO_TIMEOUT_MS) pending.delete(id); });
         const reports = mouseReports();
+        const focused = win.focusMs + (focusedAt === null ? 0 : at - focusedAt);
         const record = {
-            v: 1,
+            v: 2,
+            rend: window.TerminalManager?.rendererInUse?.() || 'dom',
             tr: socket.io?.engine?.transport?.name || 'unknown',
             rtt: rtt === null ? -1 : rtt,
             keys: win.keys,
@@ -219,8 +264,11 @@
             mreports: Math.max(0, reports - mouseReportsSeen),
             frames: frameSummary(win.frames),
             loaf: win.loaf.map(Math.round),
+            lb: win.lb.map(Math.round),
+            lag: spread(win.lag),
             glyph: win.glyph,
             grid: grid(),
+            focus: Math.round((100 * focused) / Math.max(1, at - win.start)),
             hidden: document.hidden,
         };
         mouseReportsSeen = reports;
@@ -231,9 +279,16 @@
         return record;
     }
 
+    // A record covers one minute: an idle minute is dropped, not carried into
+    // the next one's frames, timer samples and focus.
+    function restart() {
+        win = fresh();
+        if (focusedAt !== null) focusedAt = now();
+    }
+
     function send() {
         const record = report();
-        win = fresh();
+        restart();
         const sentAt = now();
         socket.emit('perf_report', { agent: navigator.userAgent.slice(0, 200), report: record }, () => {
             rtt = Math.round(now() - sentAt);
@@ -241,7 +296,13 @@
         return record;
     }
 
-    setInterval(() => { if (win.active) send(); }, REPORT_MS);
+    setInterval(() => {
+        if (win.active) {
+            send();
+        } else {
+            restart();
+        }
+    }, REPORT_MS);
     // From the console: SSHDeckPerf.flush() sends the minute so far.
     window.SSHDeckPerf = { flush: send };
 })();

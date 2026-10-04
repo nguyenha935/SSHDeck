@@ -29,6 +29,9 @@ const files = [
   // row one cell short puts every later repaint on the wrong row
   // (measured 2026-09-19, see terminal-manager.js createTerminal).
   ['@xterm/addon-unicode11/lib/addon-unicode11.js', 'xterm/xterm-addon-unicode11.js'],
+  // The WebGL renderer: fetched only by a page that opts into it
+  // (terminal-manager.js useWebglRenderer), so it has no <script> tag.
+  ['@xterm/addon-webgl/lib/addon-webgl.js', 'xterm/xterm-addon-webgl.js'],
   ['@highlightjs/cdn-assets/highlight.min.js', 'highlight/highlight.min.js'],
   ['@highlightjs/cdn-assets/styles/github-dark.min.css', 'highlight/github-dark.min.css'],
   // Material Icons: only the "filled" variant is used by the UI. The CSS
@@ -44,11 +47,11 @@ const files = [
 // this to a human step is how the notices went missing in the first place.
 //
 // One file per DIRECTORY, carrying every package that put files there.
-// static/vendor/xterm/ alone holds four packages and three distinct notices --
-// copying just one of them would delete the other two on the next run.
+// static/vendor/xterm/ alone holds five packages and four distinct notices --
+// copying just one of them would delete the others on the next run.
 const licences = {
   'xterm': ['@xterm/xterm', '@xterm/addon-fit', '@xterm/addon-search',
-            '@xterm/addon-unicode11'],
+            '@xterm/addon-unicode11', '@xterm/addon-webgl'],
   'highlight': ['@highlightjs/cdn-assets'],
   'socketio': ['socket.io-client'],
   'material-icons': ['material-icons'],
