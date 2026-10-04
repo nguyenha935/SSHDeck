@@ -414,13 +414,13 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // sends an ssh_resize for a size the server already opened the PTY at.
         // v97: a column change, a grow included, stays covered until the
         // repaint has been quiet (omp replays its transcript after a settle).
-        ['js/terminal-manager.js', 100],
+        ['js/terminal-manager.js', 101],
         // v18: the Files browser hooks (expand, delegated render and menu).
         ['js/sftp-file-manager.js', 18],
         // v2: the control that opened a menu closes it; Upload / Download in
         // the phone's menu.
         ['js/files-browser.js', 2],
-        ['js/perf-probe.js', 1],
+        ['js/perf-probe.js', 2],
         // v11: S17 FIX 4d completion -- the insert-at-prompt write routes through
         // window.emitTerminalInput, so it is no longer swallowed by tmux copy
         // mode. v10 is RELEASED, so the pin must move or the fix ships invisibly.

@@ -1539,6 +1539,139 @@ const TerminalManager = {
         }, true);
     },
 
+    /*
+     * THE WebGL RENDERER -- a trial, opted into per device (owner, 2026-10-04).
+     *
+     * Measured with ?perf=1 on the owner's Windows laptop: frames at a p90 of
+     * ~600 ms while typing and scrolling, with almost no script and no style
+     * or layout inside them, on an Intel UHD (Gen 12) driving a 3841x2401
+     * panel at 175 %. The same sessions run at 9 ms on an M4 Mac and 17 ms on
+     * an iPhone, and that laptop's NVIDIA GPU cannot be given to the browser.
+     * The DOM renderer hands every row to the browser as text to lay out and
+     * rasterise; the WebGL renderer draws the grid itself from a glyph atlas,
+     * which asks far less of a weak GPU. Whether it is enough there is what
+     * the trial measures.
+     *
+     * Off unless the page is opened with `?renderer=webgl` (remembered on the
+     * device; `?renderer=dom` forgets it), and the addon is only fetched then.
+     * If WebGL cannot start, or the GPU drops the context later, the terminal
+     * goes back to the DOM renderer where it stands.
+     */
+    RENDERER_STORE: 'sshdeck.renderer',
+    _rendererChoice: null,
+    _webglLoad: null,
+
+    rendererChoice() {
+        if (!this._rendererChoice) {
+            const asked = new URLSearchParams(location.search).get('renderer');
+            let choice = asked === 'webgl' ? 'webgl' : 'dom';
+            try {
+                if (asked === 'webgl') localStorage.setItem(this.RENDERER_STORE, 'webgl');
+                if (asked === 'dom') localStorage.removeItem(this.RENDERER_STORE);
+                choice = localStorage.getItem(this.RENDERER_STORE) === 'webgl' ? 'webgl' : 'dom';
+            } catch (e) {
+                // Storage blocked: the query alone decides, for this page.
+            }
+            this._rendererChoice = choice;
+        }
+        return this._rendererChoice;
+    },
+
+    // 'webgl' while any terminal is drawn by it (perf-probe.js reports this).
+    rendererInUse() {
+        return Object.values(this.terminals).some(t => t && t.__sshdeckWebgl)
+            ? 'webgl' : 'dom';
+    },
+
+    // The addon's script, fetched once. Its pinned URL lives in the template
+    // (meta xterm-webgl), so no pin is repeated here.
+    loadWebglAddon() {
+        if (window.WebglAddon) {
+            return Promise.resolve(window.WebglAddon);
+        }
+        if (!this._webglLoad) {
+            const src = document.querySelector('meta[name="xterm-webgl"]')?.content;
+            this._webglLoad = new Promise((resolve, reject) => {
+                if (!src) {
+                    reject(new Error('no xterm-webgl meta'));
+                    return;
+                }
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = () => (window.WebglAddon
+                    ? resolve(window.WebglAddon) : reject(new Error('no WebglAddon')));
+                script.onerror = () => reject(new Error('xterm-webgl failed to load'));
+                document.head.appendChild(script);
+            });
+            // A failed fetch is not cached: the next terminal may try again.
+            this._webglLoad.catch(() => { this._webglLoad = null; });
+        }
+        return this._webglLoad;
+    },
+
+    useWebglRenderer(terminalKey, sessionId) {
+        if (this.rendererChoice() !== 'webgl') {
+            return;
+        }
+        const terminal = this.terminals[terminalKey];
+        this.loadWebglAddon().then((lib) => {
+            // Destroyed, or replaced by a re-attach, while the addon loaded.
+            if (this.terminals[terminalKey] !== terminal || terminal.__sshdeckWebgl) {
+                return;
+            }
+            const addon = new lib.WebglAddon();
+            try {
+                terminal.loadAddon(addon);
+            } catch (e) {
+                this.noteTimeline(sessionId, 'renderer', { to: 'dom', why: 'no-webgl' });
+                return;
+            }
+            terminal.__sshdeckWebgl = addon;
+            addon.onContextLoss(() => this.dropWebglRenderer(terminalKey, 'context-lost'));
+            this.noteTimeline(sessionId, 'renderer', { to: 'webgl' });
+            this.requestFit(sessionId);
+        }).catch(() => {
+            this.noteTimeline(sessionId, 'renderer', { to: 'dom', why: 'load-failed' });
+        });
+    },
+
+    // Back to the DOM renderer, in place: disposing the addon is what makes
+    // xterm draw with its own renderer again.
+    dropWebglRenderer(terminalKey, why) {
+        const terminal = this.terminals[terminalKey];
+        const addon = terminal && terminal.__sshdeckWebgl;
+        if (!addon) {
+            return;
+        }
+        terminal.__sshdeckWebgl = null;
+        try {
+            addon.dispose();
+        } catch (e) {
+            // The context is already gone; there is nothing left to release.
+        }
+        const sessionId = this.sessionIdForTerminalKey(terminalKey);
+        this.noteTimeline(sessionId, 'renderer', { to: 'dom', why });
+        if (sessionId) {
+            this.requestFit(sessionId);
+        }
+    },
+
+    /*
+     * The cell the active renderer draws for a character of this size. The
+     * DOM renderer draws the character's own advance. The WebGL renderer snaps
+     * it to whole device pixels, width down and height up (xterm 6
+     * WebglRenderer._updateDimensions) -- measured: 8.429 px wide becomes 8 px
+     * at DPR 1, 1.25, 1.75 and 2. A fit that used the advance left 105 px of
+     * the 1801 px pane empty at the owner's 1.75.
+     */
+    rendererCell(terminal, width, height) {
+        if (!terminal.__sshdeckWebgl) {
+            return { width, height };
+        }
+        const dpr = window.devicePixelRatio || 1;
+        return { width: Math.floor(width * dpr) / dpr, height: Math.ceil(height * dpr) / dpr };
+    },
+
     attachTerminal(sessionId, containerId, terminalKey = null) {
         const key = terminalKey || sessionId;
         const terminal = this.terminals[key];
@@ -1565,6 +1698,7 @@ const TerminalManager = {
         }
 
         terminal.open(container);
+        this.useWebglRenderer(key, sessionId);
 
         // Keep the scroll-state observation (Exit-Scroll depends on it).
         // The custom scrollbar overlay it used to build was retired -- see
@@ -4287,13 +4421,17 @@ const TerminalManager = {
      * service re-measures synchronously when fontSize changes, so the
      * presented font can be put back in the same turn. The cache is keyed by
      * the base size and the family, which is what a font or theme change
-     * moves.
+     * moves, and by the renderer and the pixel ratio, which decide the cell
+     * drawn for that character (rendererCell).
      */
     baseCharMetrics(terminal) {
         const base = this.getBaseFontSize();
         const family = terminal.options.fontFamily;
+        const webgl = !!terminal.__sshdeckWebgl;
+        const dpr = window.devicePixelRatio || 1;
         const cached = terminal.__sshdeckBaseChar;
-        if (cached && cached.font === base && cached.family === family) {
+        if (cached && cached.font === base && cached.family === family
+                && cached.webgl === webgl && cached.dpr === dpr) {
             return cached;
         }
         const charSize = terminal._core._charSizeService;
@@ -4302,8 +4440,9 @@ const TerminalManager = {
             terminal.options.fontSize = base;
             charSize.measure();
         }
+        const cell = this.rendererCell(terminal, charSize.width, charSize.height);
         const metrics = {
-            width: charSize.width, height: charSize.height, font: base, family,
+            width: cell.width, height: cell.height, font: base, family, webgl, dpr,
         };
         if (presented !== base) {
             terminal.options.fontSize = presented;
@@ -4457,6 +4596,7 @@ const TerminalManager = {
                 terminal.options.fontSize = font;
             }
             const charSize = terminal._core._charSizeService;
+            const drawn = () => this.rendererCell(terminal, charSize.width, charSize.height);
             /*
              * AND THEN FIT IT FOR REAL. Glyph height moves in steps (14 and
              * 14.5 both measure 16px tall, 15 measures 18px) while width is
@@ -4467,9 +4607,10 @@ const TerminalManager = {
              * overflow and read it again.
              */
             for (let pass = 0; pass < 4; pass += 1) {
+                const cell = drawn();
                 const over = Math.max(
-                    (terminal.cols * charSize.width) / box.width,
-                    (terminal.rows * charSize.height) / box.height);
+                    (terminal.cols * cell.width) / box.width,
+                    (terminal.rows * cell.height) / box.height);
                 if (!(over > 1) || font <= this.ZOOM_MIN_FONT) {
                     break;
                 }
@@ -4487,12 +4628,17 @@ const TerminalManager = {
              * the pane, and pouring all of it between the characters is what
              * the owner reported as unreadable. Past the cap the width stays as
              * margin and recentreTerminalScreen centres the frame in it.
+             *
+             * None under WebGL: it adds the option as whole DEVICE pixels,
+             * rounded, so a capped fraction of a CSS pixel is either nothing
+             * or a pixel the spare width may not have.
              */
-            const spare = box.width / terminal.cols - charSize.width;
-            letterSpacing = Math.max(0, Math.floor(Math.min(
-                spare, charSize.width * this.LETTER_SPACING_MAX_RATIO) * 100) / 100);
+            const cell = drawn();
+            const spare = box.width / terminal.cols - cell.width;
+            letterSpacing = terminal.__sshdeckWebgl ? 0 : Math.max(0, Math.floor(Math.min(
+                spare, cell.width * this.LETTER_SPACING_MAX_RATIO) * 100) / 100);
             lineHeight = Math.max(1, Math.min(this.LINE_HEIGHT_MAX,
-                (box.height / terminal.rows) / charSize.height));
+                (box.height / terminal.rows) / cell.height));
             lineHeight = Math.floor(lineHeight * 100) / 100;
         }
         this.applyTextMetrics(terminal, font, letterSpacing, lineHeight);
@@ -5676,11 +5822,12 @@ const TerminalManager = {
      * resizes and is written to exactly as before; only the picture is held.
      * FREEZE_MAX_MS is a belt, re-armed by every geometry of a drag.
      *
-     * The snapshot is a DOM clone (the renderer is the DOM one: measured, zero
-     * canvases). The renderer's generated CSS is scoped by an owner class on
-     * the terminal root, so the clone's copy of it is re-scoped to a class of
-     * its own -- otherwise those stale rules would also match the live
-     * terminal, which is the one thing a snapshot must not touch.
+     * The snapshot is a DOM clone of the DOM renderer's rows (a pane on the
+     * WebGL trial gets a plain cover). The renderer's generated CSS is scoped
+     * by an owner class on the terminal root, so the clone's copy of it is
+     * re-scoped to a class of its own -- otherwise those stale rules would
+     * also match the live terminal, which is the one thing a snapshot must
+     * not touch.
      */
     FREEZE_MAX_MS: 1200,
     FREEZE_QUIET_MS: 250,
@@ -5798,8 +5945,6 @@ const TerminalManager = {
         if (!(rect.width > 0) || !(rect.height > 0)) {
             return;
         }
-        const owner = (terminal.element.className.match(
-            /xterm-dom-renderer-owner-\d+/) || [])[0];
         const mine = `sshdeck-frozen-${this._freezeSeq += 1}`;
         const pane = terminal.element.getBoundingClientRect();
         const cover = document.createElement('div');
@@ -5807,19 +5952,26 @@ const TerminalManager = {
         cover.setAttribute('aria-hidden', 'true');
         cover.style.cssText = 'position:fixed;overflow:hidden;pointer-events:none;'
             + `z-index:5;background:${getComputedStyle(terminal.element).backgroundColor}`;
-        // The snapshot stays exactly where the frame was painted; the cover
-        // around it is the whole pane (fitFrozenPane).
-        const copy = screen.cloneNode(true);
-        copy.style.position = 'absolute';
-        copy.style.margin = '0';
-        copy.style.left = `${rect.left - pane.left}px`;
-        copy.style.top = `${rect.top - pane.top}px`;
-        if (owner) {
-            copy.querySelectorAll('style').forEach(style => {
-                style.textContent = style.textContent.split(owner).join(mine);
-            });
+        // A WebGL pane has no rows to copy -- a canvas clones blank -- so its
+        // cover is the background alone (the trial's known cost; see
+        // useWebglRenderer).
+        if (!terminal.__sshdeckWebgl) {
+            const owner = (terminal.element.className.match(
+                /xterm-dom-renderer-owner-\d+/) || [])[0];
+            // The snapshot stays exactly where the frame was painted; the
+            // cover around it is the whole pane (fitFrozenPane).
+            const copy = screen.cloneNode(true);
+            copy.style.position = 'absolute';
+            copy.style.margin = '0';
+            copy.style.left = `${rect.left - pane.left}px`;
+            copy.style.top = `${rect.top - pane.top}px`;
+            if (owner) {
+                copy.querySelectorAll('style').forEach(style => {
+                    style.textContent = style.textContent.split(owner).join(mine);
+                });
+            }
+            cover.appendChild(copy);
         }
-        cover.appendChild(copy);
         document.body.appendChild(cover);
         this.frozenPanes[terminalKey] = {
             cover,
@@ -5966,6 +6118,8 @@ const TerminalManager = {
         const pane = terminal.element.parentElement;
         const frozen = this.frozenPanes[key];
         return {
+            // A WebGL pane paints into a canvas: it has no DOM rows to count.
+            renderer: terminal.__sshdeckWebgl ? 'webgl' : 'dom',
             domRows: texts.length,
             domPainted: texts.filter(Boolean).length,
             domFirst: texts.indexOf(true),
@@ -6383,6 +6537,9 @@ const TerminalManager = {
 };
 
 window.TerminalManager = TerminalManager;
+// Read the renderer choice at load: a page opened with ?renderer= before any
+// session exists must still remember it.
+TerminalManager.rendererChoice();
 
 let resizeTimeout;
 window.addEventListener('resize', () => {

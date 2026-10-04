@@ -13,6 +13,9 @@
          deployment's root, and its ?v= is raised here, once, with the
          template's own sprite pins when symbols are added. -->
     <meta name="icon-sprite" content="{{ url_for('static', filename='icons/icons.svg') }}?v=4">
+    <!-- The WebGL renderer, fetched only by a page opened with ?renderer=webgl
+         (terminal-manager.js loadWebglAddon); its pin lives here alone. -->
+    <meta name="xterm-webgl" content="{{ url_for('static', filename='vendor/xterm/xterm-addon-webgl.js') }}?v=1">
     <meta name="max-editor-file-size" content="{{ max_editor_file_size|default(5242880) }}">
     <title>SSHDeck</title>
 
@@ -1730,7 +1733,7 @@
     <script src="{{ url_for('static', filename='js/profile-launcher-utils.js') }}?v=1"></script>
     <script src="{{ url_for('static', filename='js/command-workspace.js') }}?v=4"></script>
 
-    <script src="{{ url_for('static', filename='js/terminal-manager.js') }}?v=100"></script>
+    <script src="{{ url_for('static', filename='js/terminal-manager.js') }}?v=101"></script>
     <script src="{{ url_for('static', filename='js/session-manager.js') }}?v=71"></script>
     <script src="{{ url_for('static', filename='js/broadcast-input.js') }}?v=9"></script>
     <script src="{{ url_for('static', filename='js/profile-manager.js') }}?v=5"></script>
@@ -1743,7 +1746,7 @@
     <script src="{{ url_for('static', filename='js/files-browser.js') }}?v=2"></script>
     <script src="{{ url_for('static', filename='js/sftp-file-manager.js') }}?v=18"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}?v=101"></script>
-    <script src="{{ url_for('static', filename='js/perf-probe.js') }}?v=1"></script>
+    <script src="{{ url_for('static', filename='js/perf-probe.js') }}?v=2"></script>
     <script src="{{ url_for('static', filename='js/header-menus.js') }}?v=13"></script>
     <!-- After header-menus.js: it owns #mobileMoreBtn's listeners, and this
          module MOVES that button into the touch action row. Binding first means

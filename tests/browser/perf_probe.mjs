@@ -11,7 +11,8 @@
  *   §4  what is counted: output volume, the glyphs a monospace font may lack,
  *       wheels over the terminal, the grid on screen
  *   §5  the record: every field one the server keeps whole; the machine's
- *       details once; the round trip from the previous ack; the transport
+ *       details once; the round trip from the previous ack; the transport;
+ *       v2's renderer, blocking time, timer lag and focus
  *   §6  no content: neither typed nor received text reaches a report
  *   §7  a minute without activity sends nothing; a minute with some sends one
  *   §8  the app is untouched: output still reaches the terminal
@@ -234,6 +235,11 @@ await withContext('§3', async (ctx) => {
         .filter(k => !(k in first)), []);
     check('§5 the transport is named', first.tr, 'websocket');
     check('§5 no round trip measured yet', first.rtt, -1);
+    check('§5 v2: the renderer, blocking, timer lag and focus are reported',
+        [first.v, first.rend, first.lb.length, first.lag.length, typeof first.focus],
+        [2, 'dom', 4, 4, 'number']);
+    between('§5 ...the 100 ms timer was sampled', first.lag[3], 1, 1000);
+    between('§5 ...focus is a share of the minute (%)', first.focus, 0, 100);
     await page.evaluate((id) => window.socket.emit('ssh_input', { session_id: id, data: 'b' }), S1);
     const second = await page.evaluate(() => window.SSHDeckPerf.flush());
     check('§5 later records leave the machine out', ['dpr', 'gpu', 'fonts'].filter(k => k in second), []);
@@ -264,6 +270,9 @@ await withContext('§7', async (ctx) => {
     await fire(page, 'ssh_output', { session_id: S1, data: 'x' });
     await page.clock.runFor(60000);
     check('§7 a minute with output sends one report', (await reports(page)).length, 1);
+    // 600 samples of the 100 ms timer is one minute; the idle minute before
+    // it would have doubled them.
+    between('§7 ...covering that minute alone', (await reports(page))[0].report.lag[3], 500, 700);
     await page.clock.runFor(60000);
     check('§7 ...and the next idle minute none', (await reports(page)).length, 1);
 });
