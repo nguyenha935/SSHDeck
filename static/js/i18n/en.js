@@ -105,13 +105,13 @@ window.__i18n.en = {
         'connection.profileUnavailable': 'This profile is no longer available.',
         'connection.loadProfile': 'Load Profile (Optional)',
         'connection.selectProfile': '-- Select Profile --',
-        'connection.host': 'Host *',
-        'connection.port': 'Port *',
+        // No string carries the required mark: a caption adds ' *' in the
+        // template, outside the translated span, so a choice that shares
+        // the key cannot inherit it (tests/test_i18n_required_mark.py).
+        'connection.host': 'Host',
+        'connection.port': 'Port',
         'connection.authMethod': 'Authentication Method',
-        // The auth-type CHOICE and the caption of the key field it reveals
-        // are two keys: only the caption marks a required field.
         'connection.sshKey': 'SSH Key',
-        'connection.sshKeyField': 'SSH Key *',
         'connection.tailscaleSSH': 'Tailscale SSH',
         'connection.selectSSHKey': '-- Select SSH Key --',
         'connection.saveAsProfile': 'Save as profile',
@@ -120,7 +120,6 @@ window.__i18n.en = {
         'connection.jumpHostHint': 'Manage jump hosts in the account menu.',
         'connection.jumpHostPassword': 'Jump Host Password',
         'connection.jumpHostPasswordHint': 'This bastion uses password auth — enter its password (never stored).',
-        'connection.commandSet': 'Commands after connecting (optional)',
         'connection.commandSetHint': 'Runs on the remote host after a successful connection, not in SSHDeck. Not run again when reconnecting to an existing tmux session.',
         'commandSets.manage': 'Command Sets',
         'commandSets.manageOpen': 'Command Sets…',

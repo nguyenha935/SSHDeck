@@ -859,19 +859,19 @@
 
                     <div class="form-row">
                         <div class="form-group flex-2">
-                            <label for="hostInput" data-i18n="connection.host">Host *</label>
+                            <label for="hostInput"><span data-i18n="connection.host">Host</span> *</label>
                             <input type="text" id="hostInput" class="form-control" placeholder="192.168.1.100" required>
                             <div class="field-hint" id="hostHint"></div>
                         </div>
                         <div class="form-group flex-1">
-                            <label for="portInput" data-i18n="connection.port">Port *</label>
+                            <label for="portInput"><span data-i18n="connection.port">Port</span> *</label>
                             <input type="number" id="portInput" class="form-control" value="22" required>
                             <div class="field-hint" id="portHint"></div>
                         </div>
                     </div>
 
                     <div class="form-group">
-                        <label for="usernameInput" data-i18n="auth.username">Username *</label>
+                        <label for="usernameInput"><span data-i18n="auth.username">Username</span> *</label>
                         <input type="text" id="usernameInput" class="form-control" placeholder="root" required>
                         <div class="field-hint" id="usernameHint"></div>
                     </div>
@@ -888,7 +888,7 @@
                     </div>
 
                     <div class="form-group" id="passwordGroup">
-                        <label for="passwordInput" data-i18n="auth.password">Password *</label>
+                        <label for="passwordInput"><span data-i18n="auth.password">Password</span> *</label>
                         <div class="input-wrapper with-toggle">
                             <input type="password" id="passwordInput" class="form-control" data-i18n-placeholder="auth.password" placeholder="Password">
                             <button type="button" class="password-toggle" data-target="passwordInput" aria-label="Toggle password visibility" data-i18n-aria-label="auth.togglePasswordVisibility"><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=5#icon-eye"></use></svg></button>
@@ -897,7 +897,7 @@
                     </div>
 
                     <div class="form-group hidden" id="keyGroup">
-                        <label for="keySelect" data-i18n="connection.sshKeyField">SSH Key *</label>
+                        <label for="keySelect"><span data-i18n="connection.sshKey">SSH Key</span> *</label>
                         <select id="keySelect" class="form-control">
                             <option value="" data-i18n="connection.selectSSHKey">-- Select SSH Key --</option>
                         </select>
@@ -913,7 +913,7 @@
                     </div>
 
                     <div class="form-group hidden" id="jumpHostPasswordGroup">
-                        <label for="jumpHostPasswordInput" data-i18n="connection.jumpHostPassword">Jump Host Password</label>
+                        <label for="jumpHostPasswordInput"><span data-i18n="connection.jumpHostPassword">Jump Host Password</span> *</label>
                         <div class="input-wrapper with-toggle">
                             <input type="password" id="jumpHostPasswordInput" class="form-control" data-i18n-placeholder="auth.password" placeholder="Password">
                             <button type="button" class="password-toggle" data-target="jumpHostPasswordInput" aria-label="Toggle password visibility" data-i18n-aria-label="auth.togglePasswordVisibility"><svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=5#icon-eye"></use></svg></button>
@@ -935,7 +935,7 @@
                         </div>
 
                         <div id="connectionCommandSetPanel" class="post-connect-panel hidden">
-                            <label for="commandSetSelect" data-i18n="connection.commandSet">Command Set</label>
+                            <label for="commandSetSelect"><span data-i18n="commandModes.commandSet">Command Set</span> *</label>
                             <div class="command-set-selector-row">
                                 <select id="commandSetSelect" class="form-control">
                                     <option value="" data-i18n="commandSets.none">Select a command set</option>
@@ -946,7 +946,7 @@
                         </div>
 
                         <div id="connectionSingleCommandPanel" class="post-connect-panel hidden">
-                            <label for="connectionCommandSelect" data-i18n="commandModes.selectCommand">Saved Command</label>
+                            <label for="connectionCommandSelect"><span data-i18n="commandModes.command">Command</span> *</label>
                             <div class="command-set-selector-row">
                                 <select id="connectionCommandSelect" class="form-control"></select>
                                 <button type="button" id="editSelectedCommandBtn" class="btn btn-secondary btn-sm" data-i18n="common.edit">Edit</button>
@@ -1041,21 +1041,21 @@
                     <form id="profileEditorForm">
                         <input type="hidden" id="profileEditorId">
                         <div class="form-group">
-                            <label for="profileEditorName" data-i18n="connection.profileName">Profile Name *</label>
+                            <label for="profileEditorName"><span data-i18n="connection.profileName">Profile Name</span> *</label>
                             <input type="text" id="profileEditorName" class="form-control" maxlength="128" required>
                         </div>
                         <div class="form-row">
                             <div class="form-group flex-2">
-                                <label for="profileEditorHost" data-i18n="connection.host">Host *</label>
+                                <label for="profileEditorHost"><span data-i18n="connection.host">Host</span> *</label>
                                 <input type="text" id="profileEditorHost" class="form-control" required>
                             </div>
                             <div class="form-group flex-1">
-                                <label for="profileEditorPort" data-i18n="connection.port">Port *</label>
+                                <label for="profileEditorPort"><span data-i18n="connection.port">Port</span> *</label>
                                 <input type="number" id="profileEditorPort" class="form-control" min="1" max="65535" value="22" required>
                             </div>
                         </div>
                         <div class="form-group">
-                            <label for="profileEditorUsername" data-i18n="auth.username">Username *</label>
+                            <label for="profileEditorUsername"><span data-i18n="auth.username">Username</span> *</label>
                             <input type="text" id="profileEditorUsername" class="form-control" required>
                         </div>
                         <div class="form-group">
@@ -1067,7 +1067,7 @@
                             </select>
                         </div>
                         <div class="form-group hidden" id="profileEditorKeyGroup">
-                            <label for="profileEditorKeySelect" data-i18n="connection.sshKeyField">SSH Key *</label>
+                            <label for="profileEditorKeySelect"><span data-i18n="connection.sshKey">SSH Key</span> *</label>
                             <select id="profileEditorKeySelect" class="form-control"></select>
                         </div>
                         <div class="form-group">
@@ -1084,12 +1084,12 @@
                             </select>
                         </div>
                         <div id="profileEditorCommandSetGroup" class="form-group hidden">
-                            <label for="profileEditorCommandSetSelect" data-i18n="connection.commandSet">Command Set</label>
+                            <label for="profileEditorCommandSetSelect"><span data-i18n="commandModes.commandSet">Command Set</span> *</label>
                             <select id="profileEditorCommandSetSelect" class="form-control"></select>
                         </div>
                         <div id="profileEditorCommandGroup" class="hidden">
                             <div class="form-group">
-                                <label for="profileEditorCommandSelect" data-i18n="commandModes.selectCommand">Saved Command</label>
+                                <label for="profileEditorCommandSelect"><span data-i18n="commandModes.command">Command</span> *</label>
                                 <select id="profileEditorCommandSelect" class="form-control"></select>
                             </div>
                             <div class="form-group">
@@ -1231,12 +1231,12 @@
                     <h3 data-i18n="jumphosts.addNew">Add Jump Host</h3>
                     <form id="jumpHostForm">
                         <div class="form-group">
-                            <label for="jhNameInput" data-i18n="jumphosts.name">Name</label>
+                            <label for="jhNameInput"><span data-i18n="jumphosts.name">Name</span> *</label>
                             <input type="text" id="jhNameInput" class="form-control" placeholder="Office Bastion" required>
                         </div>
                         <div class="form-row">
                             <div class="form-group flex-2">
-                                <label for="jhHostInput" data-i18n="connection.host">Host</label>
+                                <label for="jhHostInput"><span data-i18n="connection.host">Host</span> *</label>
                                 <input type="text" id="jhHostInput" class="form-control" placeholder="bastion.example.com" required>
                             </div>
                             <div class="form-group flex-1">
@@ -1245,7 +1245,7 @@
                             </div>
                         </div>
                         <div class="form-group">
-                            <label for="jhUsernameInput" data-i18n="auth.username">Username</label>
+                            <label for="jhUsernameInput"><span data-i18n="auth.username">Username</span> *</label>
                             <input type="text" id="jhUsernameInput" class="form-control" placeholder="bastion_user" required>
                         </div>
                         <div class="form-group">
@@ -1256,7 +1256,7 @@
                             </div>
                         </div>
                         <div class="form-group hidden" id="jhKeyGroup">
-                            <label for="jhKeySelect" data-i18n="connection.sshKeyField">SSH Key *</label>
+                            <label for="jhKeySelect"><span data-i18n="connection.sshKey">SSH Key</span> *</label>
                             <select id="jhKeySelect" class="form-control">
                                 <option value="" data-i18n="connection.selectSSHKey">-- Select SSH Key --</option>
                             </select>
@@ -1385,7 +1385,7 @@
                     </div>
 
                     <div class="form-group">
-                        <label data-i18n="commands.operatingSystems">Operating Systems *</label>
+                        <label><span data-i18n="commands.operatingSystems">Operating Systems</span> *</label>
                         <div class="checkbox-group">
                             <label><input type="checkbox" name="commandOs" value="all" id="osAll"> <span data-i18n="commands.osAll">All</span></label>
                             <label><input type="checkbox" name="commandOs" value="linux"> Linux</label>
@@ -1777,13 +1777,13 @@
          gates render this template with a plain substitution that cannot
          evaluate Jinja expressions, and a computed src would reach them as an
          empty one. -->
-    <script src="{{ url_for('static', filename='js/i18n/en.js') }}?v=5"></script>
-{% if lang == 'vi' %}    <script src="{{ url_for('static', filename='js/i18n/vi.js') }}?v=5"></script>
-{% elif lang == 'de' %}    <script src="{{ url_for('static', filename='js/i18n/de.js') }}?v=5"></script>
-{% elif lang == 'fr' %}    <script src="{{ url_for('static', filename='js/i18n/fr.js') }}?v=5"></script>
-{% elif lang == 'es' %}    <script src="{{ url_for('static', filename='js/i18n/es.js') }}?v=5"></script>
-{% elif lang == 'zh' %}    <script src="{{ url_for('static', filename='js/i18n/zh.js') }}?v=5"></script>
-{% endif %}    <script src="{{ url_for('static', filename='js/i18n.js') }}?v=52" data-i18n-version="5"></script>
+    <script src="{{ url_for('static', filename='js/i18n/en.js') }}?v=6"></script>
+{% if lang == 'vi' %}    <script src="{{ url_for('static', filename='js/i18n/vi.js') }}?v=6"></script>
+{% elif lang == 'de' %}    <script src="{{ url_for('static', filename='js/i18n/de.js') }}?v=6"></script>
+{% elif lang == 'fr' %}    <script src="{{ url_for('static', filename='js/i18n/fr.js') }}?v=6"></script>
+{% elif lang == 'es' %}    <script src="{{ url_for('static', filename='js/i18n/es.js') }}?v=6"></script>
+{% elif lang == 'zh' %}    <script src="{{ url_for('static', filename='js/i18n/zh.js') }}?v=6"></script>
+{% endif %}    <script src="{{ url_for('static', filename='js/i18n.js') }}?v=52" data-i18n-version="6"></script>
 
     <script src="{{ url_for('static', filename='js/command-set-utils.js') }}?v=1"></script>
     <script src="{{ url_for('static', filename='js/profile-launcher-utils.js') }}?v=1"></script>
@@ -1801,7 +1801,7 @@
     <script src="{{ url_for('static', filename='js/file-transfer.js') }}?v=2"></script>
     <script src="{{ url_for('static', filename='js/browser-filesystem.js') }}?v=2"></script>
     <script src="{{ url_for('static', filename='js/files-browser.js') }}?v=2"></script>
-    <script src="{{ url_for('static', filename='js/sftp-file-manager.js') }}?v=19"></script>
+    <script src="{{ url_for('static', filename='js/sftp-file-manager.js') }}?v=20"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}?v=102"></script>
     <script src="{{ url_for('static', filename='js/perf-probe.js') }}?v=3"></script>
     <script src="{{ url_for('static', filename='js/header-menus.js') }}?v=13"></script>

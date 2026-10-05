@@ -289,8 +289,9 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # on the static label instead of on the control's height. A browser on v63 keeps
     # the thickened toggle and the shortened note area, so the pin must move.
     assert "filename='css/style.css') }}?v=75" in idx
-    # sftp-file-manager.js 17 -> 18: the Files browser hooks (PR 2a).
-    assert "filename='js/sftp-file-manager.js') }}?v=19" in idx
+    # sftp-file-manager.js 19 -> 20: the quick-connect captions mark the
+    # required fields.
+    assert "filename='js/sftp-file-manager.js') }}?v=20" in idx
     # app.js v69 -> v70 (S35 A, owner's composer/erase requirement): after the
     # empty-composer erase spends its last DEL, the draft is released from the
     # taint applyTerminalTruth set when it installed the shell's line. Measured on
@@ -396,7 +397,7 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # a grow included. A browser on v96 shows omp's replay run past.
     assert "filename='js/terminal-manager.js') }}?v=102" in idx
     assert "\"filename='css/style.css'\": '?v=75'," in tp
-    assert "\"filename='js/sftp-file-manager.js'\": '?v=19'," in tp
+    assert "\"filename='js/sftp-file-manager.js'\": '?v=20'," in tp
     assert "\"filename='js/app.js'\": '?v=102'," in tp
     # session-manager v51 -> v52 (S35 P5): restore-driven pane eviction stopped
     # (displaceOccupant:false) and the remembered session selection is applied on

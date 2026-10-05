@@ -528,7 +528,7 @@ class SFTPFileManager {
 
                         <div class="form-row">
                             <div class="form-group flex-2">
-                                <label for="fmQcHost" data-i18n="fm.qc.host">Host</label>
+                                <label for="fmQcHost"><span data-i18n="fm.qc.host">Host</span> *</label>
                                 <input type="text" id="fmQcHost" class="form-control" placeholder="hostname or IP" required>
                             </div>
                             <div class="form-group flex-1">
@@ -538,7 +538,7 @@ class SFTPFileManager {
                         </div>
 
                         <div class="form-group">
-                            <label for="fmQcUsername" data-i18n="fm.qc.username">Username</label>
+                            <label for="fmQcUsername"><span data-i18n="fm.qc.username">Username</span> *</label>
                             <input type="text" id="fmQcUsername" class="form-control" required>
                         </div>
 
@@ -557,7 +557,7 @@ class SFTPFileManager {
                         </div>
 
                         <div class="form-group" id="fmQcPasswordGroup">
-                            <label for="fmQcPassword" data-i18n="fm.qc.password">Password</label>
+                            <label for="fmQcPassword"><span data-i18n="fm.qc.password">Password</span> *</label>
                             <div class="input-wrapper with-toggle">
                                 <input type="password" id="fmQcPassword" class="form-control" placeholder="Enter password">
                                 <button type="button" class="password-toggle" id="fmQcPwToggle" aria-label="Toggle password visibility">
@@ -567,7 +567,7 @@ class SFTPFileManager {
                         </div>
 
                         <div class="form-group hidden" id="fmQcKeyGroup">
-                            <label for="fmQcKeySelect" data-i18n="fm.qc.sshKey">SSH Key</label>
+                            <label for="fmQcKeySelect"><span data-i18n="fm.qc.sshKey">SSH Key</span> *</label>
                             <select id="fmQcKeySelect" class="form-control">
                                 <option value="" data-i18n="fm.qc.selectKey">-- Select Key --</option>
                             </select>
