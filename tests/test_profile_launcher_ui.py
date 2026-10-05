@@ -92,7 +92,8 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # v2: the menu is as tall as the room under its control.
         "filename='css/files-browser.css'": '?v=2',
         # New: Settings, every setting in one place (owner ruling 2026-10-05).
-        "filename='css/settings.css'": '?v=1',
+        # v2: the administration sections (users, sessions, audit, system).
+        "filename='css/settings.css'": '?v=2',
         # v36: W13-A4 session.legacyTmuxLocale / .legacyTmuxLocaleShort keys
         # in all six locales.
         # v37: W13-B5 session.reconnectRetainBody key in all six locales.
@@ -274,7 +275,10 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         "filename='js/device-settings.js'": '?v=2',
         # New: Settings (owner ruling 2026-10-05). After header-menus.js and
         # app.js, whose scrollback it reads.
-        "filename='js/settings-view.js'": '?v=1',
+        # v2: it announces open / section / close for settings-admin.js.
+        "filename='js/settings-view.js'": '?v=2',
+        # New: the administration sections; an administrator's page only.
+        "filename='js/settings-admin.js'": '?v=1',
         # Extracted from a 146-line inline <script> in index.html. Inline script
         # cannot be cache-busted at all -- it ships inside the cached HTML -- so
         # pinning it is the point of moving it out.

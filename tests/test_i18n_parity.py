@@ -85,7 +85,6 @@ def test_english_command_set_copy_explains_execution_boundaries():
 def test_all_popup_translation_references_exist_in_every_locale():
     sources = [
         Path('templates/index.html').read_text(encoding='utf-8'),
-        Path('templates/admin.html').read_text(encoding='utf-8'),
         Path('static/js/sftp-file-manager.js').read_text(encoding='utf-8'),
     ]
     referenced_keys = set()
@@ -156,7 +155,7 @@ def test_the_engine_carries_no_strings_and_can_fetch_a_locale():
 def test_every_page_loads_english_plus_the_readers_language():
     """The server decides which file the page carries, from the `lang` cookie,
     so a reader never sees English flash before their own language lands."""
-    for name in ('index.html', 'admin.html', 'login.html', 'register.html'):
+    for name in ('index.html', 'login.html', 'register.html'):
         page = Path('templates') / name
         source = page.read_text(encoding='utf-8')
         assert "filename='js/i18n/en.js'" in source, f'{name} must load English'

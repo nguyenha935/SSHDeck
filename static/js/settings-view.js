@@ -4,8 +4,11 @@
  * Settings used to live in six places: a Settings dialog, theme and language
  * pickers expanded inside the account menu, three management dialogs, the
  * change-password page, the admin page and the session menu. This view takes
- * the dialog, the two pickers and the password page; the admin page follows.
- * The markup is templates/index.html #settingsView, the look settings.css.
+ * the dialog, the two pickers, the password page and the admin page. The
+ * markup is templates/index.html #settingsView, the look settings.css; the
+ * administration sections are settings-admin.js, which only an
+ * administrator's page loads and which follows this view through the
+ * sshdeck:settings-open / -section / -close events.
  *
  * Geometry is the expanded Files browser's: over the workspace on a desktop
  * and an iPad, the whole screen on a phone, nothing underneath hidden or
@@ -103,6 +106,7 @@
                 document.body.classList.add('settings-open');
                 this.setBackgroundInert(true);
                 this.refresh();
+                this.announce('open');
             }
             const remembered = readStore(STORE_SECTION);
             const fallback = known.includes(remembered) ? remembered : known[0];
@@ -136,6 +140,7 @@
             this.root.querySelector('.sv-scroll').scrollTop = 0;
             writeStore(STORE_SECTION, section);
             this.writeAddress();
+            this.announce('section', { section });
         },
 
         showTitle() {
@@ -148,6 +153,11 @@
             this.section = null;
             this.root.classList.remove('sv-in-section');
             this.writeAddress();
+            this.announce('section', { section: null });
+        },
+
+        announce(name, detail) {
+            document.dispatchEvent(new CustomEvent(`sshdeck:settings-${name}`, { detail }));
         },
 
         // A phone's section goes back to the list; anything else closes.
@@ -167,6 +177,7 @@
             document.body.classList.remove('settings-open');
             this.setBackgroundInert(false);
             this.releaseBack();
+            this.announce('close');
             // Back to what opened it -- or, when that was a row of a menu
             // that has closed since, to the menu's own button.
             const visible = element => element?.isConnected && element.getClientRects().length > 0;
@@ -538,6 +549,7 @@
             return view.section;
         },
         THEMES,
+        FULL_SCREEN_QUERY,
     };
 
     if (document.readyState === 'loading') {

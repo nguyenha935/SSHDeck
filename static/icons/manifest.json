@@ -67,6 +67,7 @@
     "icon-radio-tower",
     "icon-refresh-cw",
     "icon-rotate-ccw",
+    "icon-scroll-text",
     "icon-search",
     "icon-send",
     "icon-settings",
@@ -74,6 +75,7 @@
     "icon-square-terminal",
     "icon-trash-2",
     "icon-upload",
+    "icon-users",
     "icon-x"
   ],
   "selection": "icons referenced by this app plus every icon in the v5 mockup (docs/spec/sshdeck-ui-plan-v5.html), deduplicated",

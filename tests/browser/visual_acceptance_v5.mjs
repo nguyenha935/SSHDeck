@@ -51,9 +51,9 @@ function renderTemplate(rel, theme = 'glass') {
     return html.replace(/\{\{[^}]*\}\}/g, '');
 }
 
-// Exact production response shape from app/__init__.py:320-343. These three
-// states make both desktop-table and phone-card screenshots meaningful: current
-// admin, active regular user, and locked regular user.
+// Exact production response shape (app/__init__.py, _user_to_dict). Three
+// states make Settings → Users meaningful at both sizes: the current admin
+// (no ⋮ on its own row), an active user and a locked one.
 const ADMIN_USERS = [
     {
         id: 1, username: 'nguyenha', is_admin: true, is_locked: false,
@@ -77,6 +77,12 @@ const ADMIN_USERS = [
  * application module still receives the same socket method surface.
  */
 const ADMIN_USERS_DELAY_MS = 500;
+// Settings fetches the running sessions as it opens (the phone's list shows
+// the count); the exact production shape of /admin/api/capacity, empty.
+const ADMIN_CAPACITY = {
+    max_sessions: 100, max_sessions_per_user: 50, pending: 0, total_live: 0,
+    by_user: [], sessions: [],
+};
 
 const SOCKET_IO_FIXTURE = `
 (() => {
@@ -204,12 +210,16 @@ const server = await new Promise(resolve => {
             }, ADMIN_USERS_DELAY_MS);
             return;
         }
+        if (req.method === 'GET' && rel === '/admin/api/capacity') {
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify(ADMIN_CAPACITY));
+            return;
+        }
         const PAGES = {
             '/': 'templates/index.html',
             '/index.html': 'templates/index.html',
             '/login': 'templates/login.html',
             '/register': 'templates/register.html',
-            '/admin': 'templates/admin.html',
         };
         if (PAGES[rel]) {
             res.writeHead(200, { 'Content-Type': MIME['.html'] });
@@ -343,10 +353,10 @@ async function expectCollapsed(page, selector) {
 async function expectAdminUsersReady(page, shotName) {
     try {
         await page.waitForFunction(expected =>
-            document.querySelectorAll('#adminUsersBody > tr').length === expected,
+            document.querySelectorAll('#usersList > .sv-arow').length === expected,
         ADMIN_USERS.length, { timeout: 3000 });
     } catch {
-        const actual = await page.locator('#adminUsersBody > tr').count();
+        const actual = await page.locator('#usersList > .sv-arow').count();
         problems.push(`${shotName}: admin users readiness failed: expected `
             + `${ADMIN_USERS.length}, found ${actual}`);
     }
@@ -1984,27 +1994,30 @@ const openSettings = async (page, shotName) => {
 };
 await shell('27-settings-desktop', 'desktop', openSettings);
 await shell('27a-settings-phone390', 'phone390', openSettings);
+/*
+ * Settings → Users took over from the admin page that shots 25 and 26 used to
+ * show. The rows are settings-admin.js rendering the production users shape
+ * above, which the server answers after a delay: the shot waits for them.
+ */
+const openSettingsUsers = async (page, shotName) => {
+    await openSettings(page, shotName);
+    const touchShell = await page.evaluate(() => TerminalManager.isTouchShell());
+    const press = touchShell ? trustedTap : trustedClick;
+    if (!await press(page, '.sv-nav-item[data-section="users"]', shotName)) return;
+    await expectAdminUsersReady(page, shotName);
+};
+await shell('25-settings-users-desktop', 'desktop', openSettingsUsers);
+await shell('26-settings-users-phone390', 'phone390', openSettingsUsers);
 
-// ── Auth / admin pages ──────────────────────────────────────────────────────
+// ── Auth pages ──────────────────────────────────────────────────────────────
 for (const [name, p, vpKey] of [
     ['21-login-desktop', '/login', 'desktop'],
     ['22-login-phone390', '/login', 'phone390'],
     ['23-register-desktop', '/register', 'desktop'],
     ['24-register-phone390', '/register', 'phone390'],
-    ['25-admin-desktop', '/admin', 'desktop'],
-    ['26-admin-phone390', '/admin', 'phone390'],
 ]) {
     const [w, h, touch] = VP[vpKey];
     const { ctx, page, errors } = await open(w, h, { touch, page: p });
-    if (p === '/admin') {
-        const rowsBeforeReadiness = await page.locator(
-            '#adminUsersBody > tr').count();
-        if (rowsBeforeReadiness !== 0) {
-            problems.push(`${name}: admin readiness was vacuous: expected 0 rows `
-                + `before waiting, found ${rowsBeforeReadiness}`);
-        }
-        await expectAdminUsersReady(page, name);
-    }
     await snap(page, errors, name);
     await ctx.close();
 }

@@ -76,7 +76,8 @@ MARKED = {
     ('index.html', 'uploadForm'): set(),
     ('index.html', 'downloadForm'): set(),
     ('index.html', 'dropUploadForm'): set(),
-    ('admin.html', 'addUserModal'): set(),
+    # Settings → Users since 2026-10-05; the admin page is gone.
+    ('index.html', 'addUserForm'): set(),
     ('login.html', None): set(),
     ('register.html', 'registerForm'): set(),
     # Settings -> Account since 2026-10-05; the page it had is gone.

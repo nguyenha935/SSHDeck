@@ -92,55 +92,9 @@
         password.addEventListener('input', checkMatch);
     }
 
-    /*
-     * The admin create-user form (templates/admin.html).
-     *
-     * D8 asks the create-user form to be consistent with login/register on
-     * "alignment, height, typography, focus, VALIDATION and responsiveness".
-     * Everything but validation came from auth-v5.css the moment the form got
-     * the a5 classes; the live feedback did not, because this form has no
-     * setup* function of its own and its ids are newUsername / newPassword
-     * rather than username / password.
-     *
-     * The RULES are not invented here: they mirror auth.py register_user, which
-     * is what the admin POST reaches (app/__init__.py -> register_user), so the
-     * hint says the same thing the server would have refused with.
-     *
-     * Guarded on element existence like every other setup function, so it is a
-     * no-op on the pages that do not have this form.
-     */
-    function setupAdminCreateUserValidation() {
-        const username = document.getElementById('newUsername');
-        const password = document.getElementById('newPassword');
-        const usernameHint = document.getElementById('adminUsernameHint');
-        const passwordHint = document.getElementById('adminPasswordHint');
-
-        if (!username || !password) {
-            return;
-        }
-
-        username.addEventListener('input', () => {
-            const value = username.value.trim();
-            const isValid = /^[a-zA-Z0-9_]{3,32}$/.test(value);
-            setFieldState(
-                username,
-                usernameHint,
-                value ? (isValid ? '✓ Valid username' : '3-32 chars, letters/numbers/_') : 'Username required',
-                value ? isValid : false
-            );
-        });
-
-        password.addEventListener('input', () => {
-            const value = password.value;
-            const isValid = value.length >= 8;
-            setFieldState(password, passwordHint, isValid ? '✓ Strong enough' : 'Minimum 8 characters', isValid);
-        });
-    }
-
     document.addEventListener('DOMContentLoaded', () => {
         setupPasswordToggles();
         setupLoginValidation();
         setupRegisterValidation();
-        setupAdminCreateUserValidation();
     });
 })();

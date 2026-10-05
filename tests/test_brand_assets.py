@@ -14,8 +14,9 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 ICONS = ROOT / 'static' / 'icons'
-# change_password.html is gone: the form is Settings → Account (2026-10-05).
-TEMPLATES = ('index.html', 'login.html', 'register.html', 'admin.html')
+# change_password.html and admin.html are gone: both are Settings now
+# (2026-10-05).
+TEMPLATES = ('index.html', 'login.html', 'register.html')
 
 
 def test_the_delivered_artwork_is_vendored():
@@ -61,7 +62,7 @@ def test_the_old_glyph_is_no_longer_a_brand_mark():
     not in a template at all."""
     for name in TEMPLATES:
         source = (ROOT / 'templates' / name).read_text(encoding='utf-8')
-        for slot in re.finditer(r'class="(?:brand-logo|a5-logo|a5-topbar-logo)[^"]*".*?</span>',
+        for slot in re.finditer(r'class="(?:brand-logo|a5-logo)[^"]*".*?</span>',
                                 source, flags=re.S):
             assert 'icon-square-terminal' not in slot.group(0), name
         outside = re.sub(r'<nav class="sv-nav".*?</nav>', '', source, flags=re.S)

@@ -107,7 +107,10 @@ const browser = await chromium.launch({ headless: true });
 console.log('\n--- CONTRACT 1: P1-1 MORE-SHEET INDEPENDENT SCROLLER WORKFLOW ---');
 {
     const ctx = await browser.newContext({
-        viewport: { width: 390, height: 600 },
+        // 390x600 until 2026-10-05: without the Admin panel row the sheet's
+        // content fits there exactly (487 = 487, measured), and at 560 it
+        // overflows by 37 px, as it did by 41 px at 600 before.
+        viewport: { width: 390, height: 560 },
         hasTouch: true,
         isMobile: true,
     });
@@ -178,7 +181,7 @@ console.log('\n--- CONTRACT 1: P1-1 MORE-SHEET INDEPENDENT SCROLLER WORKFLOW ---
     });
 
     check('P1-1: more-sheet exists and is visible', sheetAudit.exists && sheetAudit.visible);
-    check('P1-1: more-sheet has scrollable overflow on 390x600',
+    check('P1-1: more-sheet has scrollable overflow on 390x560',
         sheetAudit.canScroll, `scrollHeight=${sheetAudit.scrollHeight} clientHeight=${sheetAudit.clientHeight}`);
     check('P1-1: canonical account tree (#accountDropdownHeader) is hosted inside the sheet',
         sheetAudit.treeHosted, `treeHosted=${sheetAudit.treeHosted}`);
@@ -297,7 +300,7 @@ console.log('\n--- CONTRACT 1: P1-1 MORE-SHEET INDEPENDENT SCROLLER WORKFLOW ---
 // composer dock. This contract clicks the production button and audits the
 // anchored geometry at the three tiers the defect was measured on:
 // 390x844 (52px gap), 360x800 (8px gap), 926x428 (-25px gap).
-// The 390x600 full-card scroll contract above is unchanged and stays.
+// The 390x560 full-card scroll contract above is unchanged and stays.
 console.log('\n--- CONTRACT 1b: P1-1 MORE-SHEET TRIGGER ANCHOR (R4, 1px) ---');
 for (const tier of [
     { label: 'phone390x844', w: 390, h: 844 },
