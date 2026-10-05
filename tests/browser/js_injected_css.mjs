@@ -190,7 +190,10 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // must move.
         // v68: Phase 2 -- the resync/conflict popover rules are
         // gone with the sheets themselves.
-        ['css/style.css', 74],
+        // v75: a checkbox or radio row in a form group is a flex row again
+        // (it had lost to the caption rule), and touch fields are 44 px at
+        // 16 px at every width. A cached v74 keeps the text under the box.
+        ['css/style.css', 75],
         // deck.css owns the v5 shell and is edited every bucket, so it needs the
         // same pin contract as style.css. It was missing from this table -- which
         // is exactly the "no pin at all" failure described above.
@@ -200,7 +203,9 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v38: drag-shift / drag-settle transitions for the chip drag.
         // v42: the Settings dialog; the keyboard log and the screen-diagnostic
         // button take their look from the theme.
-        ['css/deck.css', 42],
+        // v43: the Settings rows' own flex, bleed and touch sizes are gone;
+        // style.css v75 gives every dialog the same.
+        ['css/deck.css', 43],
         ['css/deck-tokens.css', 1],
         // v9: the panel head gains the Files browser's Expand control.
         ['css/sftp-file-manager.css', 9],
