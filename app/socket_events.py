@@ -2357,7 +2357,7 @@ def handle_get_terminal_line(data, current_user=None):
 @socketio.on('kbdebug_log')
 @socket_login_required
 def handle_kbdebug_log(data, current_user=None):
-    """Record what a browser's keyboard really reported (`?kbdebug=1`).
+    """Record what a browser's keyboard really reported (the keyboard log).
 
     The Safari + Vietnamese IME defect exists on one machine with one input
     method, so the only way to see it from here is to have that browser say
@@ -2365,10 +2365,13 @@ def handle_kbdebug_log(data, current_user=None):
     copy that reaches the server log, so diagnosing it costs the owner three
     keystrokes instead of a screenshot.
 
-    Bounded and inert by default: the client only emits while the query
-    parameter is present, at most 40 lines per batch, and each line is
-    truncated. Nothing is stored.
+    Bounded and inert by default: the client only emits while the keyboard
+    log (Settings → Diagnostics) is on, at most 40 lines per batch, and each
+    line is truncated. Nothing is stored. Administrators only, like the
+    setting: the log carries what was typed.
     """
+    if not current_user.is_admin:
+        return
     payload = data if isinstance(data, dict) else {}
     lines = payload.get('lines')
     if not isinstance(lines, list):
@@ -2386,17 +2389,20 @@ PERF_REPORT_MAX_KEYS = 40
 @socketio.on('perf_report')
 @socket_login_required
 def handle_perf_report(data, current_user=None):
-    """Record one minute of a browser's performance (`?perf=1`).
+    """Record one minute of a browser's performance (the performance probe).
 
     Audit 2026-10-04: typing and scrolling stutter on the owner's Windows PC
     whatever the browser, less on a Mac, not at all on a phone. What decides
     it -- the connection, the GPU, the fonts, how long a frame takes -- can
     only be seen on that machine, so static/js/perf-probe.js counts it there
-    and this writes the minute's numbers as one log line. Off unless the page
-    was opened with `?perf=1`; numbers and short strings only, no content.
+    and this writes the minute's numbers as one log line. Off unless the
+    probe is on in Settings → Diagnostics, which only an administrator has;
+    numbers and short strings only, no content.
 
     The ack is the round trip the page times for the next report.
     """
+    if not current_user.is_admin:
+        return {'ok': False}
     if check_socket_rate_limit(current_user.id, 'perf_report',
                                PERF_REPORT_RATELIMIT):
         return {'ok': False}
@@ -2493,17 +2499,22 @@ def handle_screen_diagnostic(data, current_user=None):
     Owner,: the omp pane showed the prompt row fifty times while
     the host pane held one, and nothing had recorded the bytes the browser
     was given, so the defect could not be replayed. The client now keeps the
-    last 64 KB of each session's stream; on request (the `?kbdebug=1`
-    button) it sends that tail with the engine's own state, and this handler
-    puts it in one file with the pane as tmux holds it at the same moment.
+    last 64 KB of each session's stream; on request (the button that comes
+    with the keyboard log) it sends that tail with the engine's own state,
+    and this handler puts it in one file with the pane as tmux holds it at
+    the same moment.
     Replaying the tail into a bare engine against that pane is the whole
     reproduction.
 
     Bounded on every axis: the tail is cut to 64 KB, the engine report to
     known fields (see _bounded_engine_report), the tmux captures to 256 KB,
-    six requests per user per minute, and only sessions the account owns.
+    six requests per user per minute, only sessions the account owns, and
+    only from an administrator (the file holds the screen and the stream).
     """
     session_id = data.get('session_id')
+    if not current_user.is_admin:
+        emit('screen_diagnostic_saved', {'error': 'not_allowed'})
+        return
     if not isinstance(session_id, str) or not session_id:
         emit('screen_diagnostic_saved', {'error': 'no_session'})
         return

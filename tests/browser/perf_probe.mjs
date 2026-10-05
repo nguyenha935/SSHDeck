@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 /*
- * THE PERFORMANCE PROBE (static/js/perf-probe.js, `?perf=1`) -- audit
- * 2026-10-04: what typing and scrolling cost on the owner's machines.
+ * THE PERFORMANCE PROBE (static/js/perf-probe.js) -- audit 2026-10-04: what
+ * typing and scrolling cost on the owner's machines. Switched on in Settings
+ * → Diagnostics (DeviceSettings.perf, administrators only) since 2026-10-05.
  *
  * Sections:
- *   §1  off unless asked: no probe, no report, nothing listening
- *   §2  `?perf=1` turns it on and the device remembers; `?perf=0` turns it off
+ *   §1  off unless switched on: no probe, no report, nothing listening; the
+ *       old `?perf=1` in the address does nothing
+ *   §2  the setting starts it and stops it on the open page, the device
+ *       remembers it, and a page without the administrator's meta never
+ *       starts it
  *   §3  input to echo: the time from an ssh_input to that session's next
  *       output, and to the frame after it is painted
  *   §4  what is counted: output volume, the glyphs a monospace font may lack,
@@ -61,13 +65,16 @@ function renderTemplate() {
     return html.replace(/\{\{[^}]*\}\}/g, '');
 }
 
+// The stub keeps what `{% if current_user.is_admin %}` wraps, so it is an
+// administrator's page; `?role=user` serves it without the admin's meta.
 const html = renderTemplate();
+const userHtml = html.replace(/<meta name="sshdeck-admin"[^>]*>/, '');
 const server = await new Promise(resolve => {
     const s = http.createServer((req, res) => {
         const rel = decodeURIComponent(req.url.split('?')[0]);
         if (rel === '/' || rel === '/index.html') {
             res.writeHead(200, { 'Content-Type': MIME['.html'] });
-            res.end(html);
+            res.end(req.url.includes('role=user') ? userHtml : html);
             return;
         }
         const fp = path.join(ROOT, rel.replace(/^\/+/, ''));
@@ -100,6 +107,8 @@ const INIT = `
         once: (ev, fn) => { (window.__handlers[ev] = window.__handlers[ev] || []).push(fn); },
         onAny: (fn) => window.__any.push(fn),
         onAnyOutgoing: (fn) => window.__anyOut.push(fn),
+        offAny: (fn) => { window.__any = window.__any.filter(f => f !== fn); },
+        offAnyOutgoing: (fn) => { window.__anyOut = window.__anyOut.filter(f => f !== fn); },
         emit: (ev, payload, ack) => {
             window.__emits.push({ ev, payload });
             window.__anyOut.forEach(fn => fn(ev, payload));
@@ -131,13 +140,14 @@ const snapshot = {
 };
 
 const pageErrors = [];
-async function openPage(ctx, query = '', clock = false) {
+async function openPage(ctx, { query = '', clock = false, perf = false } = {}) {
     const page = await ctx.newPage();
     page.setDefaultTimeout(5000);
     page.on('pageerror', e => pageErrors.push(String(e)));
     await page.route('**/socket.io.min.js*',
         r => r.fulfill({ status: 200, contentType: 'text/javascript', body: '' }));
     await page.addInitScript(INIT);
+    if (perf) await page.addInitScript(() => localStorage.setItem('sshdeck.perf', '1'));
     if (clock) await page.clock.install();
     await page.goto(`${base}/${query}`, { waitUntil: 'load' });
     await page.waitForFunction(() => typeof SessionManager !== 'undefined'
@@ -164,36 +174,60 @@ async function restore(page) {
     await page.waitForTimeout(1200);
 }
 
-// ── §1 off unless asked ─────────────────────────────────────────────────────
+// ── §1 off unless switched on ───────────────────────────────────────────────
+const listening = (page) => page.evaluate(() => [window.__any.length, window.__anyOut.length]);
 await withContext('§1', async (ctx) => {
     const page = await openPage(ctx);
     await restore(page);
     await page.evaluate(() => window.socket.emit('ssh_input', { session_id: 'x', data: 'a' }));
     await fire(page, 'ssh_output', { session_id: S1, data: 'hello' });
-    check('§1 without ?perf there is no probe', await page.evaluate(() => typeof window.SSHDeckPerf), 'undefined');
-    check('§1 ...and nothing listens on the socket', await page.evaluate(() =>
-        [window.__any.length, window.__anyOut.length]), [0, 0]);
+    check('§1 by default there is no probe', await page.evaluate(() => typeof window.SSHDeckPerf), 'undefined');
+    check('§1 ...and nothing listens on the socket', await listening(page), [0, 0]);
     check('§1 ...and no report is sent', (await reports(page)).length, 0);
+    await page.close();
+    const old = await openPage(ctx, { query: '?perf=1' });
+    check('§1 the old ?perf=1 in the address does nothing', await old.evaluate(() =>
+        [typeof window.SSHDeckPerf, localStorage.getItem('sshdeck.perf')]), ['undefined', null]);
 });
 
-// ── §2 on, remembered, off ──────────────────────────────────────────────────
+// ── §2 the setting, live ────────────────────────────────────────────────────
 await withContext('§2', async (ctx) => {
-    let page = await openPage(ctx, '?perf=1');
-    check('§2 ?perf=1 turns it on', await page.evaluate(() => typeof window.SSHDeckPerf?.flush), 'function');
+    let page = await openPage(ctx);
+    await page.evaluate(() => DeviceSettings.setPerf(true));
+    check('§2 switching it on starts it on the open page', await page.evaluate(() =>
+        typeof window.SSHDeckPerf?.flush), 'function');
+    check('§2 ...listening once in each direction', await listening(page), [1, 1]);
     check('§2 ...and the device remembers', await page.evaluate(() => localStorage.getItem('sshdeck.perf')), '1');
+    await page.evaluate(() => DeviceSettings.setPerf(true));
+    check('§2 switching it on twice does not listen twice', await listening(page), [1, 1]);
     await page.close();
     page = await openPage(ctx);
-    check('§2 a later visit without the query is still measured', await page.evaluate(() =>
+    check('§2 a later visit is still measured', await page.evaluate(() =>
         typeof window.SSHDeckPerf?.flush), 'function');
+    await page.evaluate(() => DeviceSettings.setPerf(false));
+    check('§2 switching it off stops it: no probe, no listener, forgotten', await page.evaluate(() =>
+        [typeof window.SSHDeckPerf, window.__any.length, window.__anyOut.length,
+            localStorage.getItem('sshdeck.perf')]), ['undefined', 0, 0, null]);
     await page.close();
-    page = await openPage(ctx, '?perf=0');
-    check('§2 ?perf=0 turns it off and forgets', await page.evaluate(() =>
-        [typeof window.SSHDeckPerf, localStorage.getItem('sshdeck.perf')]), ['undefined', null]);
+    page = await openPage(ctx, { query: '?role=user', perf: true });
+    check('§2 a page that is not an administrator\'s never starts it, whatever is stored',
+        await page.evaluate(() => [DeviceSettings.isAdmin(), typeof window.SSHDeckPerf,
+            window.__any.length]), [false, 'undefined', 0]);
+});
+
+// ── §2b stopped mid-minute: the minute is dropped ───────────────────────────
+await withContext('§2b', async (ctx) => {
+    const page = await openPage(ctx, { clock: true, perf: true });
+    await fire(page, 'ssh_output', { session_id: S1, data: 'x' });
+    await page.clock.runFor(30000);
+    await page.evaluate(() => DeviceSettings.setPerf(false));
+    await page.clock.runFor(120000);
+    check('§2b switched off with activity in the minute, nothing is sent', (await reports(page)).length, 0);
 });
 
 // ── §3–§6, §8 ───────────────────────────────────────────────────────────────
 await withContext('§3', async (ctx) => {
-    const page = await openPage(ctx, '?perf=1');
+    const page = await openPage(ctx, { perf: true });
     await restore(page);
 
     // §3 input to echo, 40 ms on the wire.
@@ -264,7 +298,7 @@ await withContext('§3', async (ctx) => {
 
 // ── §7 one report a minute, only with activity ──────────────────────────────
 await withContext('§7', async (ctx) => {
-    const page = await openPage(ctx, '?perf=1', true);
+    const page = await openPage(ctx, { clock: true, perf: true });
     await page.clock.runFor(61000);
     check('§7 an idle minute sends nothing', (await reports(page)).length, 0);
     await fire(page, 'ssh_output', { session_id: S1, data: 'x' });

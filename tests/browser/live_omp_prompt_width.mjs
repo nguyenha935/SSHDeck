@@ -17,7 +17,8 @@
  * replayed into a bare engine with zero drift on both width tables. So it
  * guards the contract; it is not the proof of the cause. The cause is still
  * open until the client stream of a real occurrence is captured -- which is
- * what the screen diagnostic (?kbdebug=1) now records.
+ * what the screen diagnostic (Settings → Diagnostics → keyboard log) now
+ * records.
  *
  *   §1 steady: every fixture row reads in the engine EXACTLY as on the host
  *      pane -- a count alone once passed a corrupted screen, and the host

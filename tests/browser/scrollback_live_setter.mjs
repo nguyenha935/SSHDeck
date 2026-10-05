@@ -317,8 +317,13 @@ check('the input ceiling still matches the sanitizer', bounds.inputMax, String(b
  */
 console.log('\n--- 4. no second copy of the contract in app.js ---');
 const appSrc = fs.readFileSync(path.join(ROOT, 'static/js/app.js'), 'utf8');
-check('app.js delegates to the shared sanitizer exactly once',
-    (appSrc.match(/TerminalManager\.sanitizeScrollback\(/g) || []).length, 1);
+// Twice since 2026-10-05, both the owner's: the field shows what the
+// terminals use (it showed a literal '150' while they kept 5000), and the
+// change handler decides what is legal.
+check('app.js asks the shared sanitizer, at load and on change, and nowhere else',
+    (appSrc.match(/TerminalManager\.sanitizeScrollback\(/g) || []).length, 2);
+check('app.js gives the field no default of its own',
+    /getItem\(\s*'terminalScrollback'\s*\)\s*\|\|/.test(appSrc), false);
 check('app.js no longer parses the control itself',
     /parseInt\(\s*scrollbackInput\.value/.test(appSrc), false);
 

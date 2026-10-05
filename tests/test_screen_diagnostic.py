@@ -9,8 +9,8 @@ tmux holds it, one JSON file under DATA_DIR/diagnostics.
 Driven through ``socketio.test_client`` so this is the production handler and
 the production decorator; only the tmux capture is faked, because there is no
 transport here. What is pinned is the shape a person will rely on when they
-open the file, and every bound the handler promises: ownership, the rate
-limit, the tail cut, the engine report cut, the file mode.
+open the file, and every bound the handler promises: administrators only,
+ownership, the rate limit, the tail cut, the engine report cut, the file mode.
 """
 import importlib
 import json
@@ -63,13 +63,17 @@ _user_counter = [0]
 PASSWORD = 'screen-diag-pass-123'
 
 
-def _authenticated_socket(app, stem):
-    """One account per call: the rate limit is per user and counts every call."""
+def _authenticated_socket(app, stem, admin=True):
+    """One account per call: the rate limit is per user and counts every call.
+    An administrator unless asked otherwise: the diagnostic is theirs alone."""
+    from app.models import db
     _user_counter[0] += 1
     username = f'{stem}_{_user_counter[0]}'
     with app.app_context():
         user, error = register_user(username, PASSWORD)
         assert error is None
+        user.is_admin = admin
+        db.session.commit()
         user_id = user.id
     http_client = app.test_client()
     response = http_client.post('/login', data={
@@ -237,6 +241,19 @@ def test_a_capture_failure_is_still_filed(app, monkeypatch):
 
 
 # --------------------------------------------------------------- refusals
+
+def test_anyone_but_an_administrator_is_refused(app, monkeypatch):
+    client, user_id, _ = _authenticated_socket(app, 'plain', admin=False)
+    _seed_session(app, user_id, 'diag-session-0005')
+    calls = _fake_capture(monkeypatch)
+    before = _files()
+
+    client.emit('screen_diagnostic', {
+        'session_id': 'diag-session-0005', 'tail': 'x', 'engine': {}})
+    assert _answer(client) == {'error': 'not_allowed'}
+    assert calls == []
+    assert _files() == before
+
 
 def test_a_session_of_another_account_is_refused(app, monkeypatch):
     client, _, _ = _authenticated_socket(app, 'intruder')

@@ -2528,3 +2528,124 @@
         border-top-color: transparent;
     }
 }
+
+/* ── Settings (device-settings.js) ─────────────────────────────────────────
+   Per-device choices that used to be queries in the address, and the
+   scrollback that used to sit in the account menu. Controls are the app's own
+   (.form-control, .checkbox-label, .field-hint); this only groups them. */
+.settings-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-16);
+}
+
+.settings-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-12);
+}
+
+/* The group's gap spaces its rows; .form-group's own 20 px margin would add
+   to it. */
+.settings-group .form-group {
+    margin-bottom: 0;
+}
+
+/* `.form-group label` (style.css, 0,1,1) is display:block and beats
+   `.checkbox-label`'s flex (0,1,0). On touch, where the checkbox itself is
+   44 px tall, the text then falls to the line below it -- measured at 390x844:
+   a 63 px row, the text 29 px under the box. Pulled out by its own padding so
+   the box lines up with the labels and hints above and below it, and without
+   the label margin, so its hint sits under it. */
+.settings-group .checkbox-label {
+    display: flex;
+    margin: 0 calc(-1 * var(--sp-12));
+}
+
+.settings-group + .settings-group {
+    border-top: 1px solid var(--tw-border);
+    padding-top: var(--sp-16);
+}
+
+.settings-group-title {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--tw-muted);
+}
+
+.settings-inline {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-8);
+    color: var(--tw-muted);
+}
+
+.settings-inline .form-control {
+    width: 8em;
+    text-align: right;
+}
+
+.settings-warning {
+    color: var(--tw-warning);
+}
+
+/* A touch target, and 16 px so iOS does not zoom the page in on focus. The
+   app's inputs get both only below 768 px; a phone held landscape is wider.
+   Measured at 844x390: 38 px at 14 px. */
+@media (pointer: coarse) {
+    .settings-body .form-control {
+        min-height: 44px;
+        font-size: 16px;
+    }
+
+    /* The 44 px checkbox is the row's height; padding would only add air. */
+    .settings-group .checkbox-label {
+        padding-block: 0;
+    }
+}
+
+/* The keyboard log and its screen-diagnostic button (Settings → Diagnostics):
+   tools for reproducing a defect on this device, drawn over the shell and its
+   sheets but under a dialog (.modal is 9000) -- they are switched on from one,
+   and above it the log hid the dialog's title and close button. The log never
+   takes a tap meant for the terminal. */
+.kbdebug-panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 8000;
+    width: 100%;
+    max-height: 22vh;
+    margin: 0;
+    padding: var(--sp-6);
+    overflow: auto;
+    border-bottom: 1px solid var(--tw-border);
+    background: color-mix(in srgb, var(--tw-shell) 90%, transparent);
+    color: var(--tw-text);
+    font: 11px/1.35 var(--font-mono);
+    white-space: pre-wrap;
+    pointer-events: none;
+}
+
+.screen-diagnostic-btn {
+    position: fixed;
+    top: var(--sp-8);
+    right: var(--sp-8);
+    z-index: 8001;
+    padding: var(--sp-6) var(--sp-12);
+    border: 1px solid var(--tw-accent);
+    border-radius: 6px;
+    background: var(--tw-surface);
+    color: var(--tw-text);
+    font: 12px/1.2 var(--font-mono);
+    cursor: pointer;
+}
+
+@media (pointer: coarse) {
+    .screen-diagnostic-btn {
+        min-height: 44px;
+    }
+}

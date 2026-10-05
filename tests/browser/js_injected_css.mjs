@@ -111,7 +111,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
 {
     console.log('--- the CSS no longer ships from JavaScript ---');
     const files = ['sftp-file-manager.js', 'files-browser.js', 'perf-probe.js', 'session-manager.js',
-                   'header-menus.js', 'app.js'];
+                   'header-menus.js', 'app.js', 'device-settings.js'];
     for (const f of files) {
         const src = fs.readFileSync(path.join(ROOT, 'static/js', f), 'utf8');
         check(`${f}: no <style> element built at runtime`,
@@ -198,7 +198,9 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v31: W14 item 2 bounded menus + item 6 broadcast picker.
         // v32: owner batch asset changes.
         // v38: drag-shift / drag-settle transitions for the chip drag.
-        ['css/deck.css', 41],
+        // v42: the Settings dialog; the keyboard log and the screen-diagnostic
+        // button take their look from the theme.
+        ['css/deck.css', 42],
         ['css/deck-tokens.css', 1],
         // v9: the panel head gains the Files browser's Expand control.
         ['css/sftp-file-manager.css', 9],
@@ -414,17 +416,20 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // sends an ssh_resize for a size the server already opened the PTY at.
         // v97: a column change, a grow included, stays covered until the
         // repaint has been quiet (omp replays its transcript after a settle).
-        ['js/terminal-manager.js', 101],
+        // v102: the renderer and the diagnostics follow Settings, live.
+        ['js/terminal-manager.js', 102],
         // v18: the Files browser hooks (expand, delegated render and menu).
-        ['js/sftp-file-manager.js', 18],
+        ['js/sftp-file-manager.js', 19],
         // v2: the control that opened a menu closes it; Upload / Download in
         // the phone's menu.
         ['js/files-browser.js', 2],
-        ['js/perf-probe.js', 2],
+        // v3: started and stopped by the Settings toggle.
+        ['js/perf-probe.js', 3],
+        ['js/device-settings.js', 1],
         // v11: S17 FIX 4d completion -- the insert-at-prompt write routes through
         // window.emitTerminalInput, so it is no longer swallowed by tmux copy
         // mode. v10 is RELEASED, so the pin must move or the fix ships invisibly.
-        ['js/command-library.js', 12],
+        ['js/command-library.js', 13],
         // v36: W13-A4 session.legacyTmuxLocale keys in all six locales.
         // v37: W13-B5 session.reconnectRetainBody key in all six locales.
         // v39: W14 items 5/6 keys in all six locales.
@@ -500,7 +505,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // stale offer in place).
         // v68: screen_diagnostic_saved shown as a notification.
         // v69: the chip drag is animated (follow + tilt, displaced chips slide).
-        ['js/session-manager.js', 71],
+        ['js/session-manager.js', 72],
         // v7: W14 item 6 broadcast target picker semantics (allMode/custom
         // subset), stable under the review contract.
         // v8: S17 FIX 4d completion -- sendAll routes each session through
@@ -616,7 +621,8 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // one the server discarded.
         // v97: wakeSocket leaves a socket that is still connecting alone.
         // v101: a socket error the Files UI toasts itself is not toasted twice.
-        ['js/app.js', 101],
+        // v102: scrollback moved into Settings.
+        ['js/app.js', 102],
         // v9: 0209f10 raise. v10: P1 D2 trigger-anchored More-sheet position
         // (top = trigger.bottom+1, bottom auto, measured maxHeight) — Entry 27 R4.
         ['js/header-menus.js', 13],

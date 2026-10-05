@@ -1,24 +1,27 @@
 #!/usr/bin/env node
 /*
- * THE WebGL RENDERER TRIAL (terminal-manager.js useWebglRenderer,
- * `?renderer=webgl`) -- audit 2026-10-04: the owner's Windows laptop draws
- * frames at ~600 ms on its Intel GPU, and its NVIDIA GPU cannot be given to
- * the browser. The trial puts the terminal on xterm's WebGL renderer for a
- * device that asks for it, and nobody else.
+ * THE WebGL RENDERER (terminal-manager.js useWebglRenderer) -- audit
+ * 2026-10-04: the owner's Windows laptop draws frames at ~600 ms on its Intel
+ * GPU, and its NVIDIA GPU cannot be given to the browser. xterm's WebGL
+ * renderer is a choice per device, in Settings (DeviceSettings.renderer,
+ * localStorage `sshdeck.renderer`) since 2026-10-05; it was `?renderer=webgl`.
  *
  * Headless Chromium runs WebGL2 on SwiftShader, so this drives the real
  * addon, not a stand-in.
  *
  * Sections:
- *   §1  off unless asked: the DOM renderer, and the addon is never fetched
- *   §2  `?renderer=webgl`: fetched once at its pinned URL, the terminal is a
- *       canvas, the device remembers, the timeline and the screen diagnostic
- *       say which renderer drew
+ *   §1  off unless chosen: the DOM renderer, the addon is never fetched, and
+ *       the old `?renderer=webgl` in the address does nothing
+ *   §2  chosen on this device: fetched once at its pinned URL, the terminal is
+ *       a canvas, the timeline and the screen diagnostic say which renderer
+ *       drew
  *   §3  the grid fills the pane by the cell WebGL draws (whole device
  *       pixels), not the font's advance -- at four pixel ratios, each set up
  *       the way a real screen reports it (chromiumAt)
  *   §4  a window smaller than the pane is zoomed into it without overflow
- *   §5  a later visit stays on WebGL; `?renderer=dom` goes back and forgets
+ *   §5  switched in Settings: the open terminal changes renderer in place,
+ *       both ways, refitted each time; switched back before the addon has
+ *       loaded, it never starts; the device remembers
  *   §6  the GPU drops the context: back to the DOM renderer in place, still
  *       writing, refitted
  *   §7  a freeze cover on a WebGL pane is the background alone
@@ -95,8 +98,8 @@ const base = `http://127.0.0.1:${server.address().port}`;
 
 
 /*
- * A socket.io stand-in with what the perf probe listens on (onAny, onAnyOutgoing,
- * the engine's transport) and acks. Attach and resize are answered the way
+ * A socket.io stand-in with what the perf probe listens on (onAny, onAnyOutgoing
+ * and their off*, the engine's transport) and acks. Attach and resize are answered the way
  * the real server does, so the session's terminal is drawn.
  */
 const INIT = `
@@ -112,6 +115,8 @@ const INIT = `
         once: (ev, fn) => { (window.__handlers[ev] = window.__handlers[ev] || []).push(fn); },
         onAny: (fn) => window.__any.push(fn),
         onAnyOutgoing: (fn) => window.__anyOut.push(fn),
+        offAny: (fn) => { window.__any = window.__any.filter(f => f !== fn); },
+        offAnyOutgoing: (fn) => { window.__anyOut = window.__anyOut.filter(f => f !== fn); },
         emit: (ev, payload, ack) => {
             window.__emits.push({ ev, payload });
             window.__anyOut.forEach(fn => fn(ev, payload));
@@ -147,7 +152,10 @@ const browser = await chromium.launch();
 const pageErrors = [];
 const ADDON = /xterm-addon-webgl\.js/;
 
-async function openPage(ctx, query = '', engine = 'chromium') {
+// `renderer` and `perf` are what Settings stored on the device before the
+// page loaded (pages of one context share it, so each page sets both); the
+// stub page is an administrator's.
+async function openPage(ctx, { renderer = 'dom', perf = false, query = '' } = {}, engine = 'chromium') {
     const page = await ctx.newPage();
     page.setDefaultTimeout(5000);
     page.on('pageerror', e => pageErrors.push(`${engine}: ${e}`));
@@ -156,6 +164,12 @@ async function openPage(ctx, query = '', engine = 'chromium') {
     await page.route('**/socket.io.min.js*',
         r => r.fulfill({ status: 200, contentType: 'text/javascript', body: '' }));
     await page.addInitScript(INIT);
+    await page.addInitScript(([r, p]) => {
+        if (r === 'webgl') localStorage.setItem('sshdeck.renderer', 'webgl');
+        else localStorage.removeItem('sshdeck.renderer');
+        if (p) localStorage.setItem('sshdeck.perf', '1');
+        else localStorage.removeItem('sshdeck.perf');
+    }, [renderer, perf]);
     await page.goto(`${base}/${query}`, { waitUntil: 'load' });
     await page.waitForFunction(() => typeof SessionManager !== 'undefined'
         && typeof TerminalManager !== 'undefined', null, { timeout: 15000 });
@@ -287,26 +301,34 @@ function inked(png) {
     return lit / (width * height);
 }
 
-// ── §1 off unless asked ─────────────────────────────────────────────────────
+// ── §1 off unless chosen ────────────────────────────────────────────────────
 await withContext(browser, '§1', async (ctx) => {
-    const page = await openPage(ctx);
+    let page = await openPage(ctx);
     await restore(page);
-    const s = await state(page);
-    check('§1 without ?renderer the DOM renderer draws', [s.inUse, s.rows, s.canvas], ['dom', true, false]);
+    let s = await state(page);
+    check('§1 by default the DOM renderer draws', [s.inUse, s.rows, s.canvas], ['dom', true, false]);
     check('§1 ...the addon is never fetched', page.addonRequests, []);
     check('§1 ...nor defined', await page.evaluate(() => typeof window.WebglAddon), 'undefined');
+    await page.close();
+    page = await openPage(ctx, { query: '?renderer=webgl' });
+    await restore(page);
+    await page.waitForTimeout(300);
+    s = await state(page);
+    check('§1 the old ?renderer=webgl in the address does nothing', [s.inUse, s.stored, page.addonRequests],
+        ['dom', null, []]);
 });
 
-// ── §2 asked for ────────────────────────────────────────────────────────────
+// ── §2 chosen on this device ────────────────────────────────────────────────
 await withContext(browser, '§2', async (ctx) => {
-    const page = await openPage(ctx, '?renderer=webgl');
+    const page = await openPage(ctx, { renderer: 'webgl' });
     await restore(page);
     await settle(page, 'webgl');
     const s = await state(page);
-    check('§2 ?renderer=webgl: the terminal is a canvas', [s.inUse, s.canvas, s.rows], ['webgl', true, false]);
+    check('§2 WebGL chosen: the terminal is a canvas', [s.inUse, s.canvas, s.rows], ['webgl', true, false]);
     check('§2 ...the addon fetched once, at its pinned URL', page.addonRequests,
         ['/static/vendor/xterm/xterm-addon-webgl.js?v=1']);
-    check('§2 ...the device remembers', s.stored, 'webgl');
+    check('§2 ...and Settings shows it', await page.evaluate(() =>
+        document.getElementById('rendererSelect').value), 'webgl');
     check('§2 ...the timeline records the switch', s.timeline, [['webgl', '']]);
     check('§2 ...and the screen diagnostic names the renderer', s.paint, 'webgl');
     await fire(page, 'ssh_output', { session_id: S1, data: 'drawn-by-webgl' });
@@ -316,7 +338,7 @@ await withContext(browser, '§2', async (ctx) => {
 // ── §3 the grid fills the pane by the cell WebGL draws ──────────────────────
 for (const [width, height, dpr] of [[1815, 1200, 1.75], [1440, 900, 2], [1280, 800, 1], [1366, 768, 1.25]]) {
     await withContext(await chromiumAt(dpr), `§3 @${dpr}`, async (ctx) => {
-        const page = await openPage(ctx, '?renderer=webgl');
+        const page = await openPage(ctx, { renderer: 'webgl' });
         await restore(page);
         await settle(page, 'webgl');
         const s = await state(page);
@@ -338,7 +360,7 @@ for (const [width, height, dpr] of [[1815, 1200, 1.75], [1440, 900, 2], [1280, 8
 for (const [dpr, cols, rows] of [[1, 80, 24], [1.75, 80, 24], [1.25, 90, 27]]) {
     await withContext(await chromiumAt(dpr), `§4 @${dpr} ${cols}x${rows}`, async (ctx) => {
         const label = `§4 @${dpr} ${cols}x${rows}`;
-        const page = await openPage(ctx, '?renderer=webgl');
+        const page = await openPage(ctx, { renderer: 'webgl' });
         await restore(page);
         await settle(page, 'webgl');
         await fire(page, 'tmux_window_geometry', { session_id: S1, cols, rows });
@@ -353,26 +375,57 @@ for (const [dpr, cols, rows] of [[1, 80, 24], [1.75, 80, 24], [1.25, 90, 27]]) {
     }, { viewport: { width: 1440, height: 900 }, deviceScaleFactor: dpr });
 }
 
-// ── §5 remembered, and forgotten ────────────────────────────────────────────
+// ── §5 switched in Settings ─────────────────────────────────────────────────
 await withContext(browser, '§5', async (ctx) => {
-    let page = await openPage(ctx, '?renderer=webgl');
+    let page = await openPage(ctx);
+    await restore(page);
+    await page.evaluate(() => DeviceSettings.setRenderer('webgl'));
+    await settle(page, 'webgl');
+    let s = await state(page);
+    check('§5 switched to WebGL, the open terminal becomes a canvas', [s.inUse, s.canvas, s.rows],
+        ['webgl', true, false]);
+    check('§5 ...the device remembers', s.stored, 'webgl');
+    between('§5 ...refitted by the WebGL cell: spare width under one cell',
+        +(s.box[0] - s.screen[0]).toFixed(2), 0, +s.cell[0].toFixed(2));
+    await page.evaluate(() => DeviceSettings.setRenderer('dom'));
+    await settle(page, 'dom');
+    s = await state(page);
+    check('§5 switched back, the same terminal is drawn by the DOM again', [s.inUse, s.rows, s.canvas],
+        ['dom', true, false]);
+    check('§5 ...recorded with its reason, and forgotten', [s.timeline, s.stored],
+        [[['webgl', ''], ['dom', 'setting']], null]);
+    between('§5 ...refitted by the DOM cell: spare width under one cell',
+        +(s.box[0] - s.screen[0]).toFixed(2), 0, +s.cell[0].toFixed(2));
+    await fire(page, 'ssh_output', { session_id: S1, data: '\r\nafter-the-switch' });
+    await page.waitForTimeout(300);
+    check('§5 ...and it draws what arrives next', await page.evaluate(() =>
+        document.querySelector('.xterm-rows').textContent.includes('after-the-switch')), true);
     await page.close();
     page = await openPage(ctx);
     await restore(page);
-    await settle(page, 'webgl');
-    check('§5 a later visit without the query stays on WebGL', (await state(page)).inUse, 'webgl');
-    await page.close();
-    page = await openPage(ctx, '?renderer=dom');
+    check('§5 a later visit stays on the DOM renderer without fetching the addon',
+        [(await state(page)).inUse, page.addonRequests], ['dom', []]);
+});
+await withContext(browser, '§5 race', async (ctx) => {
+    await ctx.route('**/xterm-addon-webgl.js*', async (r) => {
+        await new Promise(done => setTimeout(done, 300));
+        await r.continue();
+    });
+    const page = await openPage(ctx);
     await restore(page);
+    await page.evaluate(() => {
+        DeviceSettings.setRenderer('webgl');
+        DeviceSettings.setRenderer('dom');
+    });
+    await page.waitForTimeout(900);
     const s = await state(page);
-    check('§5 ?renderer=dom goes back to the DOM renderer and forgets', [s.inUse, s.rows, s.stored],
-        ['dom', true, null]);
-    check('§5 ...without fetching the addon', page.addonRequests, []);
+    check('§5 switched back before the addon loaded: WebGL never starts', [s.inUse, s.canvas, s.timeline],
+        ['dom', false, []]);
 });
 
 // ── §6 the GPU drops the context ────────────────────────────────────────────
 await withContext(browser, '§6', async (ctx) => {
-    const page = await openPage(ctx, '?renderer=webgl');
+    const page = await openPage(ctx, { renderer: 'webgl' });
     await restore(page);
     await settle(page, 'webgl');
     // The renderer keeps 2D canvases beside its WebGL one; asking a 2D
@@ -403,8 +456,8 @@ await withContext(browser, '§6', async (ctx) => {
 
 // ── §7 a freeze cover ───────────────────────────────────────────────────────
 await withContext(browser, '§7', async (ctx) => {
-    for (const [query, renderer, copies] of [['?renderer=webgl', 'webgl', 0], ['?renderer=dom', 'dom', 1]]) {
-        const page = await openPage(ctx, query);
+    for (const [renderer, copies] of [['webgl', 0], ['dom', 1]]) {
+        const page = await openPage(ctx, { renderer });
         await restore(page);
         await settle(page, renderer);
         const cover = await page.evaluate((id) => {
@@ -427,7 +480,7 @@ await withContext(browser, '§7', async (ctx) => {
 // ── §8 the addon does not load ──────────────────────────────────────────────
 await withContext(browser, '§8', async (ctx) => {
     await ctx.route('**/xterm-addon-webgl.js*', r => r.fulfill({ status: 404, body: 'gone' }));
-    const page = await openPage(ctx, '?renderer=webgl');
+    const page = await openPage(ctx, { renderer: 'webgl' });
     await restore(page);
     await page.waitForTimeout(500);
     const s = await state(page);
@@ -438,7 +491,7 @@ await withContext(browser, '§8', async (ctx) => {
 // ── §9 WebKit ───────────────────────────────────────────────────────────────
 const engine = await webkit.launch();
 await withContext(engine, '§9', async (ctx) => {
-    const page = await openPage(ctx, '?renderer=webgl', 'webkit');
+    const page = await openPage(ctx, { renderer: 'webgl' }, 'webkit');
     await restore(page);
     await page.waitForTimeout(1500);
     const s = await state(page);
@@ -451,7 +504,7 @@ await engine.close();
 
 // ── §10 the probe ───────────────────────────────────────────────────────────
 await withContext(browser, '§10', async (ctx) => {
-    const page = await openPage(ctx, '?renderer=webgl&perf=1');
+    const page = await openPage(ctx, { renderer: 'webgl', perf: true });
     await restore(page);
     await settle(page, 'webgl');
     await fire(page, 'ssh_output', { session_id: S1, data: 'x' });
@@ -469,7 +522,7 @@ for (const dpr of [1, 1.75]) {
     const ink = {};
     for (const renderer of ['dom', 'webgl']) {
         await withContext(await chromiumAt(dpr), `§11 @${dpr} ${renderer}`, async (ctx) => {
-            const page = await openPage(ctx, `?renderer=${renderer}`);
+            const page = await openPage(ctx, { renderer });
             await restore(page);
             await settle(page, renderer);
             await fire(page, 'ssh_output', { session_id: S1, data: 'HELLO WEBGL '.repeat(30) });

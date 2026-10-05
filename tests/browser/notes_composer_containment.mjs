@@ -13,8 +13,8 @@
  *         or is refuted; until then it documents the journey only."
  *
  * This file IS that journey, driven on the real app with GENUINE composition
- * events (CDP Input.imeSetComposition — the same trusted-IME channel
- * defect1_ime_ownership_probe.mjs uses), so the iOS-profile shape (a
+ * events (CDP Input.imeSetComposition, the trusted-IME channel the
+ * defect-1 investigation used), so the iOS-profile shape (a
  * composition still open when the sheet closes) is exercised rather than
  * simulated with synthetic flags.
  *

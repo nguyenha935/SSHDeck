@@ -416,7 +416,6 @@
                 console.error('[FilePreview] Modal not found: filePreviewModal');
                 return;
             }
-            console.log('[FilePreview] Initialized successfully');
 
             const sizeMeta = document.querySelector('meta[name="max-editor-file-size"]');
             const parsedSize = sizeMeta ? parseInt(sizeMeta.content, 10) : NaN;
@@ -507,7 +506,6 @@
         },
 
         open(sessionId, path, filename) {
-            console.log('[FilePreview] open called:', { sessionId, path, filename });
             this.currentSessionId = sessionId;
             this.currentPath = path;
             this.currentFilename = filename;
@@ -522,7 +520,6 @@
             this.showPreviewActions();
 
             const fileType = this.getFileType(filename);
-            console.log('[FilePreview] File type:', fileType);
 
             this.showLoading();
             window.ModalManager.open(this.modal);
@@ -531,7 +528,6 @@
             document.getElementById('previewSize').textContent = '';
 
             if (fileType === 'image') {
-                console.log('[FilePreview] Loading image...');
                 this.loadImage(sessionId, path, filename);
             } else {
                 const options = { session_id: sessionId, path: path };
@@ -540,7 +536,6 @@
                     options.tail_lines = 1000;
                 }
 
-                console.log('[FilePreview] Emitting preview_file:', options);
                 socket.emit('preview_file', options);
             }
         },
@@ -945,7 +940,6 @@
     let socketHasConnectedBefore = false;
 
     socket.on('connect', () => {
-        console.log('Connected to server');
         TerminalManager.noteTimeline(null, 'socket', { up: 1 });
         const reconnectBar = document.getElementById('reconnectBar');
         if (reconnectBar && reconnectBar.style.display !== 'none') {
@@ -1077,7 +1071,6 @@
             console.error('[SSHDeck] Could not wake the socket:', e);
         }
     }
-    window.__wakeSocket = wakeSocket;
 
     document.addEventListener('visibilitychange', () => {
         TerminalManager.noteTimeline(null, 'page', { state: document.visibilityState });
@@ -1105,7 +1098,6 @@
     });
 
     socket.on('disconnect', (reason) => {
-        console.log('Disconnected from server:', reason);
         TerminalManager.noteTimeline(null, 'socket', { up: 0, why: String(reason).slice(0, 40) });
         showNotification('Disconnected from server', 'error');
         const reconnectBar = document.getElementById('reconnectBar');
@@ -1143,8 +1135,6 @@
     });
 
     socket.on('ssh_connected', (data) => {
-        console.log('SSH connected:', data);
-
         // Capture the request-keyed non-secret metadata BEFORE the pending
         // record is cleared, then pass it into createSession so the right
         // jumpHostId lands on the right session (no global handoff).
@@ -1318,18 +1308,12 @@
          * without that field threw here and the output never reached the
          * terminal at all.
          *
-         * And the log itself is now behind ?kbdebug=1. Measured cost is small
-         * (23µs a call, 0.06% of a core at the three-pane streaming rate, 0.7%
-         * at 300 frames a second), so this is not about speed: it is that a
-         * line per frame buries whatever a reader opened the console FOR, and
-         * the diagnostic that replaced it (?kbdebug=1 plus the screen
-         * diagnostic, which records the real bytes) says far more.
+         * The line per frame this handler used to log is gone: it buried
+         * whatever a reader opened the console FOR, and the screen diagnostic
+         * (Settings → Diagnostics) records the real bytes instead.
          */
         if (!data || typeof data.data !== 'string') {
             return;
-        }
-        if (TerminalManager.keyboardDebugEnabled()) {
-            console.log(`[SSH_OUTPUT] session ${data.session_id}, ${data.data.length} bytes`);
         }
         TerminalManager.writeOutput(data.session_id, data.data);
     });
@@ -1559,7 +1543,6 @@
     };
 
     socket.on('ssh_disconnected', (data) => {
-        console.log('SSH disconnected:', data);
         showNotification(`Session disconnected: ${data.reason}`, 'warning');
         SessionManager.updateSessionStatus(data.session_id, 'disconnected');
         FileTransferManager.updateSessionSelects();
@@ -4445,6 +4428,7 @@
             { labelKey: 'files.fileTransfer', hint: '', action: () => document.getElementById('fileTransferBtn').click() },
             { labelKey: 'keys.manageKeys', hint: '', action: () => document.getElementById('manageKeysBtn').click() },
             { labelKey: 'auth.changePassword', hint: '', action: () => document.getElementById('changePasswordBtn').click() },
+            { labelKey: 'settings.title', hint: '', action: () => document.getElementById('settingsBtn').click() },
             { labelKey: 'terminal.saveTranscript', hint: '', action: () => document.getElementById('saveTranscriptBtn').click() },
             { labelKey: 'shortcuts.title', hint: 'Ctrl+?', action: () => openShortcuts() }
         ];
@@ -5020,8 +5004,10 @@
         // Scrollback lines setting
         const scrollbackInput = document.getElementById('scrollbackInput');
         if (scrollbackInput) {
-            const savedScrollback = localStorage.getItem('terminalScrollback') || '150';
-            scrollbackInput.value = savedScrollback;
+            // What the terminals really use: with nothing stored that is the
+            // derived default (5000), not the 150 this field used to show.
+            scrollbackInput.value = TerminalManager.sanitizeScrollback(
+                localStorage.getItem('terminalScrollback'));
             scrollbackInput.addEventListener('change', () => {
                 // One owner decides what a legal capacity is: the same sanitizer
                 // createTerminal uses. The parseInt + 50/10000 pair that stood
@@ -5506,7 +5492,5 @@
             return { refresh, scheduleRefresh };
         })();
         window.MobileStatusBar = MobileStatusBar;
-
-        console.log('SSHDeck initialized');
     });
 })();

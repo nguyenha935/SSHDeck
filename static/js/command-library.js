@@ -30,7 +30,6 @@ const CommandLibrary = {
             });
 
             window.socket.on('os_detection_started', (data) => {
-                console.log('OS detection started for session:', data.session_id);
                 this.detectingOsForSession = data.session_id;
             });
         }

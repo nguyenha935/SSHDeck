@@ -514,7 +514,7 @@ def test_password_tmux_gets_the_same_command_as_tailscale(monkeypatch):
     """Auth type must not decide how a pane handles multi-byte input.
 
     Measured on the live target
-    (tests/browser/defect1_pane_locale_ime_probe.py): with no locale in the
+    (a one-off probe, 2026-08, since removed): with no locale in the
     pane, glibc resolves charmap ANSI_X3.4-1968 and readline runs
     `convert-meta on`, which rewrites every byte >= 0x80 as ESC + (byte & 0x7F).
     Composed Vietnamese typed one character at a time -- the shape an IME commit

@@ -1,15 +1,17 @@
-"""The `?perf=1` performance report (static/js/perf-probe.js).
+"""The performance report (static/js/perf-probe.js, Settings → Diagnostics).
 
 One minute of a browser's numbers becomes one log line. The record comes from
 the client, so it is shaped here: numbers, short strings and short lists of
 numbers survive; anything else is dropped. The ack is what the page times.
+Only an administrator's report is written: the switch is theirs alone.
 """
 import pytest
 
 
 @pytest.fixture
 def owner(app, monkeypatch):
-    """One user on socket 'sock-1'; log lines recorded."""
+    """An administrator on socket 'sock-1', a user on 'sock-2'; log lines
+    recorded."""
     from app.auth import register_socket_session, register_user
     from app.models import db
     import app.socket_events as socket_events
@@ -17,7 +19,12 @@ def owner(app, monkeypatch):
     with app.app_context():
         user, error = register_user('perfowner', 'perf-password-123')
         assert error is None
+        user.is_admin = True
         register_socket_session(user.id, 'sock-1')
+        plain, error = register_user('perfplain', 'perf-password-123')
+        assert error is None
+        assert not plain.is_admin
+        register_socket_session(plain.id, 'sock-2')
         db.session.commit()
 
     lines = []
@@ -27,10 +34,10 @@ def owner(app, monkeypatch):
     return socket_events, lines
 
 
-def call(app, socket_events, payload):
+def call(app, socket_events, payload, sid='sock-1'):
     from flask import request
     with app.test_request_context('/socket.io', environ_base={'REMOTE_ADDR': '127.0.0.1'}):
-        request.sid = 'sock-1'
+        request.sid = sid
         return socket_events.handle_perf_report(payload)
 
 
@@ -73,4 +80,10 @@ def test_past_the_rate_limit_nothing_is_written(app, owner, monkeypatch):
     socket_events, lines = owner
     monkeypatch.setattr(socket_events, 'check_socket_rate_limit', lambda *args: True)
     assert call(app, socket_events, {'report': {'rtt': 1}}) == {'ok': False}
+    assert lines == []
+
+
+def test_a_report_from_anyone_but_an_administrator_is_not_written(app, owner):
+    socket_events, lines = owner
+    assert call(app, socket_events, {'report': {'rtt': 1}}, sid='sock-2') == {'ok': False}
     assert lines == []

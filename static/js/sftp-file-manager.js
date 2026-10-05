@@ -2423,7 +2423,6 @@ class SFTPFileManager {
 
     handleItemDblClick(pane, index) {
         const state = this.panes[pane];
-        console.log('[SFTP] handleItemDblClick called:', { pane, index, type: state.type, sessionId: state.sessionId, connectionId: state.connectionId });
 
         if (index === -1) {
             this.navigatePaneUp(pane);
@@ -2432,11 +2431,8 @@ class SFTPFileManager {
 
         const file = state.files[index];
         if (!file) {
-            console.log('[SFTP] No file at index:', index);
             return;
         }
-
-        console.log('[SFTP] File info:', { name: file.name, is_dir: file.is_dir });
 
         if (file.is_dir) {
             this.navigateIntoDir(pane, file.name);
@@ -2444,7 +2440,6 @@ class SFTPFileManager {
             if (state.type === 'ssh') {
                 const sessionId = state.sessionId || state.connectionId;
                 const filePath = this.joinPath(state.path, file.name);
-                console.log('[SFTP] Opening preview:', { sessionId, filePath, hasFilePreview: !!window.FilePreview });
                 if (window.FilePreview) {
                     window.FilePreview.open(sessionId, filePath, file.name);
                 } else {
@@ -2453,8 +2448,6 @@ class SFTPFileManager {
             } else if (state.type === 'browser-local') {
                 this.showNotification(this.t('fm.localPreviewUnsupported',
                     'Local file preview is not supported yet'), 'info');
-            } else {
-                console.log('[SFTP] Unknown state type for preview:', state.type);
             }
         }
     }
@@ -2620,12 +2613,6 @@ class SFTPFileManager {
         if (!files || files.length === 0) return;
 
         const state = this.panes[this.activePane];
-        console.log('[FM] Mobile upload - activePane:', this.activePane, 'state:', {
-            type: state.type,
-            sessionId: state.sessionId,
-            connectionId: state.connectionId,
-            path: state.path
-        });
 
         if (!state.type) {
             this.showNotification(this.t('fm.selectConnectionFirst', 'Please select a connection first'), 'warning');
@@ -2639,7 +2626,6 @@ class SFTPFileManager {
                 return;
             }
 
-            console.log('[FM] Starting upload of', files.length, 'files to', state.path, 'via session', sessionId);
             this.showNotification(`${this.t('fm.uploading', 'Uploading')} ${files.length} ${this.t('fm.files', 'file(s)')}...`, 'info');
 
             Array.from(files).forEach(file => {
@@ -2660,8 +2646,6 @@ class SFTPFileManager {
         const fullRemotePath = remotePath.endsWith('/')
             ? remotePath + file.name
             : remotePath + '/' + file.name;
-
-        console.log('[FM] Starting HTTP upload:', file.name, 'size:', file.size, 'to:', fullRemotePath);
 
         const transferId = `upload-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         self.queueTransfer({

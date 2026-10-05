@@ -182,8 +182,8 @@ const clear = page => page.evaluate(() => { window.__emits = []; });
 }
 
 /*
- * §6 THE MEASURED SAFARI TRACE. `?kbdebug=1` on the owner's Safari 26.6.2 with
- * the Vietnamese input method, 42 events:
+ * §6 THE MEASURED SAFARI TRACE. The keyboard log (then `?kbdebug=1`) on the
+ * owner's Safari 26.6.2 with the Vietnamese input method, 42 events:
  *
  *   xterm.keydown            13   every letter: keyCode 229, isComposing false
  *   xterm.input insertReplacementText 10  -> onData  0
