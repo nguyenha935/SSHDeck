@@ -424,7 +424,8 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v102: the renderer and the diagnostics follow Settings, live.
         ['js/terminal-manager.js', 102],
         // v18: the Files browser hooks (expand, delegated render and menu).
-        ['js/sftp-file-manager.js', 19],
+        // v20: the quick-connect captions mark the required fields.
+        ['js/sftp-file-manager.js', 20],
         // v2: the control that opened a menu closes it; Upload / Download in
         // the phone's menu.
         ['js/files-browser.js', 2],

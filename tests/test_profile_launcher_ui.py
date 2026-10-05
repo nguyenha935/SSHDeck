@@ -252,7 +252,8 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # v18: the Files browser hooks (expand, delegated render and menu, the
         # selection kept by name across a relist, one toast per error).
         # v19: the [SFTP]/[FM] console lines are gone.
-        "filename='js/sftp-file-manager.js'": '?v=19',
+        # v20: the quick-connect captions mark the required fields.
+        "filename='js/sftp-file-manager.js'": '?v=20',
         # New: the expanded Files browser; loads before sftp-file-manager.js,
         # which constructs it.
         # v2: the control that opened a menu closes it; Upload / Download in

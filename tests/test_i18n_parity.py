@@ -45,7 +45,7 @@ def test_all_locales_have_matching_translation_keys():
     )
     assert all(
         {
-            'connection.commandSet',
+            'commandModes.commandSet',
             'connection.commandSetHint',
             'commandSets.manage',
             'commandSets.create',

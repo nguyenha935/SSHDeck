@@ -1,20 +1,24 @@
-"""A trailing asterisk marks a required field, so it belongs on the caption of
-that field and on nothing the reader picks.
+"""The required-field mark: which captions carry it, and where it lives.
 
-2026-10-05: the Jump Host dialog's auth-type radio read "SSH Key *". One key,
-connection.sshKey, carried the asterisk in all six locales and served both as
-the caption of the key select -- required once key auth is picked
-(app/profile_manager.py and app/jump_host_manager.py refuse a key profile
-without key_id; profile-manager.js sets keySelect.required) -- and as the
-CHOICE that reveals it: the two auth-type <option>s, the radio, and the
-auth-type badge JumpHostManager.renderList paints on every saved jump host.
-The caption has its own key now, connection.sshKeyField, as Host and Port
-carry theirs; the choice is plain.
+OWNER RULING 2026-10-05:
+1. A form that also has optional fields marks the caption of every required
+   field with " *". A form whose every field is required -- sign in,
+   register, change password, add user, upload a key, upload, download --
+   carries no mark.
+2. The mark is markup, never part of a translated string:
+   `<label for="hostInput"><span data-i18n="connection.host">Host</span> *</label>`.
 
-static/js/i18n.js updatePageText sets textContent = t(key) on every
-[data-i18n] element, English included, so what a locale file holds for a key
-is exactly what the reader sees. These rows read the locale files and the
-templates rather than rendering them.
+Why 2: static/js/i18n.js updatePageText sets textContent = t(key) on every
+[data-i18n] element, English included. A mark inside a string reached every
+other use of the key -- the Jump Host radio read "SSH Key *" because
+connection.sshKey was also the caption of the key select -- and a mark
+written in the template's text was erased on load ("Username *" rendered
+"Username"). Outside the translated span it survives the engine and cannot
+leak into a choice that shares the key.
+
+These rows read the templates, the quick-connect markup in
+sftp-file-manager.js and the locale files: what a locale file holds is what
+the engine paints, and the mark sits in markup the engine never touches.
 """
 import re
 from html.parser import HTMLParser
@@ -23,15 +27,60 @@ from pathlib import Path
 from tests.locale_sources import LOCALES, locale_source
 
 TEMPLATES = sorted(Path('templates').glob('*.html'))
-I18N_ATTRS = ('data-i18n', 'data-i18n-placeholder', 'data-i18n-title',
-              'data-i18n-label', 'data-i18n-aria-label')
-SSH_KEY_FIELDS = ('keySelect', 'profileEditorKeySelect', 'jhKeySelect')
+QUICK_CONNECT = Path('static/js/sftp-file-manager.js')
 VOID = {'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link',
         'meta', 'source', 'track', 'wbr'}
+KEY = re.compile(r"^        '([^']+)':", re.MULTILINE)
 VALUE = re.compile(
     r"""^        '([^']+)':\s*(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")\s*,?\s*$""",
     re.MULTILINE,
 )
+
+# The captions that carry the mark, per form: the label's `for`, or its key
+# when the caption names a group rather than one control. Required-ness is
+# what the client or the server refuses empty; a field shown only for one
+# choice is required while it is shown, like the key select.
+MARKED = {
+    ('index.html', 'connectionForm'): {
+        'hostInput', 'portInput', 'usernameInput',
+        'passwordInput',            # app.js "Password is required" (password auth)
+        'keySelect',                # app.js "SSH key is required" (key auth)
+        'jumpHostPasswordInput',    # app.js "Jump host password is required"
+        'commandSetSelect',         # server "Command set not found"
+        'connectionCommandSelect',  # server "Command not found"
+    },
+    ('index.html', 'profileEditorForm'): {
+        'profileEditorName', 'profileEditorHost', 'profileEditorPort',
+        'profileEditorUsername',
+        'profileEditorKeySelect',         # server "key_id required for key authentication"
+        'profileEditorCommandSetSelect',  # server "Command set not found"
+        'profileEditorCommandSelect',     # server "Command not found"
+    },
+    # Port is optional here: empty becomes 22 in app.js and in the server.
+    ('index.html', 'jumpHostForm'): {
+        'jhNameInput', 'jhHostInput', 'jhUsernameInput', 'jhKeySelect',
+    },
+    ('index.html', 'commandSetForm'): {'commandSetNameInput'},
+    ('index.html', 'commandForm'): {
+        'commandFormName', 'commandFormCommand', 'commandFormDescription',
+        'commands.operatingSystems',  # command-library.js "Select at least one OS"
+    },
+    # Port is optional here too: submitQuickConnect falls back to 22.
+    ('sftp-file-manager.js', 'fmQcForm'): {
+        'fmQcHost', 'fmQcUsername',
+        'fmQcPassword',   # "Password is required" (password auth)
+        'fmQcKeySelect',  # "Please select an SSH key" (key auth)
+    },
+    # Every field required: no mark.
+    ('index.html', 'keyUploadForm'): set(),
+    ('index.html', 'uploadForm'): set(),
+    ('index.html', 'downloadForm'): set(),
+    ('index.html', 'dropUploadForm'): set(),
+    ('admin.html', 'addUserModal'): set(),
+    ('login.html', None): set(),
+    ('register.html', 'registerForm'): set(),
+    ('change_password.html', 'changePasswordForm'): set(),
+}
 
 
 def locale_values(locale):
@@ -49,16 +98,22 @@ class Node:
         self.tag = tag
         self.attrs = dict(attrs)
         self.parent = parent
-        self.children = []
-        self.data = []
+        self.content = []  # text and child nodes, in document order
+
+    def children(self):
+        return [item for item in self.content if isinstance(item, Node)]
 
     def walk(self):
-        for child in self.children:
+        for child in self.children():
             yield child
             yield from child.walk()
 
     def text(self):
-        return ''.join(self.data) + ''.join(child.text() for child in self.children)
+        return ''.join(item if isinstance(item, str) else item.text()
+                       for item in self.content)
+
+    def own_text(self):
+        return ''.join(item for item in self.content if isinstance(item, str))
 
 
 class TreeBuilder(HTMLParser):
@@ -69,7 +124,7 @@ class TreeBuilder(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         node = Node(tag, attrs, self.current)
-        self.current.children.append(node)
+        self.current.content.append(node)
         if tag not in VOID:
             self.current = node
 
@@ -81,19 +136,28 @@ class TreeBuilder(HTMLParser):
             self.current = node.parent
 
     def handle_data(self, data):
-        self.current.data.append(data)
+        self.current.content.append(data)
 
 
-def pages():
-    for page in TEMPLATES:
-        yield page.name, TreeBuilder(page.read_text(encoding='utf-8')).root
+def quick_connect_markup():
+    source = QUICK_CONNECT.read_text(encoding='utf-8')
+    start = source.index('<form id="fmQcForm">')
+    return source[start:source.index('</form>', start) + len('</form>')]
+
+
+def documents():
+    """name -> parsed tree, for every template and the quick-connect form."""
+    trees = {page.name: TreeBuilder(page.read_text(encoding='utf-8')).root
+             for page in TEMPLATES}
+    trees[QUICK_CONNECT.name] = TreeBuilder(quick_connect_markup()).root
+    return trees
 
 
 def is_choice(node):
-    """An <option>, or text inside a <label> that wraps a radio or checkbox."""
+    """An <option>, or anything inside a <label> that wraps a radio or checkbox."""
     if node.tag == 'option':
         return True
-    ancestor = node.parent
+    ancestor = node if node.tag == 'label' else node.parent
     while ancestor is not None:
         if ancestor.tag == 'label':
             return any(d.tag == 'input' and d.attrs.get('type') in ('radio', 'checkbox')
@@ -102,93 +166,109 @@ def is_choice(node):
     return False
 
 
-def test_no_choice_carries_the_required_mark():
-    english = locale_values('en')
-    choices = []
-    for name, root in pages():
-        for node in root.walk():
-            key = node.attrs.get('data-i18n')
-            if key and is_choice(node):
-                choices.append((name, node, key))
+def captions(root):
+    return [node for node in root.walk() if node.tag == 'label' and not is_choice(node)]
 
-    # Floor: the scan reaches the choices this defect was about -- the
-    # auth-type <option>s of the connection modal and the profile editor and
-    # the Jump Host radio -- not an empty set that passes by finding nothing.
-    ssh_key_choices = [(name, node.tag) for name, node, key in choices
-                       if key == 'connection.sshKey']
-    assert sorted(ssh_key_choices) == [
-        ('index.html', 'option'), ('index.html', 'option'), ('index.html', 'span'),
-    ], ssh_key_choices
-    assert 'auth.password' in {key for _, _, key in choices}
 
-    fallbacks = [f'{name}: <{node.tag} data-i18n="{key}"> {node.text().strip()!r}'
-                 for name, node, key in choices if starred(node.text())]
-    assert not fallbacks, fallbacks
+def caption_name(label):
+    if label.attrs.get('for'):
+        return label.attrs['for']
+    keyed = [d.attrs['data-i18n'] for d in label.walk() if d.attrs.get('data-i18n')]
+    return keyed[0] if keyed else label.text().strip()
 
+
+def marked(label):
+    return starred(label.text())
+
+
+def container(trees, page, container_id):
+    root = trees[page]
+    if container_id is None:
+        forms = [node for node in root.walk() if node.tag == 'form']
+        assert len(forms) == 1, f'{page}: {len(forms)} forms'
+        return forms[0]
+    found = [node for node in root.walk() if node.attrs.get('id') == container_id]
+    assert len(found) == 1, f'{page}: {len(found)} #{container_id}'
+    return found[0]
+
+
+def test_no_string_carries_the_mark():
     for locale in LOCALES:
+        source = locale_source(locale)
         values = locale_values(locale)
-        offenders = sorted({
-            f'{key}: {values.get(key, english.get(key, key))!r}'
-            for _, _, key in choices
-            if starred(values.get(key, english.get(key, key)))
-        })
-        assert not offenders, f'{locale}: a choice reads as a required caption: {offenders}'
+        # Floor: every key of the file was read, so no string can hide from
+        # the check behind a quoting form the pattern does not know.
+        assert set(values) == set(KEY.findall(source)), locale
+        assert len(values) > 600, (locale, len(values))
+        offenders = sorted(f'{key}: {text!r}' for key, text in values.items() if starred(text))
+        assert not offenders, f'{locale}: a translated string carries the mark: {offenders}'
 
 
-def test_the_required_mark_lives_on_field_captions_only():
-    values = {locale: locale_values(locale) for locale in LOCALES}
-    marked = {key for strings in values.values()
-              for key, text in strings.items() if starred(text)}
-    # Floor: the caption split out of connection.sshKey is one of them.
-    assert 'connection.sshKeyField' in marked, sorted(marked)
-
-    for key in sorted(marked):
-        unmarked = [locale for locale in LOCALES if not starred(values[locale].get(key, ''))]
-        assert not unmarked, f'{key} marks a required field in some locales but not {unmarked}'
-
-    uses = []
-    for name, root in pages():
-        for node in root.walk():
-            for attr in I18N_ATTRS:
-                if node.attrs.get(attr) in marked:
-                    uses.append((name, node, attr))
-    assert uses, 'no template uses a marked caption key at all'
-    misused = [f'{name}: <{node.tag} {attr}="{node.attrs[attr]}">'
-               for name, node, attr in uses
-               if not (attr == 'data-i18n' and node.tag == 'label'
-                       and node.attrs.get('for') and not is_choice(node))]
-    assert not misused, f'a marked key is used for something other than a field caption: {misused}'
+def test_no_choice_carries_the_mark():
+    choices = [(name, node) for name, root in documents().items()
+               for node in root.walk()
+               if node.attrs.get('data-i18n') and is_choice(node)]
+    # Floor: the scan reaches the choices that once read "SSH Key *" -- the
+    # auth-type <option>s of the connection modal and the profile editor and
+    # the Jump Host radio.
+    ssh_key = sorted((name, node.tag) for name, node in choices
+                     if node.attrs['data-i18n'] == 'connection.sshKey')
+    assert ssh_key == [('index.html', 'option'), ('index.html', 'option'),
+                       ('index.html', 'span')], ssh_key
+    offenders = [f'{name}: <{node.tag} data-i18n="{node.attrs["data-i18n"]}"> '
+                 f'{node.text().strip()!r}' for name, node in choices if starred(node.text())]
+    assert not offenders, offenders
 
 
-def test_scripts_paint_no_marked_string():
-    """A script that names a marked key paints the asterisk outside a caption
-    -- as JumpHostManager.renderList did on each saved jump host's badge."""
-    marked = {key for locale in LOCALES
-              for key, text in locale_values(locale).items() if starred(text)}
-    scripts = {path: path.read_text(encoding='utf-8')
-               for path in Path('static/js').glob('*.js')}
-    # Floor: the scan reads the script that painted the badge, and finds the
-    # plain key it paints now.
-    badge = scripts[Path('static/js/jump-host-manager.js')]
-    assert "i18n.t('connection.sshKey')" in badge
+def test_the_mark_sits_outside_the_translated_text():
+    english = locale_values('en')
+    found = 0
+    for name, root in documents().items():
+        for label in captions(root):
+            if not marked(label):
+                continue
+            found += 1
+            where = f'{name}: caption of {caption_name(label)}'
+            # On the label itself, data-i18n would replace the whole text --
+            # the mark included -- on load.
+            assert not label.attrs.get('data-i18n'), where
+            assert starred(label.own_text()), f'{where}: the mark is not the label\'s own text'
+            spans = [child for child in label.children() if child.attrs.get('data-i18n')]
+            assert len(spans) == 1, f'{where}: {len(spans)} translated spans'
+            # The text served before the engine runs is the English string.
+            key = spans[0].attrs['data-i18n']
+            assert spans[0].text().strip() == english[key], (where, spans[0].text())
+    # Floor: every marked caption the ruling names was inspected.
+    assert found == sum(len(names) for names in MARKED.values()), found
 
-    named = sorted(f'{path}: {key}' for path, source in scripts.items()
-                   for key in marked
-                   if re.search(rf"""['"`]{re.escape(key)}['"`]""", source))
-    assert not named, named
+
+def test_the_marks_follow_the_ruling():
+    trees = documents()
+    for (page, container_id), expected in MARKED.items():
+        form = container(trees, page, container_id)
+        labels = captions(form)
+        assert labels, f'{page} #{container_id}: no captions found'
+        have = {caption_name(label) for label in labels if marked(label)}
+        assert have == expected, (
+            f'{page} #{container_id}: marked {sorted(have)}, ruling {sorted(expected)}')
+
+        # A form with a mark has optional fields, so every control the
+        # browser itself refuses empty is marked -- a required field added
+        # later cannot arrive unmarked.
+        if expected:
+            controls = {node.attrs.get('id') for node in form.walk()
+                        if 'required' in node.attrs}
+            unmarked = sorted(controls - have)
+            assert controls and not unmarked, (
+                f'{page} #{container_id}: required but unmarked {unmarked}')
 
 
-def test_the_ssh_key_field_captions_keep_the_required_mark():
-    index = dict(pages())['index.html']
-    values = {locale: locale_values(locale) for locale in LOCALES}
-    for field in SSH_KEY_FIELDS:
-        captions = [node for node in index.walk()
-                    if node.tag == 'label' and node.attrs.get('for') == field]
-        assert len(captions) == 1, f'{field}: {len(captions)} captions'
-        caption = captions[0]
-        key = caption.attrs.get('data-i18n')
-        for locale in LOCALES:
-            assert starred(values[locale].get(key, '')), (
-                f'{field} caption ({key}) is not marked required in {locale}')
-        # The text served before the engine runs is the English string.
-        assert caption.text().strip() == values['en'][key], (field, caption.text())
+def test_no_form_outside_the_ruling_carries_the_mark():
+    trees = documents()
+    listed = set()
+    for page, container_id in MARKED:
+        listed.update(id(label) for label in captions(container(trees, page, container_id)))
+    stray = [f'{name}: caption of {caption_name(label)}'
+             for name, root in trees.items() for label in captions(root)
+             if marked(label) and id(label) not in listed]
+    assert not stray, stray
