@@ -4416,6 +4416,21 @@ textarea.form-control {
     accent-color: var(--accent-primary);
 }
 
+/* Inside a form group a checkbox or radio row is a control, not the group's
+   caption. `.form-group label` (0,1,1) styles captions -- display:block and a
+   bottom margin -- and outranked the flex above (0,1,0), so the box and its
+   text were laid out as inline text. On touch, where the box is 44 px tall
+   (the coarse-pointer block below), the text dropped to the bottom of it:
+   measured at 390x844, #useTmuxCheck's row 63 px tall and the text's centre
+   17.5 px below the box's; the same in every touch tier and in a desktop
+   window under 768 px. The bleed lines the box up with the captions and hints
+   above and below it; the padding stays for the hover and press background. */
+.form-group .checkbox-label,
+.form-group .radio-label {
+    display: flex;
+    margin: 0 calc(-1 * var(--sp-12));
+}
+
 .form-actions {
     display: flex;
     justify-content: flex-end;
@@ -5157,11 +5172,6 @@ button:focus-visible,
         width: 100%;
     }
 
-    .form-control {
-        min-height: 44px;
-        font-size: 16px; 
-    }
-
     .app-title {
         font-size: 18px;
     }
@@ -5232,7 +5242,6 @@ button:focus-visible,
 
     .form-control {
         padding: var(--sp-12);
-        font-size: 16px;
     }
 
     .commands-grid {
@@ -5387,6 +5396,22 @@ body.keyboard-open.notepad-focused .notepad-panel {
        option name would be too, so the floor goes on the label. */
     .checkbox-group label {
         min-width: 44px;
+    }
+
+    /* The 44 px box is the row's height and its target; the padding would
+       only add air (a 60 px row). */
+    .checkbox-label,
+    .radio-label {
+        padding-block: 0;
+    }
+
+    /* A touch target, and 16 px so iOS does not zoom the page in on focus.
+       This used to sit in the max-width:767px block alone, so a phone held
+       landscape and a tablet -- touch, but wider -- kept the desktop field:
+       measured at 844x390, a 38 px text input at 14 px. */
+    .form-control {
+        min-height: 44px;
+        font-size: 16px;
     }
 
     .modal .close {

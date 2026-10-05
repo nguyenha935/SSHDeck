@@ -288,7 +288,7 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # the flex-truncation idiom and the toggle is `flex: none`, so the deficit falls
     # on the static label instead of on the control's height. A browser on v63 keeps
     # the thickened toggle and the shortened note area, so the pin must move.
-    assert "filename='css/style.css') }}?v=74" in idx
+    assert "filename='css/style.css') }}?v=75" in idx
     # sftp-file-manager.js 17 -> 18: the Files browser hooks (PR 2a).
     assert "filename='js/sftp-file-manager.js') }}?v=19" in idx
     # app.js v69 -> v70 (S35 A, owner's composer/erase requirement): after the
@@ -395,7 +395,7 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # the repaint has been quiet (omp replays its transcript after a settle),
     # a grow included. A browser on v96 shows omp's replay run past.
     assert "filename='js/terminal-manager.js') }}?v=102" in idx
-    assert "\"filename='css/style.css'\": '?v=74'," in tp
+    assert "\"filename='css/style.css'\": '?v=75'," in tp
     assert "\"filename='js/sftp-file-manager.js'\": '?v=19'," in tp
     assert "\"filename='js/app.js'\": '?v=102'," in tp
     # session-manager v51 -> v52 (S35 P5): restore-driven pane eviction stopped
@@ -414,7 +414,7 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # source changes what a wider pane renders under the S36 minimum).
     assert "\"filename='js/session-manager.js'\": '?v=72'," in tp
     assert "\"filename='js/terminal-manager.js'\": '?v=102'," in tp
-    assert "style.css') }}?v=74\" in template" in tp
+    assert "style.css') }}?v=75\" in template" in tp
 
 
 def test_command_workspace_modal_renamed_to_command_sets():

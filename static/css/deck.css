@@ -2551,17 +2551,6 @@
     margin-bottom: 0;
 }
 
-/* `.form-group label` (style.css, 0,1,1) is display:block and beats
-   `.checkbox-label`'s flex (0,1,0). On touch, where the checkbox itself is
-   44 px tall, the text then falls to the line below it -- measured at 390x844:
-   a 63 px row, the text 29 px under the box. Pulled out by its own padding so
-   the box lines up with the labels and hints above and below it, and without
-   the label margin, so its hint sits under it. */
-.settings-group .checkbox-label {
-    display: flex;
-    margin: 0 calc(-1 * var(--sp-12));
-}
-
 .settings-group + .settings-group {
     border-top: 1px solid var(--tw-border);
     padding-top: var(--sp-16);
@@ -2590,21 +2579,6 @@
 
 .settings-warning {
     color: var(--tw-warning);
-}
-
-/* A touch target, and 16 px so iOS does not zoom the page in on focus. The
-   app's inputs get both only below 768 px; a phone held landscape is wider.
-   Measured at 844x390: 38 px at 14 px. */
-@media (pointer: coarse) {
-    .settings-body .form-control {
-        min-height: 44px;
-        font-size: 16px;
-    }
-
-    /* The 44 px checkbox is the row's height; padding would only add air. */
-    .settings-group .checkbox-label {
-        padding-block: 0;
-    }
 }
 
 /* The keyboard log and its screen-diagnostic button (Settings → Diagnostics):
