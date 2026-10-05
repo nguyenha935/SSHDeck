@@ -230,14 +230,14 @@ class TestPasswordChange:
         assert login_response.status_code == 302
 
         new_password = ('a' * 70) + '\u00e9X'
-        response = client.post('/change-password', data={
+        response = client.post('/api/account/password', json={
             'current_password': 'current-password',
             'new_password': new_password,
             'confirm_password': new_password,
-        }, follow_redirects=True)
+        })
 
-        assert response.status_code == 200
-        assert b'72 bytes' in response.data
+        assert response.status_code == 400
+        assert response.get_json() == {'field': 'new_password', 'error': 'too_long', 'max': 72}
         with app.app_context():
             from app.models import User
             user = User.query.filter_by(username='changeuser').one()

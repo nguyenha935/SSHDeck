@@ -1,8 +1,8 @@
 /*
- * The four converted auth pages, measured against the v5 rulings.
+ * The three converted auth pages, measured against the v5 rulings.
  *
  * These are the SHIPPED templates (templates/login.html, register.html,
- * change_password.html, admin.html), rendered through the same Jinja
+ * admin.html), rendered through the same Jinja
  * substitution the other browser suites use, not a hand-written fixture. A
  * test that writes its own markup agrees with itself and proves nothing; this
  * repository has already shipped false-green tests that way.
@@ -113,7 +113,6 @@ const THEMES = ['glass', 'retro', 'solar', 'paper', 'noir', 'arctic-ice',
 const PAGES = [
     { name: 'login', tpl: 'templates/login.html', url: '/login' },
     { name: 'register', tpl: 'templates/register.html', url: '/register' },
-    { name: 'change_password', tpl: 'templates/change_password.html', url: '/change_password' },
     { name: 'admin', tpl: 'templates/admin.html', url: '/admin' },
 ];
 
@@ -708,11 +707,9 @@ for (const p of PAGES) {
 // Backend contracts that a restyle must not drop.
 const login = fs.readFileSync(path.join(ROOT, 'templates/login.html'), 'utf8');
 const register = fs.readFileSync(path.join(ROOT, 'templates/register.html'), 'utf8');
-const changePw = fs.readFileSync(path.join(ROOT, 'templates/change_password.html'), 'utf8');
 const admin = fs.readFileSync(path.join(ROOT, 'templates/admin.html'), 'utf8');
 
-for (const [label, src] of [['login', login], ['register', register],
-                            ['change_password', changePw]]) {
+for (const [label, src] of [['login', login], ['register', register]]) {
     check(`${label}: CSRF token input preserved`,
         src.includes('name="csrf_token"') && src.includes('csrf_token()'), true);
     check(`${label}: flash message loop preserved`,
@@ -731,16 +728,6 @@ check('register: password minlength preserved', register.includes('minlength="8"
 check('register: submit guard form id preserved', register.includes('id="registerForm"'), true);
 check('register: match indicator id preserved',
     register.includes('id="passwordMatchIndicator"'), true);
-check('change_password: submit guard form id preserved',
-    changePw.includes('id="changePasswordForm"'), true);
-check('change_password: all three field names preserved',
-    changePw.includes('name="current_password"')
-    && changePw.includes('name="new_password"')
-    && changePw.includes('name="confirm_password"'), true);
-check('change_password: hint ids auth.js looks up',
-    changePw.includes('id="currentPasswordHint"')
-    && changePw.includes('id="newPasswordHint"')
-    && changePw.includes('id="confirmPasswordHint"'), true);
 
 const ADMIN_IDS = ['adminUsersTable', 'adminUsersBody', 'adminAuditTable',
     'adminAuditBody', 'adminAddUserBtn', 'adminRefreshUsers', 'auditSearch',
@@ -779,14 +766,14 @@ check('admin: auth.js loaded for password-toggle hook',
  * validation are the visible behaviour, so a stale auth.js looks like the
  * feature was never built.
  *
- * auth.js is loaded by FOUR templates, so the pin is asserted on each: a partial
+ * auth.js is loaded by THREE templates, so the pin is asserted on each: a partial
  * bump would fix login and leave admin stale, which is the failure mode a single
  * assertion would miss.
  */
-const AUTH_JS_PIN = 3;
+const AUTH_JS_PIN = 4;
 const ADMIN_JS_PIN = 3;
 for (const [label, src] of [['login', login], ['register', register],
-    ['change_password', changePw], ['admin', admin]]) {
+    ['admin', admin]]) {
     check(`${label}: auth.js carries the current ?v=${AUTH_JS_PIN} pin`,
         src.includes(`filename='js/auth.js') }}?v=${AUTH_JS_PIN}"`), true);
     check(`${label}: auth.js has exactly one script reference`,

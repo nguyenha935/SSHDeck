@@ -91,9 +91,9 @@ const server = await new Promise(resolve => {
             res.end(renderTemplate('templates/index.html'));
             return;
         }
-        if (rel === '/change-password') {
+        if (rel === '/login') {
             res.writeHead(200, { 'Content-Type': MIME['.html'] });
-            res.end(renderTemplate('templates/change_password.html'));
+            res.end(renderTemplate('templates/login.html'));
             return;
         }
         if (rel === '/static/vendor/socketio/socket.io.min.js') {
@@ -244,22 +244,22 @@ for (const tier of TIERS) {
 
 /*
  * The defect was never terminal-specific: the base html/body rules are shared by
- * every template, so a non-terminal page must be measured too. change_password
+ * every template, so a non-terminal page must be measured too. The login page
  * carries no .main-content, so it keeps the normal document scroller — the
  * configuration in which a horizontal overflow is not merely invisible but
  * actually pannable by the user.
  */
 {
     const tier = TIERS[2]; // ipad-landscape, the reported breakpoint
-    const m = await measure(tier, '/change-password', '');
-    diagnostics.push(`change-password@${tier.name}: inner=${m.iw}x${m.ih} `
+    const m = await measure(tier, '/login', '');
+    diagnostics.push(`login@${tier.name}: inner=${m.iw}x${m.ih} `
         + `client=${m.cw}x${m.ch} gutter=${m.iw - m.cw} scrollW=${m.sw} `
         + `docScrollX=${m.sw - m.cw} bodyBox=${m.bodyBox}`);
-    eq('change-password: the engine reserved a gutter here too', m.iw - m.cw, BAR);
-    eq('change-password: a non-terminal page does not scroll horizontally either',
+    eq('login: the engine reserved a gutter here too', m.iw - m.cw, BAR);
+    eq('login: a non-terminal page does not scroll horizontally either',
         m.sw - m.cw, 0);
-    const n = await measure(tier, '/change-password', REINTRODUCE_VW);
-    eq('change-password: NEGATIVE CONTROL -- 100vw overflows a non-terminal page too',
+    const n = await measure(tier, '/login', REINTRODUCE_VW);
+    eq('login: NEGATIVE CONTROL -- 100vw overflows a non-terminal page too',
         n.sw - n.cw, BAR);
 }
 

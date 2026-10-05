@@ -208,7 +208,7 @@ async function open(opts) {
     // Every canonical action exists EXACTLY ONCE in the whole document.
     const CANON = ['newConnectionBtn', 'fileTransferBtn', 'commandLibraryBtn',
         'reloadPageBtn', 'manageProfilesBtn', 'fileTransferOpenBtn',
-        'logoutBtn', 'changePasswordBtn'];
+        'logoutBtn', 'settingsBtn'];
     const counts = await page.evaluate(ids => Object.fromEntries(ids.map(id =>
         [id, document.querySelectorAll(`#${id}`).length])), CANON);
     check('phone390: every canonical action appears exactly once',
@@ -296,38 +296,23 @@ async function open(opts) {
     ok('phone390: the final Logout row is reachable by real scrolling',
         reach.logoutVisibleAfterScroll, JSON.stringify(reach));
 
-    // Nested theme/language sections still work inside the hosted tree.
-    // The expanders are #themeExpanderHeader / #langExpanderHeader (the rows that
-     // carry aria-expanded); #themeBtnHeader does not exist. Asserting existence
-     // first, so a renamed control fails loudly here instead of silently
-     // clicking nothing and reporting a closed section.
-    const nested = await page.evaluate(() => {
-        const tBtn = document.getElementById('themeExpanderHeader');
-        const lBtn = document.getElementById('langExpanderHeader');
-        tBtn?.click();
-        const t = document.getElementById('themeDropdownHeader');
-        const tOpen = t?.classList.contains('show');
-        const tCount = t?.querySelectorAll('.theme-option').length || 0;
-        const tVisible = !!t && t.getBoundingClientRect().height > 0;
-        lBtn?.click();
-        const l = document.getElementById('langDropdownHeader');
-        return {
-            triggersExist: !!tBtn && !!lBtn,
-            tOpen, tCount, tVisible,
-            lOpen: l?.classList.contains('show'),
-            lVisible: !!l && l.getBoundingClientRect().height > 0,
-        };
-    });
-    ok('phone390: both nested expander triggers exist in the hosted tree',
-        nested.triggersExist, JSON.stringify(nested));
-    // Opens AND is actually painted: a .show class on a zero-height box is a
-    // dead row, which is one of the failure modes the owner called out.
-    check('phone390: nested Theme section opens with all 10 themes, painted',
-        { open: nested.tOpen, count: nested.tCount, visible: nested.tVisible },
-        { open: true, count: 10, visible: true });
-    check('phone390: nested Language section opens, painted',
-        { open: nested.lOpen, visible: nested.lVisible },
-        { open: true, visible: true });
+    // Theme and Language left the tree on 2026-10-05: no nested section is
+    // left in it, and Settings -- the one row that reaches them now -- is a
+    // painted 44px row of the hosted tree.
+    check('phone390: the hosted tree has no nested Theme or Language section',
+        await page.evaluate(() => ['themeExpanderHeader', 'langExpanderHeader',
+            'themeDropdownHeader', 'langDropdownHeader']
+            .filter(id => document.getElementById(id))), []);
+    check('phone390: Settings is a painted 44px row of the hosted tree',
+        await page.evaluate(() => {
+            const el = document.getElementById('settingsBtn');
+            el?.scrollIntoView({ block: 'nearest' });
+            const r = el?.getBoundingClientRect();
+            return {
+                inTree: !!el?.closest('#mobileSettingsHost #accountDropdownHeader'),
+                tall: !!r && Math.round(r.height) >= 44,
+            };
+        }), { inTree: true, tall: true });
 
     check('phone390: no page errors', pageErrors, []);
     await context.close();

@@ -30,8 +30,9 @@ def test_dialog_close_controls_are_buttons():
     buttons = re.findall(r'<button[^>]*class="close"[^>]*>', source)
     # 13 since: #tmuxOrphansModal (the orphaned-tmux sweep) is the
     # thirteenth dialog, built with the same <button> close control.
-    # 14 since 2026-10-05: #settingsModal (Settings).
-    assert len(buttons) == 14, f'expected 14 dialog close buttons, found {len(buttons)}'
+    # 14 with #settingsModal; 13 again since Settings stopped being a dialog
+    # (settings-view.js, 2026-10-05).
+    assert len(buttons) == 13, f'expected 13 dialog close buttons, found {len(buttons)}'
     for button in buttons:
         assert 'type="button"' in button, (
             f'{button} has no type, so it submits any form it sits inside'

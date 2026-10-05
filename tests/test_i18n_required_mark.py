@@ -79,7 +79,8 @@ MARKED = {
     ('admin.html', 'addUserModal'): set(),
     ('login.html', None): set(),
     ('register.html', 'registerForm'): set(),
-    ('change_password.html', 'changePasswordForm'): set(),
+    # Settings -> Account since 2026-10-05; the page it had is gone.
+    ('index.html', 'changePasswordForm'): set(),
 }
 
 

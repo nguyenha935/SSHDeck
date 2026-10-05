@@ -4,8 +4,8 @@
  * The terminal renderer and the diagnostics used to be switched on by a query
  * in the address (?renderer=webgl, ?perf=1, ?kbdebug=1): nothing on screen
  * said they existed or whether they were on, and two of them were silently
- * remembered. They are chosen in Settings now, and this is where every part of
- * the page reads them.
+ * remembered. They are chosen in Settings now (settings-view.js), and this is
+ * where every part of the page reads them.
  *
  * Per device, in localStorage: the renderer suits one machine's GPU, and a
  * diagnostic is for the device being diagnosed. The renderer is anyone's
@@ -119,51 +119,4 @@
             announce('keyboardLog');
         },
     };
-
-    // ── the Settings dialog ────────────────────────────────────────────────
-    function bindPanel() {
-        const modal = document.getElementById('settingsModal');
-        if (!modal) {
-            return;
-        }
-        const byId = id => document.getElementById(id);
-        const renderer = byId('rendererSelect');
-        const perf = byId('perfProbeToggle');
-        const attach = byId('attachReportToggle');
-        const keyboard = byId('keyboardLogToggle');
-        const keyboardState = byId('keyboardLogState');
-
-        function show() {
-            if (renderer) renderer.value = DeviceSettings.renderer();
-            if (perf) perf.checked = DeviceSettings.perf();
-            if (attach) attach.checked = DeviceSettings.attachReport();
-            if (keyboard) keyboard.checked = DeviceSettings.keyboardLog();
-            if (keyboardState) {
-                const until = DeviceSettings.keyboardLogUntil();
-                keyboardState.textContent = until && window.i18n
-                    ? i18n.t('settings.keyboardLogUntil').replace('{time}', new Date(until)
-                        .toLocaleTimeString(i18n.currentLang, { hour: '2-digit', minute: '2-digit' }))
-                    : '';
-            }
-        }
-
-        byId('settingsBtn')?.addEventListener('click', () => {
-            show();
-            window.ModalManager?.open(modal);
-        });
-        byId('closeSettingsModal')?.addEventListener('click', () => window.ModalManager?.close(modal));
-        renderer?.addEventListener('change', () => DeviceSettings.setRenderer(renderer.value));
-        perf?.addEventListener('change', () => DeviceSettings.setPerf(perf.checked));
-        attach?.addEventListener('change', () => DeviceSettings.setAttachReport(attach.checked));
-        keyboard?.addEventListener('change', () => DeviceSettings.setKeyboardLog(keyboard.checked));
-        // Another tab, or the keyboard log's own deadline.
-        document.addEventListener('sshdeck:device-setting', show);
-        show();
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', bindPanel);
-    } else {
-        bindPanel();
-    }
 })();

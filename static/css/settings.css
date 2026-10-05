@@ -1,0 +1,668 @@
+/* ── Settings (settings-view.js) ─────────────────────────────────────────────
+   Every setting in one place (owner ruling 2026-10-05). The geometry is the
+   expanded Files browser's, so the two behave alike:
+
+   desktop and iPad  absolute over .workspace: the header, session chips and
+                     status bar stay usable. A section list on the left, the
+                     section on the right.
+   phone and short   the whole screen, by lifting the content layer, as the
+   landscape         Files browser does. The section list first; a section
+                     replaces it, and Back returns to it.
+
+   Nothing under it is hidden or resized, so opening it sends no ssh_resize.
+   Colours are --tw-* tokens only, so all ten themes follow. Every :hover sits
+   under (hover: hover) with an :active twin (touch_hover_release.mjs).
+   ──────────────────────────────────────────────────────────────────────────── */
+.settings-view {
+    position: absolute;
+    inset: 0;
+    z-index: 960;
+    display: grid;
+    grid-template-columns: 232px minmax(0, 1fr);
+    min-width: 0;
+    min-height: 0;
+    background: var(--tw-shell);
+    color: var(--tw-text);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+/* An author display beats [hidden]. */
+.settings-view[hidden],
+.settings-view [hidden] {
+    display: none !important;
+}
+
+.sv-nav,
+.sv-main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+.sv-nav {
+    border-right: 1px solid var(--tw-border);
+    background: var(--tw-bar);
+}
+
+.sv-bar {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 48px;
+    padding: 0 8px 0 16px;
+    border-bottom: 1px solid var(--tw-border);
+}
+
+.sv-main .sv-bar {
+    background: var(--tw-shell);
+}
+
+.sv-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    font-size: 15px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sv-icon-btn {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--tw-muted);
+    cursor: pointer;
+}
+
+.sv-icon-btn .icon {
+    width: 18px;
+    height: 18px;
+}
+
+/* On a desktop the list is always beside the section: no Back, and one close
+   button, in the section's bar. */
+.sv-back,
+.sv-close-list {
+    display: none;
+}
+
+.sv-nav-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 4px 8px 12px;
+}
+
+.sv-group {
+    padding: 14px 10px 4px;
+    color: var(--tw-muted);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.sv-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 36px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--tw-muted);
+    font: inherit;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.sv-nav-icon {
+    flex: none;
+    width: 16px;
+    height: 16px;
+}
+
+.sv-nav-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sv-nav-item[aria-current="page"] {
+    background: var(--tw-accent-soft);
+    color: var(--tw-accent);
+    font-weight: 600;
+}
+
+/* The current value and the chevron belong to the phone's list. */
+.sv-nav-value,
+.sv-chevron {
+    display: none;
+}
+
+.sv-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 20px 28px 32px;
+}
+
+.sv-section {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-width: 720px;
+}
+
+.sv-scope {
+    margin: 0;
+    color: var(--tw-muted);
+    font-size: 12.5px;
+}
+
+.sv-card {
+    margin: 0;
+    border: 1px solid var(--tw-border);
+    border-radius: 10px;
+    background: var(--tw-bar);
+}
+
+.sv-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 16px;
+    min-height: 52px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--tw-border);
+}
+
+.sv-row:last-child {
+    border-bottom: 0;
+}
+
+label.sv-row {
+    cursor: pointer;
+}
+
+.sv-row-stack {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+}
+
+.sv-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.sv-label {
+    color: var(--tw-text);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.sv-hint {
+    color: var(--tw-muted);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.sv-warning {
+    color: var(--tw-warning);
+}
+
+.sv-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--tw-muted);
+}
+
+.sv-value {
+    color: var(--tw-muted);
+    overflow-wrap: anywhere;
+}
+
+.sv-row-note {
+    display: block;
+    min-height: 0;
+    padding-top: 0;
+    color: var(--tw-muted);
+    font-size: 12px;
+}
+
+.sv-row-note:empty {
+    display: none;
+}
+
+/* Longhands, not the shorthands: on touch style.css draws a select's arrow
+   as a background image with room for it on the right, which `background` and
+   `padding` would wipe out. */
+.sv-input,
+.sv-select {
+    height: 34px;
+    min-width: 0;
+    padding-block: 0;
+    padding-left: 10px;
+    border: 1px solid var(--tw-border);
+    border-radius: 7px;
+    background-color: var(--tw-shell);
+    color: var(--tw-text);
+    font: inherit;
+}
+
+.sv-input {
+    padding-right: 10px;
+}
+
+.sv-number {
+    width: 7.5em;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.sv-select {
+    min-width: 11em;
+    cursor: pointer;
+}
+
+.sv-input[aria-invalid="true"] {
+    border-color: var(--tw-danger);
+}
+
+/* ── theme ── */
+.sv-themes {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 8px;
+}
+
+.sv-theme {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 40px;
+    padding: 0 12px;
+    border: 1px solid var(--tw-border);
+    border-radius: 8px;
+    background: var(--tw-shell);
+    color: var(--tw-text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.sv-theme[aria-checked="true"] {
+    border-color: var(--tw-accent);
+    box-shadow: inset 0 0 0 1px var(--tw-accent);
+    font-weight: 600;
+}
+
+.sv-swatch {
+    flex: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+}
+
+/* A light theme's swatch vanishes on a light card without an outline. */
+.sv-swatch.is-light {
+    box-shadow: inset 0 0 0 1px var(--tw-border);
+}
+
+/* ── switches ── */
+.sv-switch {
+    position: relative;
+    flex: none;
+    width: 38px;
+    height: 22px;
+    margin: 0;
+    border-radius: 999px;
+    background: var(--tw-border);
+    cursor: pointer;
+    appearance: none;
+    transition: background 0.15s ease;
+}
+
+.sv-switch::before {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--tw-muted);
+    transition: transform 0.15s ease;
+}
+
+.sv-switch:checked {
+    background: var(--tw-accent);
+}
+
+.sv-switch:checked::before {
+    background: var(--accent-on-text);
+    transform: translateX(16px);
+}
+
+/* ── the password form ── */
+.sv-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px;
+}
+
+.sv-form-title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.sv-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 420px;
+}
+
+.sv-input-wrap {
+    position: relative;
+    display: flex;
+}
+
+.sv-input-wrap .sv-input {
+    flex: 1 1 auto;
+    padding-right: 40px;
+}
+
+.sv-reveal {
+    position: absolute;
+    top: 50%;
+    right: 1px;
+    transform: translateY(-50%);
+}
+
+.sv-reveal[aria-pressed="true"] {
+    color: var(--tw-accent);
+}
+
+.sv-field-error {
+    color: var(--tw-danger);
+    font-size: 12px;
+}
+
+.sv-field-error:empty {
+    display: none;
+}
+
+.sv-form-foot {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.sv-status {
+    flex: 1 1 auto;
+    color: var(--tw-muted);
+    font-size: 12.5px;
+}
+
+.sv-status.is-ok {
+    color: var(--tw-success);
+}
+
+.sv-status.is-error {
+    color: var(--tw-danger);
+}
+
+.sv-btn {
+    height: 34px;
+    padding: 0 14px;
+    border: 1px solid var(--tw-border);
+    border-radius: 7px;
+    background: var(--tw-surface);
+    color: var(--tw-text);
+    font: inherit;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.sv-btn-primary {
+    border-color: var(--tw-accent);
+    background: var(--tw-accent);
+    color: var(--accent-on-text);
+}
+
+.sv-btn:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+/* ── states ── */
+@media (hover: hover) {
+    .sv-icon-btn:hover,
+    .sv-nav-item:hover,
+    .sv-theme:hover {
+        background: var(--tw-hover);
+        color: var(--tw-text);
+    }
+
+    .sv-nav-item[aria-current="page"]:hover {
+        background: var(--tw-accent-soft);
+        color: var(--tw-accent);
+    }
+
+    .sv-btn:not(:disabled):hover {
+        background: var(--tw-hover);
+    }
+
+    .sv-btn-primary:not(:disabled):hover {
+        background: color-mix(in srgb, var(--tw-accent) 88%, var(--tw-text));
+    }
+}
+
+.sv-icon-btn:active,
+.sv-nav-item:active,
+.sv-theme:active {
+    background: var(--tw-hover);
+    color: var(--tw-text);
+}
+
+.sv-btn:not(:disabled):active {
+    background: var(--tw-hover);
+}
+
+.sv-btn-primary:not(:disabled):active {
+    background: color-mix(in srgb, var(--tw-accent) 88%, var(--tw-text));
+}
+
+.sv-icon-btn:focus-visible,
+.sv-nav-item:focus-visible,
+.sv-theme:focus-visible,
+.sv-btn:focus-visible,
+.sv-switch:focus-visible,
+.sv-input:focus-visible,
+.sv-select:focus-visible {
+    outline: 2px solid var(--tw-accent);
+    outline-offset: 1px;
+}
+
+/* On a phone the list rows and the bar's buttons meet the screen's edge, which
+   would clip a ring drawn outside them. */
+.sv-icon-btn:focus-visible,
+.sv-nav-item:focus-visible {
+    outline-offset: -2px;
+}
+
+/* ── touch: every control a 44 px target, fields 16 px (iOS zooms in on
+   smaller) ── */
+@media (pointer: coarse) {
+    .sv-icon-btn {
+        width: 44px;
+        height: 44px;
+    }
+
+    .sv-reveal {
+        right: 0;
+    }
+
+    .sv-input-wrap .sv-input {
+        padding-right: 48px;
+    }
+
+    .sv-nav-item,
+    .sv-theme {
+        min-height: 44px;
+    }
+
+    .sv-input,
+    .sv-select,
+    .sv-btn {
+        height: 44px;
+        font-size: 16px;
+    }
+
+    .sv-row {
+        min-height: 56px;
+    }
+
+    .sv-row-note {
+        min-height: 0;
+    }
+}
+
+/* ── phone and short landscape: the whole screen, one level at a time ──
+   The view is fixed to the viewport, and the content layer it lives in is
+   lifted over the header and dock (.main-content isolates its children at
+   z-index 1, below the header's 1000), the same move as the Files browser. */
+@media (max-width: 767px), (pointer: coarse) and (hover: none) and (max-height: 500px) {
+    body.settings-open .main-content {
+        z-index: 1001;
+    }
+
+    .settings-view {
+        position: fixed;
+        grid-template-columns: minmax(0, 1fr);
+        padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+            env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+    }
+
+    .settings-view .sv-nav {
+        border-right: 0;
+        background: var(--tw-shell);
+    }
+
+    .settings-view.sv-in-section .sv-nav,
+    .settings-view:not(.sv-in-section) .sv-main {
+        display: none;
+    }
+
+    .sv-back,
+    .sv-close-list {
+        display: inline-grid;
+    }
+
+    .sv-bar {
+        padding-left: 8px;
+    }
+
+    .sv-nav .sv-bar {
+        padding-left: 16px;
+    }
+
+    .sv-nav-list {
+        padding: 0 0 16px;
+    }
+
+    .sv-group {
+        padding: 18px 16px 6px;
+    }
+
+    .sv-nav-item,
+    .sv-nav-item[aria-current="page"] {
+        min-height: 52px;
+        padding: 0 12px 0 16px;
+        border-bottom: 1px solid var(--tw-border);
+        border-radius: 0;
+        background: transparent;
+        color: var(--tw-text);
+        font-weight: 400;
+    }
+
+    .sv-nav-value {
+        display: block;
+        flex: none;
+        max-width: 50%;
+        overflow: hidden;
+        color: var(--tw-muted);
+        font-size: 12.5px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .sv-chevron {
+        display: block;
+        flex: none;
+        width: 16px;
+        height: 16px;
+        color: var(--tw-muted);
+    }
+
+    .sv-scroll {
+        padding: 16px 16px 24px;
+    }
+
+    .sv-themes {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+/* A field with a long hint goes under it, rather than squeezing it. */
+@media (max-width: 520px) {
+    .sv-row-wide {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 10px;
+    }
+
+    .sv-row-wide .sv-select {
+        width: 100%;
+    }
+}
+
+/* The keyboard log's panel and its button (deck.css, z 8000) sit over the
+   whole page, and over this view too, which is not a dialog: on a phone the
+   panel covered the view's close button. They are for reproducing a defect,
+   not for this screen, so they step aside while it is open. */
+body.settings-open :is(.kbdebug-panel, .screen-diagnostic-btn) {
+    visibility: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sv-switch,
+    .sv-switch::before {
+        transition: none;
+    }
+}

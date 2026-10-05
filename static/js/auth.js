@@ -92,38 +92,6 @@
         password.addEventListener('input', checkMatch);
     }
 
-    function setupChangePasswordValidation() {
-        const current = document.getElementById('current_password');
-        const next = document.getElementById('new_password');
-        const confirm = document.getElementById('confirm_password');
-        const currentHint = document.getElementById('currentPasswordHint');
-        const nextHint = document.getElementById('newPasswordHint');
-        const confirmHint = document.getElementById('confirmPasswordHint');
-
-        if (!current || !next || !confirm) {
-            return;
-        }
-
-        current.addEventListener('input', () => {
-            const value = current.value;
-            setFieldState(current, currentHint, value ? '✓ Looks good' : 'Current password required', Boolean(value));
-        });
-
-        next.addEventListener('input', () => {
-            const value = next.value;
-            const isValid = value.length >= 8;
-            setFieldState(next, nextHint, isValid ? '✓ Strong enough' : 'Minimum 8 characters', isValid);
-        });
-
-        const checkMatch = () => {
-            const match = confirm.value && confirm.value === next.value;
-            setFieldState(confirm, confirmHint, match ? '✓ Passwords match' : 'Passwords do not match', match);
-        };
-
-        confirm.addEventListener('input', checkMatch);
-        next.addEventListener('input', checkMatch);
-    }
-
     /*
      * The admin create-user form (templates/admin.html).
      *
@@ -173,7 +141,6 @@
         setupPasswordToggles();
         setupLoginValidation();
         setupRegisterValidation();
-        setupChangePasswordValidation();
         setupAdminCreateUserValidation();
     });
 })();

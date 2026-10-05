@@ -7,6 +7,7 @@
   "source": "sprite.svg",
   "integrity": "sha512-dC3VJwRFsjEVX7Iaq4rY88pm7Fi2OmOb8P0WRzXsUMgbt7sCmFX8bLhaDBeNW6JdRjuele+jKqqFaam4yr+Ygg==",
   "symbols": [
+    "icon-activity",
     "icon-arrow-down",
     "icon-arrow-down-to-line",
     "icon-arrow-left",

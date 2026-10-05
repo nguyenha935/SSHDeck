@@ -63,7 +63,9 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # v70: owner ruling -- the phone-landscape 40px band, the dock slots
         # for the strip and the brand, and the 40px --shell-strip are gone; phone
         # landscape takes the >=768 touch tier (the min-height: 501px terms dropped).
-        "filename='css/style.css'": '?v=75',
+        # v76: the theme and language pickers' rules went with them to Settings
+        # (settings.css).
+        "filename='css/style.css'": '?v=76',
         # v30: W13-A4 legacy tmux locale chip badge (.chip-locale-warning).
         # v31: W14 item 2 bounded menus + item 6 broadcast picker.
         # v35: the drag-armed chip's lift was a black rgba() literal -- the one
@@ -79,7 +81,8 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # (reduced motion: none).
         # v42: the Settings dialog, and the keyboard log and screen-diagnostic
         # button styled from the theme instead of inline.
-        "filename='css/deck.css'": '?v=43',
+        # v44: the Settings dialog's rules are gone with the dialog.
+        "filename='css/deck.css'": '?v=44',
         # New: the --tw-* bridge moved out of deck.css so every page
         # can read the ten themes, not just the shell.
         "filename='css/deck-tokens.css'": '?v=1',
@@ -88,6 +91,8 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # New: the expanded Files browser.
         # v2: the menu is as tall as the room under its control.
         "filename='css/files-browser.css'": '?v=2',
+        # New: Settings, every setting in one place (owner ruling 2026-10-05).
+        "filename='css/settings.css'": '?v=1',
         # v36: W13-A4 session.legacyTmuxLocale / .legacyTmuxLocaleShort keys
         # in all six locales.
         # v37: W13-B5 session.reconnectRetainBody key in all six locales.
@@ -248,7 +253,8 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # is not toasted a second time by the app.
         # v102: scrollback is set in Settings; the per-frame and lifecycle
         # console lines are gone.
-        "filename='js/app.js'": '?v=102',
+        # v103: the change-password page is gone; the palette opens Settings.
+        "filename='js/app.js'": '?v=103',
         # v18: the Files browser hooks (expand, delegated render and menu, the
         # selection kept by name across a relist, one toast per error).
         # v19: the [SFTP]/[FM] console lines are gone.
@@ -258,13 +264,17 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # which constructs it.
         # v2: the control that opened a menu closes it; Upload / Download in
         # the phone's menu.
-        "filename='js/files-browser.js'": '?v=2',
+        "filename='js/files-browser.js'": '?v=3',
         # New: the performance probe (audit 2026-10-04).
         # v3: switched on in Settings (administrators), and off again live.
         "filename='js/perf-probe.js'": '?v=3',
         # New: the per-device settings (renderer, diagnostics) every module
         # reads; loads before terminal-manager.js.
-        "filename='js/device-settings.js'": '?v=1',
+        # v2: the Settings dialog it bound is gone; settings-view.js shows it.
+        "filename='js/device-settings.js'": '?v=2',
+        # New: Settings (owner ruling 2026-10-05). After header-menus.js and
+        # app.js, whose scrollback it reads.
+        "filename='js/settings-view.js'": '?v=1',
         # Extracted from a 146-line inline <script> in index.html. Inline script
         # cannot be cache-busted at all -- it ships inside the cached HTML -- so
         # pinning it is the point of moving it out.
@@ -272,7 +282,8 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # copy /login can read before there is a user.
         # v13: comments only -- triggerReachableBottom no longer describes the
         # retired 40px band; the measurement is unchanged.
-        "filename='js/header-menus.js'": '?v=13',
+        # v14: the theme and language pickers moved to Settings.
+        "filename='js/header-menus.js'": '?v=14',
         # session-manager.js was the one changed asset with no pinned version
         # anywhere, so a change to it could ship behind a stale browser cache
         # with nothing going red. Pinned here for the same reason as the rest.
@@ -584,7 +595,7 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # v97: a column change -- a grow too -- stays covered until the repaint
         # has been quiet for FREEZE_QUIET_MS, so omp's transcript replay is not
         # seen running from the top of the conversation to the prompt.
-        "filename='js/terminal-manager.js'": '?v=102',
+        "filename='js/terminal-manager.js'": '?v=103',
         # touch-action-row.js owns the six-action global row. It did not exist
         # when this table was written; an unpinned copy of it is the single most
         # damaging stale asset on touch, because the row it builds is the only
@@ -684,7 +695,7 @@ def test_profile_launcher_stylesheet_uses_current_cache_version():
     # test_merged_profile_frontend_assets_have_distinct_cache_versions above --
     # this file states the style.css pin TWICE, so a raise must move both or one
     # row goes red while the other passes.
-    assert "filename='css/style.css') }}?v=75" in template
+    assert "filename='css/style.css') }}?v=76" in template
 
 
 def test_retired_upload_modules_are_fully_gone():

@@ -11,7 +11,7 @@
  *      the bottom of it: #useTmuxCheck's row 63 px, the text's centre 17.5 px
  *      below the box's. The same for every .checkbox-label and .radio-label in
  *      a form group: connection, profile editor, jump host, SFTP quick connect.
- *      Settings had its own copy of the fix in deck.css; it now has none.
+ *      Settings is no longer a dialog (settings.css, gate settings_view.mjs).
  *   2. Fields reached 44 px and 16 px only below 768 px. A phone held
  *      landscape (844x390) and a tablet are touch but wider: 38 px at 14 px.
  *      16 px matters because iOS zooms the page in on focusing a smaller
@@ -96,16 +96,14 @@ const VIEWPORTS = [
 ];
 
 // Every dialog with a checkbox, a radio or a .form-control. The SFTP quick
-// connect dialog is built by SFTPFileManager, so the page builds one; Settings
-// keeps its administrator's section, as Jinja renders it for one.
+// connect dialog is built by SFTPFileManager, so the page builds one.
 const DIALOGS = ['connectionModal', 'profileManagementModal', 'keyManagementModal',
     'commandSetsModal', 'jumpHostManagementModal', 'fileTransferModal', 'commandFormModal',
-    'commandPaletteModal', 'dropUploadModal', 'fmQuickConnectModal', 'settingsModal'];
+    'commandPaletteModal', 'dropUploadModal', 'fmQuickConnectModal'];
 
 // The first row of each group: its box belongs on the column's left edge.
 const FIRST_IN_ROW = ['useTmuxCheck', 'saveProfileCheck', 'profileEditorUseDefaultParameters',
-    'jhAuthType=password', 'fmQcAuth=password', 'osAll', 'commandSetUseSudoInput',
-    'perfProbeToggle'];
+    'jhAuthType=password', 'fmQcAuth=password', 'osAll', 'commandSetUseSudoInput'];
 
 const pageErrors = [];
 
@@ -243,8 +241,7 @@ for (const [engineName, engine] of [['chromium', chromium], ['webkit', webkit]])
             for (const [dialog, sel] of [['connectionModal', '#useTmuxCheck'],
                 ['connectionModal', '#saveProfileCheck'], ['connectionModal', '#hostInput'],
                 ['jumpHostManagementModal', 'input[name=jhAuthType]'],
-                ['profileManagementModal', '#profileEditorUseDefaultParameters'],
-                ['settingsModal', '#perfProbeToggle']]) {
+                ['profileManagementModal', '#profileEditorUseDefaultParameters']]) {
                 await page.evaluate((id) => {
                     const m = document.getElementById(id);
                     m.classList.add('show');

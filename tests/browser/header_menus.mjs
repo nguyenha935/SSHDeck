@@ -10,12 +10,10 @@
  *   - The menu opens on click. The five inline onclick= attributes were the only
  *     thing binding these buttons before, so if the extracted bindings never run
  *     the page is silently inert.
- *   - Picking a theme changes data-theme AND repaints the terminals. The palette
- *     reaches xterm only via TerminalManager.applyThemeToAll(), which reads
- *     --term-* out of CSS; without it the page themes and the terminals do not.
- *   - The Theme/Language rows do NOT close the account menu. They open a
- *     sub-section in place, so closing on them would shut the menu the instant
- *     you reached for a theme -- the exact bug an over-tidy rewrite introduces.
+ *   - The menu holds no Theme or Language row: since 2026-10-05 both live in
+ *     the Settings view (settings_view.mjs drives them there), and Settings is
+ *     an action that closes the menu and opens the view.
+ *   - A theme still changes what is painted (a CSS check, not a menu one).
  *   - A click outside closes everything.
  *
  * Run: node tests/browser/header_menus.mjs   (from source/)
@@ -103,13 +101,10 @@ await page.evaluate(() => {
 const shown = id => page.evaluate(
     i => !!document.getElementById(i)?.classList.contains('show'), id);
 
-// The theme list is built by the extracted file at init. If it never ran, the
-// dropdown is empty and every check below would fail for one shared reason --
-// so establish it first.
-check('theme picker is populated at init',
-    await page.evaluate(
-        () => document.querySelectorAll('#themeDropdownHeader .theme-option').length),
-    10);
+check('the menu has no Theme or Language picker left',
+    await page.evaluate(() => ['themeExpanderHeader', 'themeDropdownHeader',
+        'langExpanderHeader', 'langDropdownHeader']
+        .filter(id => document.getElementById(id))), []);
 
 check('account menu starts closed', await shown('accountDropdownHeader'), false);
 
@@ -147,59 +142,8 @@ check('the account menu is 1px below its owning wrapper',
 check('the account menu keeps its right edge on the owning wrapper',
     accountGeometry.rightAligned, true);
 
-// The load-bearing one: the expanders must not close the menu around them.
-await page.click('#themeExpanderHeader');
-check('the Theme expander opens its sub-section', await shown('themeDropdownHeader'), true);
-check('the Theme expander leaves the account menu open',
-    await shown('accountDropdownHeader'), true);
-
-await page.click('#langExpanderHeader');
-check('the Language expander opens its sub-section',
-    await shown('langDropdownHeader'), true);
-check('opening Language closes Theme (only one sub-section at a time)',
-    await shown('themeDropdownHeader'), false);
-check('the Language expander leaves the account menu open',
-    await shown('accountDropdownHeader'), true);
-
-// The mirror direction. Only one of these two was checked at first, and a
-// mutation removing the closeLangDropdown() call from the Theme toggle survived
-// the whole suite: "only one sub-section at a time" has to hold both ways round,
-// so both ways round get asserted.
-await page.click('#themeExpanderHeader');
-check('opening Theme closes Language (the mirror direction)',
-    await shown('langDropdownHeader'), false);
-check('opening Theme reopens its own sub-section',
-    await shown('themeDropdownHeader'), true);
-
-// Pick a theme and prove it reached both the page and the terminals.
-await page.evaluate(() => {
-    window.__appliedToAll = 0;
-    window.TerminalManager = window.TerminalManager || {};
-    window.TerminalManager.applyThemeToAll = () => { window.__appliedToAll += 1; };
-});
-// Open the theme list from a known state rather than toggling blind. Toggling
-// assumes it was closed, and once the mirror-direction check above left it open
-// this click closed it instead -- then the option below was never clickable.
-await page.evaluate(() => {
-    document.getElementById('accountDropdownHeader').classList.add('show');
-    document.getElementById('themeDropdownHeader').classList.add('show');
-});
-await page.click('#themeDropdownHeader .theme-option[data-theme-id="noir"]');
-
-check('picking a theme sets data-theme on the body',
-    await page.evaluate(() => document.body.getAttribute('data-theme')), 'noir');
-check('picking a theme repaints the live terminals',
-    await page.evaluate(() => window.__appliedToAll), 1);
-check('picking a theme marks that option active',
-    await page.evaluate(() => {
-        const active = document.querySelectorAll('#themeDropdownHeader .theme-option.active');
-        return [active.length, active[0]?.dataset.themeId];
-    }), [1, 'noir']);
-check('picking a theme closes the theme sub-section',
-    await shown('themeDropdownHeader'), false);
-
 // A theme with a real CSS block must actually change what is rendered, or the
-// picker is relabelling nothing.
+// Settings picker is relabelling nothing.
 //
 // Read backgroundImage, not backgroundColor. `body` is painted with
 // `background: var(--bg-gradient)` (style.css), so backgroundColor computes to
@@ -235,57 +179,14 @@ check('the two themes expose a different --accent-primary',
     glass.accent !== noir.accent, true);
 
 /*
- * The swatch dot for a light theme needs an outline or it disappears: a pale
- * colour on a pale dropdown reads as an empty gap where the other nine show a
- * dot. This file used to write `border:1px solid #666` inline for exactly that,
- * one fixed grey regardless of theme; it is now a class, so the border colour
- * comes from the stylesheet and follows the theme like everything else.
- *
- * Measured as a rendered border width, not as the presence of the class: a class
- * that no rule matches would still pass a class check while rendering nothing.
- */
-{
-    await page.evaluate(() => document.body.setAttribute('data-theme', 'glass'));
-    const swatches = await page.evaluate(() => {
-        const read = id => {
-            const dot = document.querySelector(
-                `#themeDropdownHeader .theme-option[data-theme-id="${id}"] .theme-color-dot`);
-            const cs = getComputedStyle(dot);
-            return {
-                marked: dot.classList.contains('is-light'),
-                width: Math.round(parseFloat(cs.borderTopWidth)),
-                colour: cs.borderTopColor,
-                // The dot's own colour is data from the THEMES list and stays
-                // inline; only the outline moved to CSS.
-                background: cs.backgroundColor,
-            };
-        };
-        return { paper: read('paper'), noir: read('noir') };
-    });
-
-    check('the light theme swatch is marked', swatches.paper.marked, true);
-    check('the light theme swatch renders an outline',
-        swatches.paper.width >= 1, true);
-    check('a dark theme swatch has none', swatches.noir.width, 0);
-    check('the outline colour comes from the theme, not a fixed grey',
-        swatches.paper.colour !== 'rgb(102, 102, 102)', true);
-    check('the swatch still carries its own colour',
-        swatches.paper.background !== swatches.noir.background, true);
-    check('neither swatch lost its colour',
-        [swatches.paper.background, swatches.noir.background]
-            .every(c => c && c !== 'rgba(0, 0, 0, 0)'), true);
-}
-
-/*
  * A click inside the menu that lands on no action leaves it open; an action
  * closes it. The scrollback input used to be the in-place row that proved the
  * first half (it reached the dropdown's delegated handler without being an
- * action); it moved into the Settings dialog on 2026-10-05, so the identity
- * block -- inside the menu, no control at all -- carries that half now, and
- * Settings, the row that replaced it, carries the second.
+ * action); it moved into Settings on 2026-10-05, so the identity block --
+ * inside the menu, no control at all -- carries that half now, and Settings,
+ * the row that replaced it, carries the second.
  */
-// Reopen explicitly: picking a theme above left the menu itself open but this
-// must not depend on that. Assert the precondition rather than assume it -- the
+// Open explicitly and assert the precondition rather than assume it -- the
 // first version of this check clicked a hidden input and timed out.
 await page.evaluate(
     () => document.getElementById('accountDropdownHeader').classList.add('show'));
@@ -295,13 +196,13 @@ await page.click('#accountDropdownHeader .account-menu-identity');
 check('touching the identity block leaves the account menu open',
     await shown('accountDropdownHeader'), true);
 await page.click('#settingsBtn');
-check('Settings is an action: the menu closes and the Settings dialog opens',
-    [await shown('accountDropdownHeader'), await page.evaluate(() =>
-        getComputedStyle(document.getElementById('settingsModal')).display !== 'none')],
+check('Settings is an action: the menu closes and the Settings view opens',
+    [await shown('accountDropdownHeader'),
+        await page.evaluate(() => !document.getElementById('settingsView').hidden)],
     [false, true]);
-await page.click('#closeSettingsModal');
-check('...and its close button closes it', await page.evaluate(() =>
-    getComputedStyle(document.getElementById('settingsModal')).display), 'none');
+await page.click('#settingsView .sv-main [data-act="close"]');
+check('...and its close button closes it',
+    await page.evaluate(() => document.getElementById('settingsView').hidden), true);
 await page.evaluate(
     () => document.getElementById('accountDropdownHeader').classList.add('show'));
 

@@ -6933,8 +6933,8 @@ if (window.visualViewport) {
      * BUG 4+5 fix:
      * the bfcache resync the shell never had.
      *
-     * Leaving the terminal for another page (admin, change-password, a new
-     * tab from the More sheet) and coming back via Back regularly restores
+     * Leaving the terminal for another page (admin, a new tab from the More
+     * sheet) and coming back via Back regularly restores
      * this page FROM THE BACK-FORWARD CACHE: the document and this JS heap
      * come back as-is, but the state this shell keeps in variables and
      * inline styles was measured for the MOMENT the page was left:

@@ -29,7 +29,7 @@
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icons/favicon.svg') }}?v=3">
     <link rel="alternate icon" type="image/x-icon" href="{{ url_for('static', filename='icons/favicon.ico') }}?v=3">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}?v=3">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=75">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=76">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/deck-tokens.css') }}?v=1">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/auth-v5.css') }}?v=3">
 </head>
@@ -54,9 +54,9 @@
                 <div class="a5-lang-wrap">
                     <button type="button" class="a5-lang" id="langBtn"
                             aria-haspopup="true" aria-expanded="false" aria-controls="langDropdown">
-                        <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=5#icon-languages"></use></svg>
+                        <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=6#icon-languages"></use></svg>
                         <span id="currentLangName">English</span>
-                        <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=5#icon-chevron-down"></use></svg>
+                        <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=6#icon-chevron-down"></use></svg>
                     </button>
                     <div class="a5-lang-menu" id="langDropdown" role="menu"></div>
                 </div>
@@ -67,7 +67,7 @@
                 {% if messages %}
                     {% for category, message in messages %}
                         <div class="a5-alert a5-alert-{{ category }}" role="alert">
-                            <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=5#icon-{% if category == 'success' %}circle-check{% elif category == 'error' %}circle-alert{% else %}info{% endif %}"></use></svg>
+                            <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=6#icon-{% if category == 'success' %}circle-check{% elif category == 'error' %}circle-alert{% else %}info{% endif %}"></use></svg>
                             <span>{{ message }}</span>
                         </div>
                     {% endfor %}
@@ -81,7 +81,7 @@
                     <label class="a5-label" for="username" data-i18n="auth.username">Username</label>
                     <div class="a5-input-wrap">
                         <span class="a5-input-icon" aria-hidden="true">
-                            <svg><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=5#icon-contact-round"></use></svg>
+                            <svg><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=6#icon-contact-round"></use></svg>
                         </span>
                         <!-- [INF-4] 44px, not mockup 234's 32px chrome density.
                              pattern/title are constraint validation: preserved. -->
@@ -98,7 +98,7 @@
                     <label class="a5-label" for="password" data-i18n="auth.password">Password</label>
                     <div class="a5-input-wrap">
                         <span class="a5-input-icon" aria-hidden="true">
-                            <svg><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=5#icon-lock"></use></svg>
+                            <svg><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=6#icon-lock"></use></svg>
                         </span>
                         <input type="password" id="password" name="password" class="a5-input"
                                data-i18n-placeholder="auth.password" placeholder="Password"
@@ -106,7 +106,7 @@
                         <button type="button" class="a5-toggle password-toggle" data-target="password"
                                 aria-label="Toggle password visibility"
                                 data-i18n-aria-label="auth.togglePasswordVisibility">
-                            <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=5#icon-eye"></use></svg>
+                            <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=6#icon-eye"></use></svg>
                         </button>
                     </div>
                     <div class="a5-hint" data-i18n="auth.passwordHint">Minimum 8 characters</div>
@@ -116,7 +116,7 @@
                     <label class="a5-label" for="confirm_password" data-i18n="auth.confirmPassword">Confirm Password</label>
                     <div class="a5-input-wrap">
                         <span class="a5-input-icon" aria-hidden="true">
-                            <svg><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=5#icon-lock"></use></svg>
+                            <svg><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=6#icon-lock"></use></svg>
                         </span>
                         <input type="password" id="confirm_password" name="confirm_password" class="a5-input"
                                data-i18n-placeholder="auth.confirmPassword" placeholder="Confirm Password"
@@ -124,7 +124,7 @@
                         <button type="button" class="a5-toggle password-toggle" data-target="confirm_password"
                                 aria-label="Toggle password visibility"
                                 data-i18n-aria-label="auth.togglePasswordVisibility">
-                            <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=5#icon-eye"></use></svg>
+                            <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=6#icon-eye"></use></svg>
                         </button>
                     </div>
                     <!-- Same id and same .match/.no-match classes the script
@@ -134,7 +134,7 @@
 
                 <button type="submit" class="a5-submit" id="submitBtn">
                     <span data-i18n="auth.createAccount">Create Account</span>
-                    <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=5#icon-arrow-right"></use></svg>
+                    <svg class="a5-icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons/icons.svg') }}?v=6#icon-arrow-right"></use></svg>
                 </button>
             </form>
 
@@ -155,15 +155,15 @@
          gates render this template with a plain substitution that cannot
          evaluate Jinja expressions, and a computed src would reach them as an
          empty one. -->
-    <script src="{{ url_for('static', filename='js/i18n/en.js') }}?v=6"></script>
-{% if lang == 'vi' %}    <script src="{{ url_for('static', filename='js/i18n/vi.js') }}?v=6"></script>
-{% elif lang == 'de' %}    <script src="{{ url_for('static', filename='js/i18n/de.js') }}?v=6"></script>
-{% elif lang == 'fr' %}    <script src="{{ url_for('static', filename='js/i18n/fr.js') }}?v=6"></script>
-{% elif lang == 'es' %}    <script src="{{ url_for('static', filename='js/i18n/es.js') }}?v=6"></script>
-{% elif lang == 'zh' %}    <script src="{{ url_for('static', filename='js/i18n/zh.js') }}?v=6"></script>
-{% endif %}    <script src="{{ url_for('static', filename='js/i18n.js') }}?v=50" data-i18n-version="6"></script>
-    <script src="{{ url_for('static', filename='js/auth.js') }}?v=3"></script>
-    <script src="{{ url_for('static', filename='js/auth-lang.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/i18n/en.js') }}?v=7"></script>
+{% if lang == 'vi' %}    <script src="{{ url_for('static', filename='js/i18n/vi.js') }}?v=7"></script>
+{% elif lang == 'de' %}    <script src="{{ url_for('static', filename='js/i18n/de.js') }}?v=7"></script>
+{% elif lang == 'fr' %}    <script src="{{ url_for('static', filename='js/i18n/fr.js') }}?v=7"></script>
+{% elif lang == 'es' %}    <script src="{{ url_for('static', filename='js/i18n/es.js') }}?v=7"></script>
+{% elif lang == 'zh' %}    <script src="{{ url_for('static', filename='js/i18n/zh.js') }}?v=7"></script>
+{% endif %}    <script src="{{ url_for('static', filename='js/i18n.js') }}?v=52" data-i18n-version="7"></script>
+    <script src="{{ url_for('static', filename='js/auth.js') }}?v=4"></script>
+    <script src="{{ url_for('static', filename='js/auth-lang.js') }}?v=1"></script>
     <script>
         /*
          * Password-match indicator and the submit guard.
@@ -179,7 +179,7 @@
          * so a translation string can never become markup.
          */
         (function () {
-            const SPRITE = "{{ url_for('static', filename='icons/icons.svg') }}?v=5";
+            const SPRITE = "{{ url_for('static', filename='icons/icons.svg') }}?v=6";
 
             function setIndicator(indicator, symbol, message, stateClass) {
                 indicator.textContent = '';

@@ -6,7 +6,7 @@
  *   - ONE scroll-lock owner: html/body:has(.main-content). index.html is the
  *     only template with .main-content, so ONLY the terminal shell locks the
  *     document scroller, at every width.
- *   - Admin, login, register, change_password keep NORMAL page scroll:
+ *   - Admin, login, register keep NORMAL page scroll:
  *     mouse wheel, keyboard, and touch drag all reach the last element of
  *     long content — proven BEHAVIORALLY (repeated real input until the last
  *     element is visible), never via window.scrollTo, which is used only to
@@ -83,7 +83,6 @@ const PAGES = {
     'admin': renderTemplate('admin'),
     'login': renderTemplate('login'),
     'register': renderTemplate('register'),
-    'change_password': renderTemplate('change_password'),
 };
 
 const server = await new Promise(resolve => {
@@ -370,10 +369,10 @@ for (const [label, w, h] of [['ipad portrait 768x1024', 768, 1024],
 }
 
 // ============================================================================
-// §5 Auth pages at phone portrait 390x844: login, register, change_password
-//    all scroll by touch drag to their very bottom (behavioral).
+// §5 Auth pages at phone portrait 390x844: login and register both scroll by
+//    touch drag to their very bottom (behavioral).
 // ============================================================================
-for (const route of ['login', 'register', 'change_password']) {
+for (const route of ['login', 'register']) {
     const { ctx, page, errors } = await newPage(390, 844, { touch: true, route });
     await page.evaluate(() => {
         const spacer = document.createElement('div');
@@ -793,8 +792,13 @@ for (const route of ['login', 'register', 'change_password']) {
 //     reached by scrolling the dropdown itself, with the page behind fixed.
 //     420px is a real desktop case (a short window, or a browser with several
 //     toolbars), and 360px is the same shape one tier worse.
+//
+//     500px left the list on 2026-10-05: Theme, Language and Change password
+//     moved to Settings, the menu is 8 rows (404px), and at 500 its last row
+//     already sits inside the card. Its 6px "overflow" there was the bottom
+//     padding, which the old scrollHeight precondition counted as overflow.
 // ============================================================================
-for (const h of [500, 420, 360]) {
+for (const h of [420, 360]) {
     const { ctx, page, errors } = await newPage(1280, h, { route: 'index' });
     await page.click('#accountBtnHeader');
     await page.waitForTimeout(250);
@@ -805,10 +809,13 @@ for (const h of [500, 420, 360]) {
     });
     check(`§12 account dropdown @${h}: opens through its real trigger`, open, true);
 
-    // The precondition that makes the rest meaningful: it really does overflow.
+    // The precondition that makes the rest meaningful: the last row really
+    // starts below the card, not just its padding.
     const over = await page.evaluate(() => {
         const d = document.getElementById('accountDropdownHeader');
-        return d.scrollHeight > d.clientHeight + 1;
+        const rows = [...d.querySelectorAll(':scope > .account-item')];
+        return rows[rows.length - 1].getBoundingClientRect().bottom
+            > d.getBoundingClientRect().bottom + 20;
     });
     check(`§12 account dropdown @${h}: content exceeds its bounded height`, over, true);
 
@@ -894,10 +901,6 @@ const MODAL_CASES = [
     ['keyManagementModal', '#manageKeysBtn', true, false],
     ['jumpHostManagementModal', '#manageJumpHostsBtn', true, false],
     ['profileManagementModal', '#manageProfilesBtn', true, false],
-    // Settings is a dialog of its own since 2026-10-05. Its Scrollback input
-    // used to sit in the account menu, and this section reached it there by
-    // wheeling the menu; the dialog is now what has to be scrollable.
-    ['settingsModal', '#settingsBtn', true, false],
     // #fmUploadDownloadBtn does not exist at load: it is rendered by the inline
     // SFTP inspector (sftp-file-manager.js openInline), which #fileTransferBtn
     // opens. Measured: absent before, present after. Reaching it through that
@@ -1016,6 +1019,58 @@ for (const [vpLabel, w, h] of [
             document.getElementById('accountDropdownHeader')?.setAttribute('hidden', '');
         }, modalId);
         await page.waitForTimeout(150);
+    }
+
+    // Settings is a view over the workspace, not a dialog, so it is not in the
+    // table above. The same clause holds for it: its longest section (Account)
+    // must reach its last control by real wheel input inside its own scroller,
+    // with the locked document behind it unmoved.
+    {
+        const shown = await page.evaluate(async () => {
+            window.SettingsView.open('account');
+            await new Promise(r => setTimeout(r, 200));
+            return window.SettingsView.isOpen && window.SettingsView.section === 'account';
+        });
+        check(`§13 ${vpLabel} settings view: opens on Account`, shown, true);
+        if (shown) {
+            const predicate = `(() => {
+                const scroller = document.querySelector('#settingsView .sv-scroll');
+                const last = document.getElementById('changePasswordSubmit');
+                const r = last.getBoundingClientRect();
+                const sr = scroller.getBoundingClientRect();
+                return r.height > 0 && r.bottom <= sr.bottom + 1 && r.top >= sr.top - 1
+                    && r.bottom <= window.innerHeight + 1;
+            })()`;
+            const geom = await page.evaluate(() => {
+                const scroller = document.querySelector('#settingsView .sv-scroll');
+                const r = scroller.getBoundingClientRect();
+                return {
+                    overflowY: getComputedStyle(scroller).overflowY,
+                    overflows: scroller.scrollHeight > scroller.clientHeight + 1,
+                    fits: r.top >= -1 && r.bottom <= window.innerHeight + 1,
+                    x: Math.round(r.left + r.width / 2),
+                    y: Math.round(r.top + r.height / 2),
+                };
+            });
+            check(`§13 ${vpLabel} settings view: the section owns its scrolling`,
+                geom.overflowY === 'auto' || geom.overflowY === 'scroll', true);
+            check(`§13 ${vpLabel} settings view: the scroller fits the viewport`,
+                geom.fits, true);
+            const alreadyVisible = await page.evaluate(predicate);
+            if (geom.overflows && !alreadyVisible) {
+                check(`§13 ${vpLabel} settings view: wheel reaches the last control`,
+                    await wheelUntil(page, predicate, { x: geom.x, y: geom.y, dy: 200 }), true);
+                checkAtLeast(`§13 ${vpLabel} settings view: the section itself scrolled`,
+                    await page.evaluate(() => document
+                        .querySelector('#settingsView .sv-scroll').scrollTop), 20);
+            } else {
+                check(`§13 ${vpLabel} settings view: last control reachable without `
+                    + `scrolling (overflows=${geom.overflows})`, alreadyVisible, true);
+            }
+            check(`§13 ${vpLabel} settings view: the page behind did NOT move`,
+                await docScrollY(page), 0);
+            await page.evaluate(() => window.SettingsView.close());
+        }
     }
 
     check(`§13 no page errors @${vpLabel}`, errors.join(' | '), '');
