@@ -894,6 +894,10 @@ const MODAL_CASES = [
     ['keyManagementModal', '#manageKeysBtn', true, false],
     ['jumpHostManagementModal', '#manageJumpHostsBtn', true, false],
     ['profileManagementModal', '#manageProfilesBtn', true, false],
+    // Settings is a dialog of its own since 2026-10-05. Its Scrollback input
+    // used to sit in the account menu, and this section reached it there by
+    // wheeling the menu; the dialog is now what has to be scrollable.
+    ['settingsModal', '#settingsBtn', true, false],
     // #fmUploadDownloadBtn does not exist at load: it is rendered by the inline
     // SFTP inspector (sftp-file-manager.js openInline), which #fileTransferBtn
     // opens. Measured: absent before, present after. Reaching it through that
@@ -1014,109 +1018,6 @@ for (const [vpLabel, w, h] of [
         await page.waitForTimeout(150);
     }
 
-    /*
-     * The Settings controls themselves. Scrollback is the one numeric INPUT in
-     * the global menu, which makes it the D6 "settings … form" case: it sits
-     * below the fold in both of the menu's homes and is reachable only by
-     * scrolling the menu, on a shell whose document scroll is pinned.
-     *
-     * The route differs by tier and must be taken, not bypassed. On a touch
-     * shell #mobileMoreBtn opens #mobileMoreSheet and header-menus.js MOVES the
-     * canonical #accountDropdownHeader into #mobileSettingsHost, where the SHEET
-     * is the scroller. On a fine pointer the same node stays in
-     * .account-selector and is its own scroller. Measured: the control starts at
-     * y=479 (phone 390), y=475 (phone landscape) and y=323 (desktop 1280x420),
-     * i.e. out of view in the landscape and desktop cases, and the scroller is
-     * #mobileMoreSheet / #mobileMoreSheet / #accountDropdownHeader respectively.
-     *
-     * Reached with real wheel input over that scroller — never scrollIntoView,
-     * which would move the element whether or not a user could.
-     */
-    const menu = await page.evaluate(async () => {
-        const touch = window.TerminalManager.isTouchShell();
-        const moreBtn = document.getElementById('mobileMoreBtn');
-        if (touch && moreBtn && moreBtn.getClientRects().length > 0) {
-            moreBtn.click();
-        } else {
-            document.getElementById('accountDropdownHeader')?.removeAttribute('hidden');
-            document.getElementById('accountBtnHeader').click();
-        }
-        await new Promise(r => setTimeout(r, 300));
-        const input = document.getElementById('scrollbackInput');
-        if (!input) return { missing: true };
-        // Walk up to the nearest real scroller, which is the tier's own owner.
-        let el = input.parentElement;
-        let scroller = null;
-        while (el && el !== document.body) {
-            const cs = getComputedStyle(el);
-            if ((cs.overflowY === 'auto' || cs.overflowY === 'scroll')
-                && el.scrollHeight > el.clientHeight + 1) { scroller = el; break; }
-            el = el.parentElement;
-        }
-        const b = scroller ? scroller.getBoundingClientRect() : null;
-        // When no scroller was found, check whether the touch-tier sheet simply
-        // FITS (D2 measured maxHeight >= content): that is a legitimate outcome
-        // on a tall viewport and is asserted by the caller instead.
-        let fitsFully = false;
-        if (!scroller) {
-            const sheet = document.getElementById('mobileMoreSheet');
-            fitsFully = !!sheet && !sheet.hidden
-                && sheet.scrollHeight <= sheet.clientHeight + 1;
-        }
-        return {
-            touch,
-            scrollerId: scroller ? (scroller.id || scroller.className) : null,
-            fitsFully,
-            box: b ? { x: Math.round(b.left + b.width / 2),
-                y: Math.round(b.top + b.height / 2) } : null,
-        };
-    });
-    check(`§13 ${vpLabel} settings: the menu opened and owns a scroller `
-        + `(${menu.scrollerId}) or the sheet fits fully (${menu.fitsFully})`,
-        !!menu.scrollerId || menu.fitsFully, true);
-    if (menu.scrollerId) {
-        const reachable = `(() => {
-            const i = document.getElementById('scrollbackInput');
-            const r = i.getBoundingClientRect();
-            return r.width > 0 && r.height > 0
-                && r.top >= -1 && r.bottom <= window.innerHeight + 1;
-        })()`;
-        check(`§13 ${vpLabel} settings: wheel reaches the Scrollback control`,
-            await wheelUntil(page, reachable,
-                { x: menu.box.x, y: menu.box.y, dy: 200 }), true);
-        check(`§13 ${vpLabel} settings: reaching it did not scroll the document`,
-            await docScrollY(page), 0);
-    } else if (menu.fitsFully) {
-        /*
-         * P1 D2: the trigger-anchored More sheet measures its
-         * maxHeight from the live floor, so on a TALL viewport (390x844) the
-         * whole card fits — there is no scroll range to own, by design. The
-         * D6 guarantee ("cuộn được và tới phần tử cuối") degenerates to "every
-         * control, including the last, is already reachable": assert that the
-         * last control is on-screen un-scrolled AND that the sheet is a
-         * genuine scroller (overflow-y:auto) whose content simply does not
-         * exceed it. The scroll-range proof itself stays on the short and
-         * landscape viewports below, where content really does exceed the cap.
-         */
-        const fullyVisible = await page.evaluate(() => {
-            const input = document.getElementById('scrollbackInput');
-            const sheet = document.getElementById('mobileMoreSheet');
-            if (!input || !sheet) return null;
-            const r = input.getBoundingClientRect();
-            const cs = getComputedStyle(sheet);
-            return {
-                lastControlOnScreen: r.width > 0 && r.height > 0
-                    && r.top >= -1 && r.bottom <= window.innerHeight + 1,
-                sheetScrollableCss: ['auto', 'scroll'].includes(cs.overflowY),
-                contentFits: sheet.scrollHeight <= sheet.clientHeight + 1,
-            };
-        });
-        check(`§13 ${vpLabel} settings: tall sheet fits fully, last control already reachable`,
-            fullyVisible.lastControlOnScreen
-                && fullyVisible.sheetScrollableCss && fullyVisible.contentFits, true);
-        check(`§13 ${vpLabel} settings: nothing scrolled the document`,
-            await docScrollY(page), 0);
-    }
     check(`§13 no page errors @${vpLabel}`, errors.join(' | '), '');
     await ctx.close();
 }

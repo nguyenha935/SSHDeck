@@ -1542,39 +1542,36 @@ const TerminalManager = {
     /*
      * THE WebGL RENDERER -- a trial, opted into per device (owner, 2026-10-04).
      *
-     * Measured with ?perf=1 on the owner's Windows laptop: frames at a p90 of
-     * ~600 ms while typing and scrolling, with almost no script and no style
-     * or layout inside them, on an Intel UHD (Gen 12) driving a 3841x2401
-     * panel at 175 %. The same sessions run at 9 ms on an M4 Mac and 17 ms on
-     * an iPhone, and that laptop's NVIDIA GPU cannot be given to the browser.
+     * Measured by the performance probe on the owner's Windows laptop: frames
+     * at a p90 of ~600 ms while typing and scrolling, with almost no script
+     * and no style or layout inside them, on an Intel UHD (Gen 12) driving a
+     * 3841x2401 panel at 175 %. The same sessions run at 9 ms on an M4 Mac
+     * and 17 ms on an iPhone, and that laptop's NVIDIA GPU cannot be given to
+     * the browser.
      * The DOM renderer hands every row to the browser as text to lay out and
      * rasterise; the WebGL renderer draws the grid itself from a glyph atlas,
-     * which asks far less of a weak GPU. Whether it is enough there is what
-     * the trial measures.
+     * which asks far less of a weak GPU. It did not help there (one minute
+     * measured, 2026-10-04: p90 585 ms), so it stays a choice.
      *
-     * Off unless the page is opened with `?renderer=webgl` (remembered on the
-     * device; `?renderer=dom` forgets it), and the addon is only fetched then.
-     * If WebGL cannot start, or the GPU drops the context later, the terminal
-     * goes back to the DOM renderer where it stands.
+     * Chosen per device in Settings (DeviceSettings.renderer), applied at once
+     * to every open terminal, and the addon is only fetched for it. If WebGL
+     * cannot start, or the GPU drops the context later, the terminal goes back
+     * to the DOM renderer where it stands.
      */
-    RENDERER_STORE: 'sshdeck.renderer',
-    _rendererChoice: null,
     _webglLoad: null,
 
-    rendererChoice() {
-        if (!this._rendererChoice) {
-            const asked = new URLSearchParams(location.search).get('renderer');
-            let choice = asked === 'webgl' ? 'webgl' : 'dom';
-            try {
-                if (asked === 'webgl') localStorage.setItem(this.RENDERER_STORE, 'webgl');
-                if (asked === 'dom') localStorage.removeItem(this.RENDERER_STORE);
-                choice = localStorage.getItem(this.RENDERER_STORE) === 'webgl' ? 'webgl' : 'dom';
-            } catch (e) {
-                // Storage blocked: the query alone decides, for this page.
+    // Settings changed the renderer: every open terminal follows, in place.
+    applyRendererSetting() {
+        Object.keys(this.terminals).forEach((key) => {
+            if (!this.terminals[key]?.element) {
+                return;
             }
-            this._rendererChoice = choice;
-        }
-        return this._rendererChoice;
+            if (window.DeviceSettings?.renderer() === 'webgl') {
+                this.useWebglRenderer(key, this.sessionIdForTerminalKey(key));
+            } else {
+                this.dropWebglRenderer(key, 'setting');
+            }
+        });
     },
 
     // 'webgl' while any terminal is drawn by it (perf-probe.js reports this).
@@ -1610,13 +1607,15 @@ const TerminalManager = {
     },
 
     useWebglRenderer(terminalKey, sessionId) {
-        if (this.rendererChoice() !== 'webgl') {
+        if (window.DeviceSettings?.renderer() !== 'webgl') {
             return;
         }
         const terminal = this.terminals[terminalKey];
         this.loadWebglAddon().then((lib) => {
-            // Destroyed, or replaced by a re-attach, while the addon loaded.
-            if (this.terminals[terminalKey] !== terminal || terminal.__sshdeckWebgl) {
+            // Destroyed, replaced by a re-attach, or switched back in Settings
+            // while the addon loaded.
+            if (this.terminals[terminalKey] !== terminal || terminal.__sshdeckWebgl
+                    || window.DeviceSettings?.renderer() !== 'webgl') {
                 return;
             }
             const addon = new lib.WebglAddon();
@@ -3608,7 +3607,6 @@ const TerminalManager = {
                 this.pendingOutput[terminalKey] = [];
             }
             this.pendingOutput[terminalKey].push(data);
-            console.log(`Buffering output for ${sessionId} (terminal not ready yet)`);
         }
     },
 
@@ -5405,7 +5403,7 @@ const TerminalManager = {
      * macrotask after the composition ended, and on the start mark still being
      * right. That is the fragile part, and it is where engines differ.
      *
-     * MEASURED ON THE OWNER'S SAFARI, (`?kbdebug=1`, Safari
+     * MEASURED ON THE OWNER'S SAFARI, (the keyboard log, Safari
      * 26.6.2 on macOS, Vietnamese input method, 42 events):
      *
      *   xterm.keydown            13   every letter: keyCode 229, isComposing false
@@ -5474,7 +5472,7 @@ const TerminalManager = {
          * `;` and `?` and knew no OSC, so a mouse report or a colour answer
          * survived it, sat in `delivered`, and the first edit after a click
          * was judged "already handled" and dropped -- the owner's lost first
-         * letter, once more (?kbdebug=1 log).
+         * letter, once more (the keyboard log).
          */
         const typedOnly = (data) => data
             .replace(/\x1b\[[0-?]*[ -\/]*[@-~]/g, '')
@@ -5706,15 +5704,6 @@ const TerminalManager = {
     },
 
     /*
-     * `?kbdebug=1` — an on-screen keyboard log, for the one defect that cannot
-     * be reproduced without the owner's own machine and IME.
-     *
-     * It paints nothing and costs nothing unless the query is present, and it
-     * records only event SHAPES plus the bytes that were sent, which is what a
-     * screenshot has to carry for the composition path to be diagnosable from
-     * here.
-     */
-    /*
      * ONE LINE PER PAGE PER SESSION, to the server log.
      *
      * The owner reports a Claude Code pane that comes back BLANK after a
@@ -5722,16 +5711,18 @@ const TerminalManager = {
      * live reload against their own session showed the alternate buffer with
      * 28 painted rows within 1.5s, and the trace had the history's
      * `\x1b[?1049l` landing BEFORE tmux's attach repaint, which is the order
-     * that works. Rather than ask for another round of manual reporting, the
-     * app now says what it ended up with two and a half seconds after its
-     * FIRST attach of a page: the buffer it is showing, how many rows carry
-     * text, and the grid. A blank pane will say `painted: 0`, and which
+     * that works. So the page can say what it ended up with two and a half
+     * seconds after its FIRST attach: the buffer it is showing, how many rows
+     * carry text, and the grid. A blank pane will say `painted: 0`, and which
      * buffer it is on says whether the repaint was lost or hidden.
+     *
+     * Settings → Diagnostics → "First attach report", off by default: it ran
+     * on every page of every user from 2026-09-20 until 2026-10-05.
      */
     firstAttachReported: {},
 
     reportFirstAttach(sessionId) {
-        if (this.firstAttachReported[sessionId]) {
+        if (!window.DeviceSettings?.attachReport() || this.firstAttachReported[sessionId]) {
             return;
         }
         this.firstAttachReported[sessionId] = true;
@@ -6201,13 +6192,13 @@ const TerminalManager = {
     },
 
     /*
-     * The button that sends it, present only with `?kbdebug=1` -- the same
-     * switch as the keyboard log, because both exist for a person reproducing
-     * a defect on their own device and neither is a product control. It is its
-     * own element: #kbdebugPanel is pointer-events:none by design (it must
-     * never catch a tap meant for the terminal), so nothing in it can be
-     * pressed. Created once, from createTerminal, so it exists exactly when
-     * there is a session to report on.
+     * The button that sends it, on with the keyboard log, because both exist
+     * for a person reproducing a defect on their own device and neither is a
+     * product control. It is its own element: #kbdebugPanel is
+     * pointer-events:none by design (it must never catch a tap meant for the
+     * terminal), so nothing in it can be pressed. Created from createTerminal,
+     * or when the log is switched on with a session open, so it exists
+     * exactly when there is a session to report on.
      */
     ensureScreenDiagnosticButton() {
         if (!this.keyboardDebugEnabled()
@@ -6217,12 +6208,9 @@ const TerminalManager = {
         const button = document.createElement('button');
         button.id = 'screenDiagnosticBtn';
         button.type = 'button';
+        button.className = 'screen-diagnostic-btn';
         button.textContent = window.i18n
             ? i18n.t('diag.sendScreen') : 'Send screen diagnostic';
-        button.style.cssText = 'position:fixed;right:8px;top:8px;z-index:100000;'
-            + 'padding:6px 10px;font:12px/1.2 monospace;border:1px solid #7CFC9B;'
-            + 'border-radius:6px;background:rgba(0,0,0,.82);color:#7CFC9B;'
-            + 'cursor:pointer';
         button.addEventListener('click', () => {
             const sessionId = typeof SessionManager !== 'undefined'
                 ? SessionManager.activeSessionId : null;
@@ -6234,33 +6222,48 @@ const TerminalManager = {
         document.body.appendChild(button);
     },
 
+    /*
+     * THE KEYBOARD LOG: keyboard and composition events on screen and in the
+     * server log, for the defect that cannot be reproduced without the
+     * owner's own machine and input method. Settings → Diagnostics,
+     * administrators only. It records what is typed -- event data and the
+     * bytes sent -- so it turns itself off an hour after it is switched on
+     * (DeviceSettings). Off, it paints nothing and sends nothing.
+     */
     keyboardDebugEnabled() {
-        if (this._kbdebug === undefined) {
-            try {
-                this._kbdebug = new URLSearchParams(location.search)
-                    .get('kbdebug') === '1';
-            } catch (e) {
-                this._kbdebug = false;
+        return !!window.DeviceSettings?.keyboardLog();
+    },
+
+    // Settings switched the keyboard log: its panel and button follow.
+    applyKeyboardLogSetting() {
+        if (this.keyboardDebugEnabled()) {
+            this.keyboardDebugPanel();
+            if (Object.keys(this.terminals).length > 0) {
+                this.ensureScreenDiagnosticButton();
             }
+        } else {
+            document.getElementById('kbdebugPanel')?.remove();
+            document.getElementById('screenDiagnosticBtn')?.remove();
         }
-        return this._kbdebug;
+    },
+
+    keyboardDebugPanel() {
+        let panel = document.getElementById('kbdebugPanel');
+        if (!panel) {
+            panel = document.createElement('pre');
+            panel.id = 'kbdebugPanel';
+            panel.className = 'kbdebug-panel';
+            document.body.appendChild(panel);
+            this._kbdebugBind();
+        }
+        return panel;
     },
 
     noteKeyboardDebug(type, detail) {
         if (!this.keyboardDebugEnabled()) {
             return;
         }
-        let panel = document.getElementById('kbdebugPanel');
-        if (!panel) {
-            panel = document.createElement('pre');
-            panel.id = 'kbdebugPanel';
-            panel.style.cssText = 'position:fixed;left:0;top:0;z-index:99999;'
-                + 'max-height:22vh;width:100%;margin:0;overflow:auto;'
-                + 'background:rgba(0,0,0,.82);color:#7CFC9B;font:11px/1.35 monospace;'
-                + 'padding:6px;white-space:pre-wrap;pointer-events:none';
-            document.body.appendChild(panel);
-            this._kbdebugBind();
-        }
+        const panel = this.keyboardDebugPanel();
         const hex = (detail && typeof detail.data === 'string')
             ? [...detail.data].map(c => c.codePointAt(0).toString(16)).join(' ')
             : '';
@@ -6271,7 +6274,7 @@ const TerminalManager = {
          * machine with one input method, so the round trip that matters is the
          * owner typing three letters and someone reading what the browser
          * actually reported -- without asking them to photograph a screen.
-         * Batched, capped, and only while the query is present.
+         * Batched, capped, and only while the log is on.
          */
         this._kbdebugQueue = this._kbdebugQueue || [];
         if (this._kbdebugQueue.length < 200) {
@@ -6537,9 +6540,13 @@ const TerminalManager = {
 };
 
 window.TerminalManager = TerminalManager;
-// Read the renderer choice at load: a page opened with ?renderer= before any
-// session exists must still remember it.
-TerminalManager.rendererChoice();
+// Settings applies at once: the renderer to every open terminal, the
+// keyboard log's panel and button on or off.
+document.addEventListener('sshdeck:device-setting', (event) => {
+    const name = event.detail && event.detail.name;
+    if (name === 'renderer') TerminalManager.applyRendererSetting();
+    if (name === 'keyboardLog') TerminalManager.applyKeyboardLogSetting();
+});
 
 let resizeTimeout;
 window.addEventListener('resize', () => {

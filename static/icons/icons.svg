@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg">
 <!--
-  SSHDeck icon sprite - 66 Lucide glyphs (ISC).
+  SSHDeck icon sprite - 67 Lucide glyphs (ISC).
   Source: lucide-static 1.28.0, sprite.svg, subset to icons actually referenced
   by this app plus every icon in the authoritative v5 mockup
   (docs/spec/sshdeck-ui-plan-v5.html), deduplicated.
@@ -13,7 +13,7 @@
   Required presentation (set in style.css): fill:none; stroke:currentColor;
   stroke-width:2; stroke-linecap:round; stroke-linejoin:round.
 
-  Usage: <svg class="icon" aria-hidden="true"><use href=".../static/icons/icons.svg?v=4#icon-NAME"/></svg>
+  Usage: <svg class="icon" aria-hidden="true"><use href=".../static/icons/icons.svg?v=5#icon-NAME"/></svg>
 -->
   <defs>
     <symbol id="icon-arrow-down" viewBox="0 0 24 24">
@@ -339,6 +339,17 @@
     <symbol id="icon-settings" viewBox="0 0 24 24">
       <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" />
       <circle cx="12" cy="12" r="3" />
+    </symbol>
+    <symbol id="icon-sliders-horizontal" viewBox="0 0 24 24">
+      <path d="M10 5H3" />
+      <path d="M12 19H3" />
+      <path d="M14 3v4" />
+      <path d="M16 17v4" />
+      <path d="M21 12h-9" />
+      <path d="M21 19h-5" />
+      <path d="M21 5h-7" />
+      <path d="M8 10v4" />
+      <path d="M8 12H3" />
     </symbol>
     <symbol id="icon-square-terminal" viewBox="0 0 24 24">
       <path d="m7 11 2-2-2-2" />

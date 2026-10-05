@@ -1,5 +1,5 @@
 /*
- * THE PERFORMANCE PROBE (`?perf=1`) -- audit 2026-10-04.
+ * THE PERFORMANCE PROBE -- audit 2026-10-04.
  *
  * Owner: typing and scrolling stutter on a Windows PC whatever the browser,
  * less on a Mac, not at all on a phone. Measured on the server first
@@ -11,11 +11,12 @@
  * actually found, how long frames take while typing and scrolling -- is only
  * visible on that machine, so this counts it there.
  *
- * Off unless the page is opened with `?perf=1` (remembered on the device;
- * `?perf=0` turns it off). It only listens: the socket's onAny/onAnyOutgoing,
- * a wheel listener, the browser's frame observers. Once a minute with
- * activity it sends one flat record of numbers to the server log
- * (handle_perf_report). No keystroke or output content leaves the page.
+ * Off unless Settings → Diagnostics → "Performance probe" is on for this
+ * device (DeviceSettings.perf, administrators only); switching it starts or
+ * stops it at once. It only listens: the socket's onAny/onAnyOutgoing, a
+ * wheel listener, the browser's frame observers. Once a minute with activity
+ * it sends one flat record of numbers to the server log (handle_perf_report).
+ * No keystroke or output content leaves the page.
  *
  * v2 (the first readings): Windows frames ran at ~600 ms with almost no
  * script or layout inside them, which says where the time is NOT, not where
@@ -25,7 +26,6 @@
  * trial in terminal-manager.js).
  */
 (() => {
-    const STORE = 'sshdeck.perf';
     const REPORT_MS = 60000;
     const ECHO_TIMEOUT_MS = 3000;
     const ACTIVE_MS = 1500;
@@ -39,20 +39,9 @@
         'Symbols Nerd Font': 'nerd',
     };
 
-    function enabled() {
-        const asked = new URLSearchParams(location.search).get('perf');
-        try {
-            if (asked === '1') localStorage.setItem(STORE, '1');
-            if (asked === '0') localStorage.removeItem(STORE);
-            return localStorage.getItem(STORE) === '1';
-        } catch {
-            return asked === '1';
-        }
-    }
-
     const socket = window.socket;
-    if (!enabled() || !socket || typeof socket.onAny !== 'function'
-            || typeof socket.onAnyOutgoing !== 'function') {
+    if (!socket || ['onAny', 'onAnyOutgoing', 'offAny', 'offAnyOutgoing']
+            .some(name => typeof socket[name] !== 'function')) {
         return;
     }
 
@@ -64,10 +53,14 @@
     });
     let win = fresh();
     let rtt = null;
-    let focusedAt = document.hasFocus() ? now() : null;
-    let mouseReportsSeen = mouseReports();
+    let focusedAt = null;
+    let mouseReportsSeen = 0;
     let env = null;
     const pending = new Map();
+    let running = false;
+    let reportTimer = null;
+    let lagTimer = null;
+    let observer = null;
 
     function mouseReports() {
         const counts = window.TerminalManager?.mouseReports || {};
@@ -81,7 +74,7 @@
     function tick(t) {
         if (lastFrame) win.frames.push(t - lastFrame);
         lastFrame = t;
-        if (now() < activeUntil) {
+        if (running && now() < activeUntil) {
             requestAnimationFrame(tick);
         } else {
             sampling = false;
@@ -103,58 +96,55 @@
      * frames that never rendered, longest]. A long frame whose blocking time
      * is small was WAITING (for the next frame to be granted), not working.
      */
-    if (PerformanceObserver.supportedEntryTypes?.includes('long-animation-frame')) {
-        new PerformanceObserver((list) => list.getEntries().forEach((entry) => {
-            const end = entry.startTime + entry.duration;
-            win.loaf[0] += 1;
-            win.loaf[1] += entry.duration;
-            win.loaf[2] += (entry.scripts || []).reduce((sum, s) => sum + s.duration, 0);
-            if (entry.styleAndLayoutStart) win.loaf[3] += end - entry.styleAndLayoutStart;
-            win.lb[0] += entry.blockingDuration || 0;
-            if (entry.renderStart) {
-                win.lb[1] += end - entry.renderStart;
-            } else {
-                win.lb[2] += 1;
-            }
-            win.lb[3] = Math.max(win.lb[3], entry.duration);
-        })).observe({ type: 'long-animation-frame' });
+    function onLongFrame(entry) {
+        const end = entry.startTime + entry.duration;
+        win.loaf[0] += 1;
+        win.loaf[1] += entry.duration;
+        win.loaf[2] += (entry.scripts || []).reduce((sum, s) => sum + s.duration, 0);
+        if (entry.styleAndLayoutStart) win.loaf[3] += end - entry.styleAndLayoutStart;
+        win.lb[0] += entry.blockingDuration || 0;
+        if (entry.renderStart) {
+            win.lb[1] += end - entry.renderStart;
+        } else {
+            win.lb[2] += 1;
+        }
+        win.lb[3] = Math.max(win.lb[3], entry.duration);
     }
 
     // How late a 100 ms timer fires: the main thread's own answer to "was I
     // busy". Not counted while hidden, where the browser throttles timers.
-    let lagDue = now() + LAG_MS;
-    const lagTick = () => {
+    let lagDue = 0;
+    function lagTick() {
         const t = now();
         if (!document.hidden) win.lag.push(Math.max(0, t - lagDue));
         lagDue = t + LAG_MS;
-        setTimeout(lagTick, LAG_MS);
-    };
-    setTimeout(lagTick, LAG_MS);
+        lagTimer = setTimeout(lagTick, LAG_MS);
+    }
 
-    window.addEventListener('focus', () => {
+    function onFocus() {
         if (focusedAt === null) focusedAt = now();
-    });
-    window.addEventListener('blur', () => {
+    }
+    function onBlur() {
         if (focusedAt !== null) {
             win.focusMs += now() - focusedAt;
             focusedAt = null;
         }
-    });
+    }
 
     // ── input to echo ──────────────────────────────────────────────────
-    socket.onAnyOutgoing((event, payload) => {
+    function onOutgoing(event, payload) {
         if (event !== 'ssh_input' || !payload) return;
         win.keys += 1;
         markActive();
         const id = payload.session_id;
         if (id && !pending.has(id)) pending.set(id, now());
-    });
+    }
 
     // Characters a monospace font may not carry: Nerd Font icons (private
     // use), braille spinners, emoji, box drawing.
     const GLYPHS = [/[-]|[\uDB80-\uDBFF][\uDC00-\uDFFF]/g, /[⠀-⣿]/g,
         /\p{Extended_Pictographic}/gu, /[─-▟]/g];
-    socket.onAny((event, payload) => {
+    function onIncoming(event, payload) {
         if (event !== 'ssh_output' || !payload || typeof payload.data !== 'string') return;
         const data = payload.data;
         win.outBytes += data.length;
@@ -169,14 +159,14 @@
         win.echo.push(arrived);
         // Painted by the frame after the one the engine renders it in.
         requestAnimationFrame(() => requestAnimationFrame(() => win.paint.push(now() - sent)));
-    });
+    }
 
-    document.addEventListener('wheel', (event) => {
+    function onWheel(event) {
         if (event.target?.closest?.('.xterm')) {
             win.wheels += 1;
             markActive();
         }
-    }, { capture: true, passive: true });
+    }
 
     // ── the machine ────────────────────────────────────────────────────
     function hasFont(family) {
@@ -296,13 +286,58 @@
         return record;
     }
 
-    setInterval(() => {
-        if (win.active) {
-            send();
-        } else {
-            restart();
+    // ── on and off ─────────────────────────────────────────────────────
+    function start() {
+        if (running) return;
+        running = true;
+        win = fresh();
+        rtt = null;
+        env = null;
+        pending.clear();
+        focusedAt = document.hasFocus() ? now() : null;
+        mouseReportsSeen = mouseReports();
+        socket.onAnyOutgoing(onOutgoing);
+        socket.onAny(onIncoming);
+        document.addEventListener('wheel', onWheel, { capture: true, passive: true });
+        window.addEventListener('focus', onFocus);
+        window.addEventListener('blur', onBlur);
+        if (PerformanceObserver.supportedEntryTypes?.includes('long-animation-frame')) {
+            observer = new PerformanceObserver(list => list.getEntries().forEach(onLongFrame));
+            observer.observe({ type: 'long-animation-frame' });
         }
-    }, REPORT_MS);
-    // From the console: SSHDeckPerf.flush() sends the minute so far.
-    window.SSHDeckPerf = { flush: send };
+        lagDue = now() + LAG_MS;
+        lagTimer = setTimeout(lagTick, LAG_MS);
+        reportTimer = setInterval(() => {
+            if (win.active) {
+                send();
+            } else {
+                restart();
+            }
+        }, REPORT_MS);
+        // From the console: SSHDeckPerf.flush() sends the minute so far.
+        window.SSHDeckPerf = { flush: send };
+    }
+
+    // Switched off mid-minute: the minute is dropped, nothing is sent.
+    function stop() {
+        if (!running) return;
+        running = false;
+        socket.offAnyOutgoing(onOutgoing);
+        socket.offAny(onIncoming);
+        document.removeEventListener('wheel', onWheel, { capture: true });
+        window.removeEventListener('focus', onFocus);
+        window.removeEventListener('blur', onBlur);
+        observer?.disconnect();
+        observer = null;
+        clearTimeout(lagTimer);
+        clearInterval(reportTimer);
+        pending.clear();
+        delete window.SSHDeckPerf;
+    }
+
+    const apply = () => (window.DeviceSettings?.perf() ? start() : stop());
+    document.addEventListener('sshdeck:device-setting', (event) => {
+        if (event.detail?.name === 'perf') apply();
+    });
+    apply();
 })();

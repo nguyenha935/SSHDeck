@@ -14,8 +14,10 @@
  *      is cut to the last STREAM_TAIL_MAX chars;
  *   §2 sendScreenDiagnostic emits the tail with the engine's own account of
  *      the session (grid, buffer, offsets, sizes, the visible rows);
- *   §3 the button exists only with ?kbdebug=1, is pressable (it is NOT inside
- *      the pointer-events:none panel), and sends the ACTIVE session;
+ *   §3 the button exists only while the keyboard log is on (Settings, and
+ *      it follows the switch live; the old ?kbdebug=1 does nothing), is
+ *      pressable (it is NOT inside the pointer-events:none panel), and sends
+ *      the ACTIVE session;
  *   §4 the server's answer is shown as a notification, success or refusal;
  *   §5 the tail is released with the terminal;
  *   §6 the timeline: what happened around the capture, in order, as counts
@@ -119,7 +121,8 @@ async function mount(id) {
 }
 
 /* ---------------------------------------------------------- §1 the tail */
-await open('/?kbdebug=1');
+await open('/');
+await page.evaluate(() => DeviceSettings.setKeyboardLog(true));
 const S = 'diag-a';
 await mount(S);
 const tail = await page.evaluate(id => {
@@ -193,7 +196,7 @@ const button = await page.evaluate(id => {
         sentActive: e ? e.payload.session_id : null,
     };
 }, S);
-check('§3 with ?kbdebug=1 the button exists, outside the pointer-events:none panel, and is hit-testable',
+check('§3 with the keyboard log on the button exists, outside the pointer-events:none panel, and is hit-testable',
     [button.present, button.insidePanel, button.hit], [true, false, true]);
 check('§3 the button sends the ACTIVE session', button.sentActive, S);
 check('§3 the label is translated', button.label, 'Send screen diagnostic');
@@ -221,14 +224,26 @@ const released = await page.evaluate(id => {
 check('§5 destroyTerminal releases the tail', released, false);
 
 /* -------------------------------------------- §3b without the switch */
-await open('/');
+await page.evaluate(() => DeviceSettings.setKeyboardLog(false));
+await open('/?kbdebug=1');
 await mount('diag-b');
 const plain = await page.evaluate(() => ({
     button: !!document.getElementById('screenDiagnosticBtn'),
+    panel: !!document.getElementById('kbdebugPanel'),
     tail: typeof TerminalManager.streamTail['diag-b'],
 }));
-check('§3 without ?kbdebug=1 there is no button, though the tail is still kept',
-    plain, { button: false, tail: 'undefined' });
+check('§3 with the log off -- the old ?kbdebug=1 in the address included -- there is no button '
+    + 'and no panel, though the tail is still kept', plain, { button: false, panel: false, tail: 'undefined' });
+const live = await page.evaluate(() => {
+    const present = () => [!!document.getElementById('screenDiagnosticBtn'),
+        !!document.getElementById('kbdebugPanel')];
+    DeviceSettings.setKeyboardLog(true);
+    const on = present();
+    DeviceSettings.setKeyboardLog(false);
+    return { on, off: present() };
+});
+check('§3 switched on in Settings with a session open, the button and the panel appear at once; '
+    + 'switched off, both go', live, { on: [true, true], off: [false, false] });
 await page.evaluate(() => { TerminalManager.writeOutput('diag-b', 'kept'); });
 check('§3 ... kept from the first write on',
     await page.evaluate(() => TerminalManager.streamTail['diag-b']), 'kept');

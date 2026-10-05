@@ -25,7 +25,7 @@
  *   /tmp/... to /home/<user> 176 ms after the explicit navigation.
  *
  * Each guard has a section that is RED with that guard removed and GREEN with
- * both present (proven by tests/browser/w8_listing_mutation_proof.sh), plus
+ * both present (proven by removing each guard in turn), plus
  * sections pinning the behaviour the guards must NOT break: the home
  * auto-landing itself, unsolicited server-pushed refreshes, and source
  * switching.

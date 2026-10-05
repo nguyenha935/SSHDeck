@@ -77,7 +77,9 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # its list keeps one row under the two-row header.
         # v38: drag-shift / drag-settle transform transitions for the chip drag
         # (reduced motion: none).
-        "filename='css/deck.css'": '?v=41',
+        # v42: the Settings dialog, and the keyboard log and screen-diagnostic
+        # button styled from the theme instead of inline.
+        "filename='css/deck.css'": '?v=42',
         # New: the --tw-* bridge moved out of deck.css so every page
         # can read the ten themes, not just the shell.
         "filename='css/deck-tokens.css'": '?v=1',
@@ -118,7 +120,8 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # v11: S17 FIX 4d completion -- the insert-at-prompt write goes through
         # window.emitTerminalInput, so it is no longer swallowed by tmux copy
         # mode. v10 is RELEASED, so the pin must move or the fix ships invisibly.
-        "filename='js/command-library.js'": '?v=12',
+        # v13: the OS-detection console line is gone.
+        "filename='js/command-library.js'": '?v=13',
         "filename='js/command-set-manager.js'": '?v=2',
         # v45: W13-B5 reconnect payload carries the SOURCE session id so the
         # server can bind the reattach claim to the exact saved row.
@@ -243,17 +246,24 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # reporting itself connected).
         # v101: a socket `error` the Files panel or browser will toast itself
         # is not toasted a second time by the app.
-        "filename='js/app.js'": '?v=101',
+        # v102: scrollback is set in Settings; the per-frame and lifecycle
+        # console lines are gone.
+        "filename='js/app.js'": '?v=102',
         # v18: the Files browser hooks (expand, delegated render and menu, the
         # selection kept by name across a relist, one toast per error).
-        "filename='js/sftp-file-manager.js'": '?v=18',
+        # v19: the [SFTP]/[FM] console lines are gone.
+        "filename='js/sftp-file-manager.js'": '?v=19',
         # New: the expanded Files browser; loads before sftp-file-manager.js,
         # which constructs it.
         # v2: the control that opened a menu closes it; Upload / Download in
         # the phone's menu.
         "filename='js/files-browser.js'": '?v=2',
-        # New: the `?perf=1` performance probe (audit 2026-10-04).
-        "filename='js/perf-probe.js'": '?v=2',
+        # New: the performance probe (audit 2026-10-04).
+        # v3: switched on in Settings (administrators), and off again live.
+        "filename='js/perf-probe.js'": '?v=3',
+        # New: the per-device settings (renderer, diagnostics) every module
+        # reads; loads before terminal-manager.js.
+        "filename='js/device-settings.js'": '?v=1',
         # Extracted from a 146-line inline <script> in index.html. Inline script
         # cannot be cache-busted at all -- it ships inside the cached HTML -- so
         # pinning it is the point of moving it out.
@@ -342,7 +352,7 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
                 # refusal) as a notification.
                 # v69: a drag you can see -- the chip in hand follows the pointer
                 # with a tilt, displaced chips slide to their new slot (FLIP).
-                "filename='js/session-manager.js'": '?v=71',
+                "filename='js/session-manager.js'": '?v=72',
         # v33: S16/S3 -- W14-B-3 min-over-visible: TerminalManager
         # .reportVisibility emits client_visibility, the D3 cosmetic geometry
         # corrections (settled-frame recentre/pannable, fractional rect
@@ -573,7 +583,7 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # v97: a column change -- a grow too -- stays covered until the repaint
         # has been quiet for FREEZE_QUIET_MS, so omp's transcript replay is not
         # seen running from the top of the conversation to the prompt.
-        "filename='js/terminal-manager.js'": '?v=101',
+        "filename='js/terminal-manager.js'": '?v=102',
         # touch-action-row.js owns the six-action global row. It did not exist
         # when this table was written; an unpinned copy of it is the single most
         # damaging stale asset on touch, because the row it builds is the only

@@ -191,15 +191,12 @@ const SessionManager = {
     restoreSession(data) {
         const sessionId = data.session_id;
 
-        console.log(`[RESTORE] Restoring SSH session: ${sessionId}`, data);
-
         // A session this page already holds is skipped -- unless it holds it as
         // an offer and the snapshot is live: the server reattaches under the
         // same id, so this is that offer back, promoted in place by
         // createSession below.
         const known = this.sessions[sessionId];
         if (known && (known.connected || data.connected !== true)) {
-            console.log(`[RESTORE] Session ${sessionId} already exists, skipping restore`);
             return;
         }
 
@@ -238,7 +235,6 @@ const SessionManager = {
         };
 
         const restoredId = this.createSession(sessionData);
-        console.log(`[RESTORE] Session UI created for ${sessionId}`);
 
         /*
          * A LIVE snapshot is another device's news, not this page's restore:
@@ -436,8 +432,6 @@ const SessionManager = {
          * removeSessionUI remains the sole owner of teardown.
          */
         this.startLatencyPolling();
-
-        console.log(`[RESTORE] Session ${sessionId} fully restored - waiting for output`);
     },
 
     showPersistentSessionTab(data) {
@@ -564,8 +558,6 @@ const SessionManager = {
         // keeps this id, lands right here.
         this.placeRemembered(session_id);
         this.renderReconnectList();
-
-        console.log(`[PERSISTENT] Offering tmux session: ${host}:${port} (${session_id})`);
     },
 
     // Every reconnectable candidate, as one vertical list in the empty pane.
@@ -2558,8 +2550,8 @@ const SessionManager = {
      *
      * Reconnect, Reset and Close share this one dialog. It used to write only
      * the TITLE; body, accept label, icon and danger class were static markup
-     * fixed to Reset's copy. Measured on the deployed build
-     * (tests/browser/defect2_action_semantics_probe.mjs): every one of the three
+     * fixed to Reset's copy. Measured on the deployed build with a one-off
+     * probe (2026-08, since removed): every one of the three
      * actions said "The current connection closes and a fresh session starts
      * without reattaching tmux", offered "Start fresh" in danger red under a
      * rotate-ccw icon. Reconnect therefore promised to DESTROY the tmux session

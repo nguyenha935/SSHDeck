@@ -277,27 +277,33 @@ check('the two themes expose a different --accent-primary',
 }
 
 /*
- * The scrollback row is .account-item but NOT .account-action: it is a setting
- * you adjust in place, so touching it must not close the menu around the input
- * you are typing into.
- *
- * This case exists because a mutation escaped without it. Widening the close
- * condition from .account-action to .account-item -- the exact over-tidy edit
- * that shuts the menu on the way to a theme -- left every other check green,
- * because both expanders call stopPropagation() and so never reach the
- * dropdown's delegated handler at all. The scrollback row does reach it, which
- * makes it the one place the widened selector is observable.
+ * A click inside the menu that lands on no action leaves it open; an action
+ * closes it. The scrollback input used to be the in-place row that proved the
+ * first half (it reached the dropdown's delegated handler without being an
+ * action); it moved into the Settings dialog on 2026-10-05, so the identity
+ * block -- inside the menu, no control at all -- carries that half now, and
+ * Settings, the row that replaced it, carries the second.
  */
 // Reopen explicitly: picking a theme above left the menu itself open but this
 // must not depend on that. Assert the precondition rather than assume it -- the
 // first version of this check clicked a hidden input and timed out.
 await page.evaluate(
     () => document.getElementById('accountDropdownHeader').classList.add('show'));
-check('the account menu is open before the in-place setting is touched',
+check('the account menu is open before the identity block is touched',
     await shown('accountDropdownHeader'), true);
-await page.click('#scrollbackInput');
-check('touching the scrollback setting leaves the account menu open',
+await page.click('#accountDropdownHeader .account-menu-identity');
+check('touching the identity block leaves the account menu open',
     await shown('accountDropdownHeader'), true);
+await page.click('#settingsBtn');
+check('Settings is an action: the menu closes and the Settings dialog opens',
+    [await shown('accountDropdownHeader'), await page.evaluate(() =>
+        getComputedStyle(document.getElementById('settingsModal')).display !== 'none')],
+    [false, true]);
+await page.click('#closeSettingsModal');
+check('...and its close button closes it', await page.evaluate(() =>
+    getComputedStyle(document.getElementById('settingsModal')).display), 'none');
+await page.evaluate(
+    () => document.getElementById('accountDropdownHeader').classList.add('show'));
 
 await page.click('.main-content', { position: { x: 5, y: 5 } });
 check('a click outside closes the account menu',

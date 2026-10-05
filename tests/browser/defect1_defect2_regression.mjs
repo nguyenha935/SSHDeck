@@ -1,12 +1,11 @@
 /*
  * DEFECT 1 + DEFECT 2 REGRESSION — action semantics and reconnect intent.
  *
- * Both defects were reported on the deployed build and reproduced with probes
- * before anything was edited (tests/browser/defect2_action_semantics_probe.mjs,
- * tests/browser/defect1_pane_locale_ime_probe.py). This suite is the standing
- * regression for the fixes, and every assertion below is one the PRE-FIX source
- * fails -- see tests/browser/defect1_defect2_mutation_proof.sh, which puts each
- * defect back one at a time and names the assertion that must go red.
+ * Both defects were reported on the deployed build and reproduced with one-off
+ * probes before anything was edited (2026-08, since removed). This suite is
+ * the standing regression for the fixes, and every assertion below is one the
+ * PRE-FIX source fails: putting each defect back one at a time turned the
+ * assertion named for it red.
  *
  * WHAT WAS WRONG
  *
@@ -771,7 +770,7 @@ for (const closer of ['closeConnectionModal', 'cancelConnectionBtn']) {
      * The defect was that auth_type decided how a pane handles multi-byte
      * input: Tailscale sessions got `env LANG=C.UTF-8 LC_ALL=C.UTF-8` and
      * password sessions got nothing. Measured on the live target
-     * (tests/browser/defect1_pane_locale_ime_probe.py, tmux 3.4): a pane with no
+     * (a one-off probe, 2026-08, since removed; tmux 3.4): a pane with no
      * locale resolves charmap ANSI_X3.4-1968, readline runs `convert-meta on`,
      * and composed Vietnamese typed one character at a time -- the shape an IME
      * commit has -- comes back as "ting Vit xin cho". The same bytes in one bulk

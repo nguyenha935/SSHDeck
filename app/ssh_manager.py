@@ -435,8 +435,8 @@ TMUX_KILL_TIMEOUT = 2.0
 
 # ── Deterministic UTF-8 for every tmux pane ─────────────────────────────────
 #
-# MEASURED, not assumed (tests/browser/defect1_pane_locale_ime_probe.py, run
-# against the live target, tmux 3.4):
+# MEASURED, not assumed (a one-off probe, 2026-08, since removed, run against
+# the live target, tmux 3.4):
 #
 #   * paramiko forwards no LANG/LC_* on ANY auth type, and the target's sshd
 #     sends none either, so a pane's locale is empty and glibc resolves
