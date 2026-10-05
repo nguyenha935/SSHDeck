@@ -111,7 +111,8 @@ const base = `http://127.0.0.1:${server.address().port}`;
 {
     console.log('--- the CSS no longer ships from JavaScript ---');
     const files = ['sftp-file-manager.js', 'files-browser.js', 'perf-probe.js', 'session-manager.js',
-                   'header-menus.js', 'app.js', 'device-settings.js', 'settings-view.js'];
+                   'header-menus.js', 'app.js', 'device-settings.js', 'settings-view.js',
+                   'settings-admin.js'];
     for (const f of files) {
         const src = fs.readFileSync(path.join(ROOT, 'static/js', f), 'utf8');
         check(`${f}: no <style> element built at runtime`,
@@ -216,7 +217,8 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v2: the menu is as tall as the room under its control.
         ['css/files-browser.css', 2],
         // New: Settings (owner ruling 2026-10-05).
-        ['css/settings.css', 1],
+        // v2: the administration sections.
+        ['css/settings.css', 2],
         // v28: owner batch (terminal-manager untouched by P1 D1-D3,
         // re-pinned to the served version).
         // v29: P1 steps S1/S3-S8 -- strict scrollback sanitizer, wheel sign fix,
@@ -439,7 +441,10 @@ const base = `http://127.0.0.1:${server.address().port}`;
         ['js/perf-probe.js', 3],
         // v2: the dialog binding moved to settings-view.js.
         ['js/device-settings.js', 2],
-        ['js/settings-view.js', 1],
+        // v2: it announces open / section / close for settings-admin.js.
+        ['js/settings-view.js', 2],
+        // New: the administration sections; an administrator's page only.
+        ['js/settings-admin.js', 1],
         // v11: S17 FIX 4d completion -- the insert-at-prompt write routes through
         // window.emitTerminalInput, so it is no longer swallowed by tmux copy
         // mode. v10 is RELEASED, so the pin must move or the fix ships invisibly.

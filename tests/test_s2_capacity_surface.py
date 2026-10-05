@@ -208,7 +208,8 @@ def test_admin_capacity_is_registry_backed(app, client, monkeypatch):
         other_id = other.id
 
     _seed_registry('live-1', user_id=other_id, host='a.example')
-    _seed_registry('live-2', user_id=other_id, host='b.example', use_tmux=True)
+    _seed_registry('live-2', user_id=other_id, host='b.example', use_tmux=True,
+                   tmux_session_name='sshdeck_root_b_22_0001')
 
     assert client.post('/login', data={
         'username': 'capadmin', 'password': 'pw-123456789'}).status_code == 302
@@ -227,6 +228,8 @@ def test_admin_capacity_is_registry_backed(app, client, monkeypatch):
     tmux_row = next(s for s in body['sessions'] if s['session_id'] == 'live-2')
     assert tmux_row['use_tmux'] is True
     assert tmux_row['user_username'] == 'capuser'
+    # Settings → Running sessions names the tmux session it would keep or end.
+    assert tmux_row['tmux_session_name'] == 'sshdeck_root_b_22_0001'
 
 
 def test_admin_capacity_requires_admin(app, client):

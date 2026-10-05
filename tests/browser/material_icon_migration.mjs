@@ -16,7 +16,6 @@ function check(label, actual, expected) {
     }
 }
 const read = relative => fs.readFileSync(path.join(ROOT, relative), 'utf8');
-const admin = read('templates/admin.html');
 const index = read('templates/index.html');
 const command = read('static/js/command-library.js');
 const trusted = read('tests/browser/mobile_shell_trusted.mjs');
@@ -31,9 +30,11 @@ const manifest = JSON.parse(read('static/icons/manifest.json'));
 check('P6b canonical drag/upload owners have zero Material refs',
     read('static/js/app.js').includes('material-icons')
         || read('static/js/sftp-file-manager.js').includes('material-icons'), false);
-check('P6b admin template has zero Material refs', admin.includes('material-icons'), false);
-check('admin title uses the verified settings sprite',
-    admin.includes('#icon-settings') && manifest.symbols.includes('icon-settings'), true);
+// The admin page is part of Settings now (templates/index.html): its section
+// list names System with the same verified settings glyph.
+check('Settings → System uses the verified settings sprite',
+    /data-section="system"[^>]*><svg[^>]*><use href="[^"]*#icon-settings"/.test(index)
+        && manifest.symbols.includes('icon-settings'), true);
 const rendererStart = command.indexOf('    renderNextChunk() {');
 const rendererEnd = command.indexOf('    attachCommandListeners(container) {', rendererStart);
 const commandRenderer = command.slice(rendererStart, rendererEnd);

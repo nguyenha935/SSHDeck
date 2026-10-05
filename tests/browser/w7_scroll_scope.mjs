@@ -6,7 +6,7 @@
  *   - ONE scroll-lock owner: html/body:has(.main-content). index.html is the
  *     only template with .main-content, so ONLY the terminal shell locks the
  *     document scroller, at every width.
- *   - Admin, login, register keep NORMAL page scroll:
+ *   - Login and register keep NORMAL page scroll:
  *     mouse wheel, keyboard, and touch drag all reach the last element of
  *     long content — proven BEHAVIORALLY (repeated real input until the last
  *     element is visible), never via window.scrollTo, which is used only to
@@ -80,7 +80,6 @@ function renderTemplate(name) {
 const PAGES = {
     '': renderTemplate('index'),
     'index': renderTemplate('index'),
-    'admin': renderTemplate('admin'),
     'login': renderTemplate('login'),
     'register': renderTemplate('register'),
 };
@@ -140,7 +139,7 @@ async function newPage(w, h, { touch = false, route = '' } = {}) {
     }
     await page.goto(`${base}/${route}`, { waitUntil: 'load' });
     // The terminal page loads vendor xterm + app.js, which take longer to
-    // initialize than the static auth/admin pages. Wait for the production
+    // initialize than the static auth pages. Wait for the production
     // globals the terminal sections below depend on.
     if (route === '' || route === 'index') {
         await page.waitForFunction(
@@ -181,16 +180,12 @@ const docMetrics = (page) => page.evaluate(() => ({
     htmlOverscroll: getComputedStyle(document.documentElement).overscrollBehavior,
 }));
 
-const seedAdminRows = (page, n = 60) => page.evaluate((n) => {
-    const tb = document.querySelector('#adminUsersTable tbody')
-        || document.querySelector('tbody');
-    for (let i = 0; i < n; i++) {
-        const tr = tb.insertRow();
-        tr.insertCell().textContent = `user${i}`;
-        tr.insertCell().textContent = `u${i}@example.com`;
-        tr.insertCell().textContent = 'active';
-    }
-}, n);
+// Makes a non-terminal page taller than any viewport, as a long form would be.
+const addSpacer = (page, height = 1400) => page.evaluate((h) => {
+    const spacer = document.createElement('div');
+    spacer.style.height = `${h}px`;
+    document.body.appendChild(spacer);
+}, height);
 
 /* Repeated REAL wheel input until the predicate holds. Never programmatic
  * scrolling: this is exactly what a user does at a mouse/trackpad. */
@@ -243,84 +238,58 @@ async function dragUntil(page, ctx, predicate, { x, y0, y1, max = 30, steps = 12
     return page.evaluate(predicate);
 }
 
-const lastAdminRowVisible = () => {
-    const rows = document.querySelectorAll('tbody tr');
-    const last = rows[rows.length - 1];
-    return !!last && last.getBoundingClientRect().bottom <= window.innerHeight + 1;
-};
 const pageAtBottom = () => window.scrollY + window.innerHeight
     >= Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) - 2;
 
 // ============================================================================
-// §1 Admin (desktop 1280x800): wheel, keyboard and drag all reach the last
-//    row of a long user table. NEGATIVE proof: a non-terminal page scrolls.
+// §1 Login (desktop 1280x800), made taller than the window: wheel, keyboard
+//    and drag all reach the bottom. NEGATIVE proof: a non-terminal page
+//    scrolls. (The admin page this used to measure is part of Settings now.)
 // ============================================================================
 {
-    const { ctx, page, errors } = await newPage(1280, 800, { route: 'admin' });
-    await seedAdminRows(page);
+    const { ctx, page, errors } = await newPage(1280, 800, { route: 'login' });
+    await addSpacer(page);
     const m = await docMetrics(page);
-    check('§1 admin: content exceeds the viewport', m.scrollH > m.vp, true);
-    check('§1 admin: body is NOT overflow-hidden', m.bodyOvY === 'hidden', false);
-    check('§1 admin: body overscroll-behavior is not none', m.bodyOverscroll, 'auto');
+    check('§1 login: content exceeds the viewport', m.scrollH > m.vp, true);
+    check('§1 login: body is NOT overflow-hidden', m.bodyOvY === 'hidden', false);
+    check('§1 login: body overscroll-behavior is not none', m.bodyOverscroll, 'auto');
 
     const wheelBefore = await docScrollY(page);
-    check('§1 admin: mouse wheel scrolls the page',
-        await wheelUntil(page, lastAdminRowVisible, { x: 640, y: 500, dy: 400 }), true);
-    check('§1 admin: wheel reached the last table row (behavioral)',
-        await page.evaluate(lastAdminRowVisible), true);
-    check('§1 admin: wheel moved the scroller', (await docScrollY(page)) > wheelBefore, true);
+    check('§1 login: mouse wheel reaches the bottom',
+        await wheelUntil(page, pageAtBottom, { x: 640, y: 500, dy: 400 }), true);
+    check('§1 login: wheel moved the scroller', (await docScrollY(page)) > wheelBefore, true);
 
     await page.evaluate(() => window.scrollTo(0, 0)); // setup reset only
+    await page.mouse.click(5, 5);                     // focus the page, not a field
     let kd = false;
     for (let i = 0; i < 15; i++) {
         await page.keyboard.press('PageDown');
         await page.waitForTimeout(100);
-        if (await page.evaluate(lastAdminRowVisible)) { kd = true; break; }
+        if (await page.evaluate(pageAtBottom)) { kd = true; break; }
     }
-    check('§1 admin: keyboard PageDown reaches the last row', kd, true);
+    check('§1 login: keyboard PageDown reaches the bottom', kd, true);
 
     await page.evaluate(() => window.scrollTo(0, 0)); // setup reset only
-    check('§1 admin: drag reaches the last row',
-        await dragUntil(page, ctx, lastAdminRowVisible,
-            { x: 640, y0: 600, y1: 150 }), true);
+    check('§1 login: drag reaches the bottom',
+        await dragUntil(page, ctx, pageAtBottom, { x: 640, y0: 600, y1: 150 }), true);
     check('§1 no page errors', errors.join(' | '), '');
     await ctx.close();
 }
 
 // ============================================================================
-// §2 Admin (phone 390x844, touch): wheel AND a genuine touch drag reach the
-//    last row.
-// ============================================================================
-{
-    const { ctx, page, errors } = await newPage(390, 844, { touch: true, route: 'admin' });
-    await seedAdminRows(page);
-    const m = await docMetrics(page);
-    check('§2 admin phone: content exceeds the viewport', m.scrollH > m.vp, true);
-
-    check('§2 admin phone: wheel reaches the last row',
-        await wheelUntil(page, lastAdminRowVisible, { x: 195, y: 500, dy: 500 }), true);
-
-    await page.evaluate(() => window.scrollTo(0, 0)); // setup reset only
-    check('§2 admin phone: touch drag reaches the last row',
-        await dragUntil(page, ctx, lastAdminRowVisible,
-            { x: 195, y0: 700, y1: 150 }), true);
-    check('§2 no page errors', errors.join(' | '), '');
-    await ctx.close();
-}
-
-// ============================================================================
-// §3 Admin on iPad tiers: portrait 768x1024 and landscape 1024x768 both
-//    wheel-scroll to the last row.
+// §3 Login on iPad tiers: portrait 768x1024 and landscape 1024x768 both
+//    wheel-scroll to the bottom. (§2, the admin page on a phone, went with it;
+//    a phone is §5's.)
 // ============================================================================
 for (const [label, w, h] of [['ipad portrait 768x1024', 768, 1024],
                              ['ipad landscape 1024x768', 1024, 768]]) {
-    const { ctx, page, errors } = await newPage(w, h, { touch: true, route: 'admin' });
-    await seedAdminRows(page);
+    const { ctx, page, errors } = await newPage(w, h, { touch: true, route: 'login' });
+    await addSpacer(page);
     const m = await docMetrics(page);
     check(`§3 ${label}: content exceeds the viewport`, m.scrollH > m.vp, true);
     check(`§3 ${label}: body overscroll-behavior is not none`, m.bodyOverscroll, 'auto');
-    check(`§3 ${label}: wheel reaches the last row`,
-        await wheelUntil(page, lastAdminRowVisible,
+    check(`§3 ${label}: wheel reaches the bottom`,
+        await wheelUntil(page, pageAtBottom,
             { x: Math.round(w / 2), y: Math.round(h * 0.6), dy: 500 }), true);
     check(`§3 ${label} no page errors`, errors.join(' | '), '');
     await ctx.close();
@@ -797,6 +766,11 @@ for (const route of ['login', 'register']) {
 //     moved to Settings, the menu is 8 rows (404px), and at 500 its last row
 //     already sits inside the card. Its 6px "overflow" there was the bottom
 //     padding, which the old scrollHeight precondition counted as overflow.
+//
+//     The Admin panel row left too (Settings part B): 7 rows, 364px. At 420
+//     the card clips the last row by 30px while that row is still inside the
+//     viewport, so "the wheel reaches it" has to mean inside the CARD: read
+//     against the viewport it was reached before a single wheel step.
 // ============================================================================
 for (const h of [420, 360]) {
     const { ctx, page, errors } = await newPage(1280, h, { route: 'index' });
@@ -836,7 +810,8 @@ for (const h of [420, 360]) {
         const last = rows[rows.length - 1];
         if (!last) return false;
         const r = last.getBoundingClientRect();
-        return r.bottom <= window.innerHeight && r.top >= 0;
+        const card = document.getElementById('accountDropdownHeader').getBoundingClientRect();
+        return r.bottom <= Math.min(card.bottom + 1, window.innerHeight) && r.top >= Math.max(card.top - 1, 0);
     };
     const box = await page.evaluate(() => {
         const r = document.getElementById('accountDropdownHeader').getBoundingClientRect();
@@ -878,7 +853,7 @@ for (const h of [420, 360]) {
 // host, command form and the transfer forms are all inside modals, on a shell
 // whose DOCUMENT scroll is deliberately locked. If a modal body stops being its
 // own scroller there, the content below the fold becomes unreachable with no
-// fallback, unlike on admin/login where the page itself can scroll.
+// fallback, unlike on login where the page itself can scroll.
 //
 // Every modal is opened through its real production trigger (a click, or the
 // production key binding for the two that have one), then, for the ones that

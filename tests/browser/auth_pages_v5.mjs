@@ -1,8 +1,10 @@
 /*
- * The three converted auth pages, measured against the v5 rulings.
+ * The two auth pages, measured against the v5 rulings. (The change-password
+ * and admin pages are part of Settings now: settings_view.mjs and
+ * settings_admin.mjs.)
  *
- * These are the SHIPPED templates (templates/login.html, register.html,
- * admin.html), rendered through the same Jinja
+ * These are the SHIPPED templates (templates/login.html, register.html),
+ * rendered through the same Jinja
  * substitution the other browser suites use, not a hand-written fixture. A
  * test that writes its own markup agrees with itself and proves nothing; this
  * repository has already shipped false-green tests that way.
@@ -16,13 +18,6 @@
  *     silently leaves the tokens empty, so it must be measured.
  *   - No horizontal overflow at 359px (narrowest supported) and 926x428
  *     (phone landscape).
- *   - [INF-6](a) admin reflows to STACKED CARDS on a phone. `overflow-x:auto`
- *     would pass a naive "document does not overflow" check while still
- *     forcing a sideways drag per row, so this asserts the reflow itself:
- *     cells become block-level, the header row leaves layout, and every cell
- *     carries a data-label. It also asserts the table is NOT wider than the
- *     viewport, which is the user-visible consequence.
- *   - [INF-6](b) every row action stays >=44px in the stacked form.
  *   - Zero emoji and zero Lucide runtime on any converted page.
  *   - Every backend/JS contract hook survives the restyle.
  *
@@ -113,7 +108,6 @@ const THEMES = ['glass', 'retro', 'solar', 'paper', 'noir', 'arctic-ice',
 const PAGES = [
     { name: 'login', tpl: 'templates/login.html', url: '/login' },
     { name: 'register', tpl: 'templates/register.html', url: '/register' },
-    { name: 'admin', tpl: 'templates/admin.html', url: '/admin' },
 ];
 
 // The canonical set, from tests/browser/mobile_shell_layout.mjs:107-131.
@@ -145,44 +139,6 @@ const base = `http://127.0.0.1:${server.address().port}`;
 const browser = await chromium.launch();
 const pageErrors = [];
 
-// Seed the admin tables so the reflow has real rows to measure. This mirrors
-// what admin.js renderUsers/renderAudit produce, including applyColumnLabels.
-async function seedAdminTables(page) {
-    await page.evaluate(() => {
-        const usersBody = document.getElementById('adminUsersBody');
-        const mk = (u) => {
-            const tr = document.createElement('tr');
-            tr.dataset.userId = u.id;
-            tr.innerHTML =
-                `<td>${u.id}</td>` +
-                `<td>${u.username}</td>` +
-                `<td><span class="admin-badge">User</span></td>` +
-                `<td><span class="admin-badge">Active</span></td>` +
-                `<td>2026-07-01</td>` +
-                `<td>2026-08-06</td>` +
-                `<td><div class="a5-row-actions admin-actions">` +
-                `<button class="a5-btn btn btn-secondary" data-act="promote">Promote</button>` +
-                `<button class="a5-btn btn btn-secondary" data-act="lock">Lock</button>` +
-                `<button class="a5-btn a5-btn-danger btn btn-danger" data-act="delete">Delete</button>` +
-                `</div></td>`;
-            return tr;
-        };
-        usersBody.appendChild(mk({ id: 1, username: 'testadmin' }));
-        usersBody.appendChild(mk({ id: 2, username: 'alice' }));
-
-        // The same mirroring admin.js applyColumnLabels() performs.
-        const table = document.getElementById('adminUsersTable');
-        const headers = Array.from(table.querySelectorAll('thead th'))
-            .map(th => th.textContent.trim());
-        table.querySelectorAll('tbody tr').forEach(tr => {
-            Array.from(tr.children).forEach((td, i) => {
-                const isLast = i === headers.length - 1;
-                td.setAttribute('data-label', isLast ? '' : (headers[i] || ''));
-            });
-        });
-    });
-}
-
 /* ---------------------------------------------------------------------------
  * 1. Geometry and themes, every page x viewport x theme.
  * ------------------------------------------------------------------------ */
@@ -204,7 +160,6 @@ for (const vp of VIEWPORTS) {
                     '*,*::before,*::after{transition:none!important;animation:none!important}';
                 document.head.appendChild(st);
             });
-            if (p.name === 'admin') await seedAdminTables(page);
 
             const m = await page.evaluate(() => {
                 const small = [];
@@ -323,298 +278,7 @@ for (const vp of VIEWPORTS) {
 }
 
 /* ---------------------------------------------------------------------------
- * 2. [INF-6](a) admin reflows to stacked cards on a phone -- and does NOT
- *    merely gain a horizontal scrollbar.
- *
- * The reflow breakpoint is 700px. 926x428 (phone landscape) is WIDER than
- * that and deliberately keeps the real table: at 926px the columns fit, and
- * the scarce axis there is height, not width (amendment line 55 compresses
- * the shell for the same reason). So landscape is asserted against the
- * condition that actually matters -- no sideways drag -- rather than being
- * forced into a stacked form it does not need.
- * ------------------------------------------------------------------------ */
-currentTheme = 'glass';
-for (const vp of [{ label: 'phone-small', w: 359, h: 800, stacks: true },
-                  { label: 'phone', w: 428, h: 926, stacks: true },
-                  { label: 'landscape', w: 926, h: 428, stacks: false }]) {
-    const ctx = await browser.newContext({
-        viewport: { width: vp.w, height: vp.h }, hasTouch: true, isMobile: true,
-    });
-    const page = await ctx.newPage();
-    page.on('pageerror', e => pageErrors.push(`reflow-${vp.label}: ${e}`));
-    await page.goto(`${base}/admin`, { waitUntil: 'load' });
-    await seedAdminTables(page);
-
-    const r = await page.evaluate(() => {
-        const table = document.getElementById('adminUsersTable');
-        const wrap = table.closest('.a5-table-wrap');
-        const firstCell = table.querySelector('tbody td');
-        const thead = table.querySelector('thead');
-        const cells = Array.from(table.querySelectorAll('tbody td'));
-        const actions = Array.from(
-            table.querySelectorAll('tbody .a5-row-actions button'));
-
-        return {
-            // In the stacked form a cell is laid out as a flex row (label left,
-            // value right) -- the point is that it is NOT a table-cell any more.
-            cellDisplay: getComputedStyle(firstCell).display,
-            headPosition: getComputedStyle(thead).position,
-            missingLabels: cells.filter(td => !td.hasAttribute('data-label')).length,
-            // The user-visible consequence, asserted at EVERY width.
-            tableWider: Math.max(0, table.scrollWidth - window.innerWidth),
-            wrapScrolls: wrap.scrollWidth > wrap.clientWidth + 1,
-            smallActions: actions.map(b => {
-                const q = b.getBoundingClientRect();
-                return (q.height < 44 || q.width < 44)
-                    ? `${b.dataset.act}:${Math.round(q.width)}x${Math.round(q.height)}` : null;
-            }).filter(Boolean),
-            actionCount: actions.length,
-        };
-    });
-
-    const at = `admin reflow @ ${vp.label}`;
-    if (vp.stacks) {
-        check(`${at}: cells are no longer table-cells`,
-            r.cellDisplay !== 'table-cell', true);
-        check(`${at}: cells stack as flex rows`, r.cellDisplay, 'flex');
-        check(`${at}: header row is removed from layout`, r.headPosition, 'absolute');
-        check(`${at}: every cell carries a data-label`, r.missingLabels, 0);
-    } else {
-        check(`${at}: keeps the real table above the breakpoint`,
-            r.cellDisplay, 'table-cell');
-    }
-    // Both forms must satisfy this: it is the whole point of the condition.
-    check(`${at}: table is not wider than the viewport`, r.tableWider, 0);
-    check(`${at}: wrapper does not scroll sideways`, r.wrapScrolls, false);
-    check(`${at}: row actions were rendered`, r.actionCount > 0, true);
-    check(`${at}: every row action reaches 44px`, r.smallActions, []);
-    await ctx.close();
-}
-
-// And the converse: on a wide viewport it is still a real table.
-{
-    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
-    const page = await ctx.newPage();
-    await page.goto(`${base}/admin`, { waitUntil: 'load' });
-    await seedAdminTables(page);
-    const d = await page.evaluate(() => ({
-        cell: getComputedStyle(document.querySelector('#adminUsersTable tbody td')).display,
-        head: getComputedStyle(document.querySelector('#adminUsersTable thead')).position,
-    }));
-    check('admin @ laptop: still a real table', d.cell, 'table-cell');
-    check('admin @ laptop: header row is in layout', d.head, 'static');
-    await ctx.close();
-}
-
-/* ---------------------------------------------------------------------------
- * 2b. A toast must never cover the only way off the admin page.
- *
- * The shared toast stack is `.notification-container { position: fixed;
- * top: 24px; right: 24px; z-index: 11000 }` (style.css:4132) and admin.html
- * puts the "Back to Terminal" link in that same corner in normal flow
- * (admin.html:46-51), so the two collide by construction.
- *
- * Why this needs its OWN assertion rather than riding on the geometry checks
- * above: every existing admin assertion is a FLOOR (>=44px, no overflow, still
- * a table). None of them can see two elements that are each perfectly sized but
- * STACKED ON TOP OF EACH OTHER -- which is exactly Entry 11's lesson that a
- * geometry-floor set proves a minimum, never an appearance. Measured before the
- * fix: 147x36 px of cover at 834/926/390, and elementFromPoint() at the LINK'S
- * OWN CENTRE returned the toast, i.e. the link was genuinely unclickable.
- *
- * The hit test is the load-bearing half. A pure rect-overlap check would pass
- * the moment the boxes were nudged apart by a pixel while the toast still ate
- * the clicks, so the assertion is "is the link still the top element at its own
- * centre", not merely "do the rectangles miss each other".
- */
-for (const vp of [
-    { label: 'laptop', w: 1440, h: 900 },
-    { label: 'tablet', w: 834, h: 1194 },
-    { label: 'phone-landscape', w: 926, h: 428 },
-    { label: 'phone-390', w: 390, h: 844 },
-]) {
-    const ctx = await browser.newContext({
-        viewport: { width: vp.w, height: vp.h },
-        hasTouch: vp.w <= 926, isMobile: vp.w <= 926,
-    });
-    const page = await ctx.newPage();
-    await page.goto(`${base}/admin`, { waitUntil: 'load' });
-
-    /* Raise the toast, THEN let its entry animation finish before measuring.
-     *
-     * `.notification` carries `animation: notificationSlideIn 0.4s` (style.css),
-     * so for the first 400ms the element sits at its pre-animation offset --
-     * off-screen to the right. Measuring immediately reads that transient rect,
-     * which never overlaps anything, and the assertion passes no matter where
-     * the container is anchored. Proven: with the fix mutated back to
-     * `top: 24px` the suite still reported 0 failures until this wait was
-     * added, while a standalone probe that happened to wait 350ms saw the full
-     * 147x36 overlap. A settled rect is the only one worth asserting on.
-     */
-    await page.evaluate(() => {
-        const cont = document.getElementById('notificationContainer');
-        if (!cont) { return; }
-        const el = document.createElement('div');
-        el.className = 'notification notification-error';
-        el.textContent = 'Request failed (500)';
-        cont.appendChild(el);
-    });
-    await page.waitForTimeout(500);
-
-    const r = await page.evaluate(() => {
-        const back = document.querySelector('.a5-topbar-actions .a5-btn');
-        const el = document.querySelector('#notificationContainer .notification');
-        if (!back || !el) { return { missing: true }; }
-
-        const B = back.getBoundingClientRect();
-        const T = el.getBoundingClientRect();
-        const ox = Math.min(B.right, T.right) - Math.max(B.left, T.left);
-        const oy = Math.min(B.bottom, T.bottom) - Math.max(B.top, T.top);
-        const top = document.elementFromPoint(B.left + B.width / 2, B.top + B.height / 2);
-        return {
-            missing: false,
-            toastRaised: T.height > 0,
-            // A toast parked outside the viewport would make "no overlap"
-            // vacuous, so require it to be on-screen before trusting the result.
-            // innerWidth/innerHeight, NOT clientWidth/clientHeight: under
-            // `isMobile: true` Chromium reserves a ~13px scrollbar gutter, so the
-            // client box is smaller than the CSS viewport and a correctly-placed
-            // toast reads as off-screen against it. That produced 4 false
-            // OFF-SCREEN flags in a standalone probe before being corrected.
-            toastOnScreen: T.top >= -1 && T.left >= -1
-                && T.right <= window.innerWidth + 1 && T.bottom <= window.innerHeight + 1,
-            overlaps: ox > 0 && oy > 0,
-            backClickable: !!(top && (top === back || back.contains(top))),
-        };
-    });
-
-    const at = `admin toast @ ${vp.label}`;
-    check(`${at}: the back link and the toast container both exist`, r.missing, false);
-    // Guards the guard: if no toast actually rendered, or it rendered off to the
-    // side, "no overlap" would be vacuously true and this block would assert
-    // nothing at all.
-    check(`${at}: a toast really was raised`, r.toastRaised, true);
-    check(`${at}: the toast is inside the viewport`, r.toastOnScreen, true);
-    check(`${at}: toast does not overlap the back link`, r.overlaps, false);
-    check(`${at}: back link is still the hit target at its own centre`, r.backClickable, true);
-
-    /* The SECOND occlusion, and the reason this block asserts on the tab row too.
-     *
-     * Clearing the topbar alone moved the toast down onto the tab strip rather
-     * than out of the way: at 390x844 it covered the Settings tab by 2394px^2
-     * (3577 at 359x800) and elementFromPoint at that tab's own centre returned
-     * the toast. Every assertion above still passed, because the back link was
-     * genuinely clear -- so "the back link is reachable" does not imply "the
-     * page is usable". Each control the toast can reach needs its own hit test.
-     *
-     * Wider viewports never overlapped (the three tabs end long before the
-     * toast starts), so a desktop-only check would also have missed it. The
-     * phone widths are the ones that bite.
-     */
-    const tabs = await page.evaluate(() => {
-        const el = document.querySelector('#notificationContainer .notification');
-        if (!el) { return null; }
-        const T = el.getBoundingClientRect();
-        /* Collect every visible interactive control rather than a hand-listed
-         * set, so a control added later cannot silently escape the check.
-         * Skip zero-area and clipped elements: a rect that paints nowhere
-         * cannot be occluded (the admin thead is absolute 1x1 with
-         * clip-path: inset(50%) and would otherwise report a bogus rect).
-         */
-        const hidden = (n) => {
-            for (let q = n; q && q !== document.documentElement; q = q.parentElement) {
-                const cs = getComputedStyle(q);
-                if (cs.display === 'none' || cs.visibility === 'hidden'
-                    || Number(cs.opacity) === 0 || cs.clipPath !== 'none') { return true; }
-            }
-            return false;
-        };
-        const sel = 'button, a[href], input, select, textarea, [role="tab"],'
-            + ' [tabindex]:not([tabindex="-1"])';
-        const controls = [...document.querySelectorAll(sel)].filter((n) => {
-            const R = n.getBoundingClientRect();
-            return R.width > 1 && R.height > 1 && !el.contains(n) && !hidden(n);
-        });
-        return controls.map((tab) => {
-            const B = tab.getBoundingClientRect();
-            const ox = Math.min(B.right, T.right) - Math.max(B.left, T.left);
-            const oy = Math.min(B.bottom, T.bottom) - Math.max(B.top, T.top);
-            const top = document.elementFromPoint(B.left + B.width / 2, B.top + B.height / 2);
-            return {
-                label: (tab.textContent || tab.getAttribute('aria-label')
-                    || tab.tagName).trim().slice(0, 24),
-                // The acceptance number is the OVERLAP AREA, not the hit test.
-                // A control that is half-covered but still hittable at its
-                // centre is a defect; the hit test is kept only as a
-                // corroborating signal.
-                overlap: Math.round(Math.max(0, ox) * Math.max(0, oy)),
-                clickable: !!(top && (top === tab || tab.contains(top))),
-            };
-        });
-    });
-    // Would-be-vacuous guard: if the tab strip were absent or empty, a forEach
-    // over it would assert nothing while looking green.
-    check(`${at}: interactive controls were actually collected`,
-        Array.isArray(tabs) && tabs.length >= 3, true);
-    for (const t of (tabs || [])) {
-        check(`${at}: toast overlaps "${t.label}" by 0px2`, t.overlap, 0);
-        check(`${at}: "${t.label}" is still the hit target at its own centre`, t.clickable, true);
-    }
-
-    /* The anchor TIER, not just the outcome.
-     *
-     * "0 overlap" can be true for the wrong reason -- e.g. the toast never
-     * painted, or a future edit happens to shrink the tab row. So assert the
-     * mechanism directly: on the narrow tier the toast must sit in the bottom
-     * half of the viewport with its gap to the bottom edge equal to the derived
-     * max(--a5-gap, safe-area-inset-bottom); everywhere else it stays top-right
-     * exactly as before.
-     *
-     * The narrow tier deliberately matches on EITHER width or short-landscape.
-     * Width alone is not enough: phone landscape is 926px WIDE, well above the
-     * 767px canonical breakpoint, so a width-only query leaves the single most
-     * chrome-crowded viewport on the desktop tier.
-     */
-    const anch = await page.evaluate(() => {
-        const el = document.querySelector('#notificationContainer .notification');
-        if (!el) { return null; }
-        /* Measure the CONTAINER, not the first .notification. The container is
-         * what the media query anchors, and toasts stack inside it -- with two
-         * queued, querySelector returns the UPPER one, whose distance to the
-         * bottom edge includes the toast below it (that read 70px instead of 8).
-         */
-        const cont = document.getElementById('notificationContainer');
-        if (!cont) { return null; }
-        const T = cont.getBoundingClientRect();
-        // The a5 tokens are declared on `.a5`, not on :root, and custom-property
-        // substitution resolves against the element the property is DECLARED on.
-        // Reading them off documentElement yields an empty string.
-        const gap = getComputedStyle(document.querySelector('.a5') || cont)
-            .getPropertyValue('--a5-gap').trim();
-        return {
-            narrowTier: matchMedia('(max-width: 767px)').matches
-                || matchMedia('(max-height: 480px) and (orientation: landscape)').matches,
-            inBottomHalf: T.top > window.innerHeight / 2,
-            gapBottom: Math.round(window.innerHeight - T.bottom),
-            gapToken: parseInt(gap, 10),
-        };
-    });
-    check(`${at}: the toast was measurable for the anchor check`, anch !== null, true);
-    if (anch) {
-        check(`${at}: narrow tier bottom-anchors the toast`,
-            anch.narrowTier ? anch.inBottomHalf : !anch.inBottomHalf, true);
-        if (anch.narrowTier) {
-            // Derived from the token, not a literal: --a5-gap is the floor and
-            // headless Chromium reports a 0 safe-area inset, so max() == the gap.
-            check(`${at}: bottom gap equals max(--a5-gap, safe-area-inset-bottom)`,
-                anch.gapBottom, anch.gapToken);
-        }
-    }
-    await ctx.close();
-}
-
-/* ---------------------------------------------------------------------------
- * 2c. A footer link must be identifiable as a link in EVERY theme.
+ * 2. A footer link must be identifiable as a link in EVERY theme.
  *
  * Two independent reasons the affordance cannot rest on colour alone:
  *
@@ -707,7 +371,6 @@ for (const p of PAGES) {
 // Backend contracts that a restyle must not drop.
 const login = fs.readFileSync(path.join(ROOT, 'templates/login.html'), 'utf8');
 const register = fs.readFileSync(path.join(ROOT, 'templates/register.html'), 'utf8');
-const admin = fs.readFileSync(path.join(ROOT, 'templates/admin.html'), 'utf8');
 
 for (const [label, src] of [['login', login], ['register', register]]) {
     check(`${label}: CSRF token input preserved`,
@@ -729,51 +392,24 @@ check('register: submit guard form id preserved', register.includes('id="registe
 check('register: match indicator id preserved',
     register.includes('id="passwordMatchIndicator"'), true);
 
-const ADMIN_IDS = ['adminUsersTable', 'adminUsersBody', 'adminAuditTable',
-    'adminAuditBody', 'adminAddUserBtn', 'adminRefreshUsers', 'auditSearch',
-    'auditLevel', 'auditRefresh', 'auditPrev', 'auditNext', 'auditPageInfo',
-    'settingRegistration', 'addUserModal', 'closeAddUser', 'newUsername',
-    'newPassword', 'newIsAdmin', 'submitNewUser', 'notificationContainer'];
-check('admin: every admin.js hook id preserved',
-    ADMIN_IDS.filter(id => !admin.includes(`id="${id}"`)), []);
-check('admin: tab hooks preserved',
-    admin.includes('class="a5-tab admin-tab active" data-tab="users"'), true);
-check('admin: modal shell contract preserved',
-    admin.includes('modal modal-small modal-shell') && admin.includes('class="close"'), true);
-check('admin: csrf meta preserved', admin.includes('name="csrf-token"'), true);
-
-// W8: create-user form now carries the v5 icon system like every other auth form.
-check('admin: username field has leading icon in input-wrap',
-    admin.includes('a5-input-wrap') && admin.includes('#icon-contact-round'), true);
-check('admin: password field has lock icon',
-    admin.includes('#icon-lock'), true);
-check('admin: password reveal toggle wired to newPassword',
-    admin.includes('class="a5-toggle password-toggle" data-target="newPassword"'), true);
-check('admin: submit button has trailing arrow-right icon',
-    /id="submitNewUser"[^]*#icon-arrow-right/.test(admin), true);
-check('admin: auth.js loaded for password-toggle hook',
-    admin.includes("filename='js/auth.js'"), true);
-
 /*
- * CACHE PINS for the two auth-page scripts.
+ * CACHE PIN for the auth-page script.
  *
- * auth.js and admin.js were the last shipped frontend files in this tree with no
- * `?v=` at all. Both changed in this batch — auth.js gained the admin
- * create-user validation, admin.js re-notifies it after clearing the form — and
- * the documented cache-bust contract is that changing a static asset without
+ * auth.js was among the last shipped frontend files in this tree with no `?v=`
+ * at all, and the documented cache-bust contract is that changing a static
+ * asset without
  * raising its pin ships the change invisibly behind a stale browser copy. That
  * is worse here than elsewhere: the password reveal toggle and the live
  * validation are the visible behaviour, so a stale auth.js looks like the
  * feature was never built.
  *
- * auth.js is loaded by THREE templates, so the pin is asserted on each: a partial
- * bump would fix login and leave admin stale, which is the failure mode a single
- * assertion would miss.
+ * auth.js is loaded by both templates, so the pin is asserted on each: a partial
+ * bump would fix login and leave register stale, which is the failure mode a
+ * single assertion would miss. v5: the admin create-user validation left with
+ * the admin page.
  */
-const AUTH_JS_PIN = 4;
-const ADMIN_JS_PIN = 3;
-for (const [label, src] of [['login', login], ['register', register],
-    ['admin', admin]]) {
+const AUTH_JS_PIN = 5;
+for (const [label, src] of [['login', login], ['register', register]]) {
     check(`${label}: auth.js carries the current ?v=${AUTH_JS_PIN} pin`,
         src.includes(`filename='js/auth.js') }}?v=${AUTH_JS_PIN}"`), true);
     check(`${label}: auth.js has exactly one script reference`,
@@ -781,43 +417,6 @@ for (const [label, src] of [['login', login], ['register', register],
     check(`${label}: no unpinned auth.js tag survives`,
         /filename='js\/auth\.js'\)\s*\}\}"/.test(src), false);
 }
-check(`admin: admin.js carries the current ?v=${ADMIN_JS_PIN} pin`,
-    admin.includes(`filename='js/admin.js') }}?v=${ADMIN_JS_PIN}"`), true);
-check('admin: admin.js has exactly one script reference',
-    (admin.match(/filename='js\/admin\.js'\)\s*\}\}/g) || []).length, 1);
-check('admin: create-user form uses same icon system as login',
-    admin.includes('#icon-contact-round') && admin.includes('#icon-lock')
-    && admin.includes('#icon-eye') && admin.includes('#icon-arrow-right'), true);
-
-/*
- * D8 also asks the create-user form to be consistent with login/register on
- * VALIDATION, not only on icons and geometry. The rules belong to
- * auth.py register_user (3-32 username of letters/numbers/underscore, 8-char
- * password floor), which the admin POST reaches through register_user — so the
- * constraint attributes here must state the same rule, and the hint nodes must
- * exist for auth.js to write into. Measured behaviour is in
- * tests/browser/w8_admin_form_icons.mjs §6; this is the static half.
- */
-check('admin: username carries register_user\'s 3-32 pattern',
-    admin.includes('pattern="[a-zA-Z0-9_]{3,32}"'), true);
-check('admin: password carries register_user\'s 8-char floor',
-    admin.includes('minlength="8"'), true);
-check('admin: both create-user fields are required',
-    (admin.match(/\brequired\b/g) || []).length >= 2, true);
-check('admin: hint ids auth.js looks up',
-    admin.includes('id="adminUsernameHint"')
-    && admin.includes('id="adminPasswordHint"'), true);
-const authJs = fs.readFileSync(path.join(ROOT, 'static/js/auth.js'), 'utf8');
-check('auth.js owns the admin create-user validation',
-    authJs.includes('function setupAdminCreateUserValidation()')
-    && authJs.includes('setupAdminCreateUserValidation();'), true);
-check('auth.js admin validation is guarded like the others',
-    /setupAdminCreateUserValidation\(\)[\s\S]*?if \(!username \|\| !password\) \{/
-        .test(authJs), true);
-const adminJs = fs.readFileSync(path.join(ROOT, 'static/js/admin.js'), 'utf8');
-check('admin.js re-notifies validation after clearing the form',
-    adminJs.includes("new Event('input', { bubbles: true })"), true);
-
 // Zero hardcoded colours in the shipped stylesheet.
 const css = fs.readFileSync(path.join(ROOT, 'static/css/auth-v5.css'), 'utf8');
 const noComments = css.replace(/\/\*[\s\S]*?\*\//g, '');

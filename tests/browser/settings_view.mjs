@@ -157,6 +157,15 @@ async function openPage(ctx, { query = '', hash = '', stored = {}, clock = false
     page.on('pageerror', e => pageErrors.push(String(e)));
     await page.route('**/socket.io.min.js*',
         r => r.fulfill({ status: 200, contentType: 'text/javascript', body: '' }));
+    // settings-admin.js fetches the users and the running sessions as Settings
+    // opens; empty answers here (settings_admin.mjs measures those sections).
+    await page.route('**/admin/api/**', r => r.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify(r.request().url().includes('/capacity')
+            ? { max_sessions: 100, max_sessions_per_user: 50, pending: 0, total_live: 0,
+                by_user: [], sessions: [] }
+            : { users: [] }),
+    }));
     await page.addInitScript(INIT);
     await page.addInitScript((values) => {
         if (sessionStorage.getItem('__seeded')) return;
@@ -274,7 +283,8 @@ await withContext('§2', async (ctx) => {
         [s.open, s.inSection, s.hash, geo], [true, false, '#settings', [0, 0, 390, 844]]);
     check('§2 ...the list says what each section is set to', await page.evaluate(() =>
         Object.fromEntries([...document.querySelectorAll('.sv-nav-value')].map(v => [v.dataset.value, v.textContent]))),
-    { appearance: 'Glass Ops · English', terminal: '5000 lines · Standard', account: 'pwuser', diagnostics: 'Off' });
+    { appearance: 'Glass Ops · English', terminal: '5000 lines · Standard', account: 'pwuser',
+        users: '0', sessions: '0 / 100', diagnostics: 'Off' });
     check('§2 ...and covers the header and the dock',
         await onTop(page, [[20, 20], [200, 830]]), [true, true]);
     await page.tap('.sv-nav-item[data-section="terminal"]');
@@ -560,10 +570,12 @@ await withContext('§9', async (ctx) => {
     await openSection(page, 'diagnostics');
     check('§9 no Administration group: Settings opens on what there is', await page.evaluate(() => [
         [...document.querySelectorAll('.sv-nav-item')].map(i => i.dataset.section || i.getAttribute('href')),
-        ['perfProbeToggle', 'attachReportToggle', 'keyboardLogToggle', 'sv-diagnostics', 'adminPanelBtn']
+        ['perfProbeToggle', 'attachReportToggle', 'keyboardLogToggle', 'sv-diagnostics', 'adminPanelBtn',
+            'sv-users', 'sv-sessions', 'sv-audit', 'sv-system']
             .filter(id => document.getElementById(id)),
+        [...document.scripts].filter(script => script.src.includes('settings-admin.js')).length,
         SettingsView.section,
-    ]), [['appearance', 'terminal', 'account'], [], 'appearance']);
+    ]), [['appearance', 'terminal', 'account'], [], 0, 'appearance']);
     check('§9 what is stored on the device switches nothing on, and sends nothing', await page.evaluate(() =>
         [DeviceSettings.isAdmin(), DeviceSettings.perf(), DeviceSettings.attachReport(),
             DeviceSettings.keyboardLog(), typeof window.SSHDeckPerf,

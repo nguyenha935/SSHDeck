@@ -226,6 +226,10 @@ label.sv-row {
     line-height: 1.45;
 }
 
+.sv-hint.is-error {
+    color: var(--tw-danger);
+}
+
 .sv-warning {
     color: var(--tw-warning);
 }
@@ -362,6 +366,13 @@ label.sv-row {
 .sv-switch:checked::before {
     background: var(--accent-on-text);
     transform: translateX(16px);
+}
+
+/* style.css gives every touch checkbox min-height 44px (0,1,1), which beat
+   the 22 px above and drew the track as a blob. The row around a switch is
+   its 44 px target. */
+input.sv-switch {
+    min-height: 0;
 }
 
 /* ── the password form ── */
@@ -637,6 +648,448 @@ label.sv-row {
 
     .sv-themes {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+/* ── administration (settings-admin.js) ──
+   A row of a list is one grid: avatar, what it is, its chips, and a fixed
+   last column for its ⋮ -- empty on one's own row but the same width, so the
+   ⋮ of every row sits on one vertical line. */
+.sv-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.sv-head .sv-scope {
+    flex: 1 1 auto;
+}
+
+.sv-head .sv-btn,
+.sv-pager .sv-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sv-btn .icon {
+    width: 15px;
+    height: 15px;
+}
+
+.sv-note {
+    margin: 0;
+    color: var(--tw-muted);
+    font-size: 12px;
+}
+
+/* A form that holds cards, spaced as the section's own children are. */
+.sv-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.sv-list {
+    overflow: hidden;
+}
+
+.sv-arow {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) auto 32px;
+    align-items: center;
+    gap: 12px;
+    min-height: 56px;
+    padding: 8px 10px 8px 14px;
+    border-bottom: 1px solid var(--tw-border);
+}
+
+.sv-arow:last-child,
+.sv-lrow:last-child {
+    border-bottom: 0;
+}
+
+.sv-avatar {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--tw-accent-soft);
+    color: var(--tw-accent);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.sv-arow-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.sv-arow-name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--tw-text);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sv-arow-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sv-arow-meta {
+    overflow: hidden;
+    color: var(--tw-muted);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sv-arow-chips {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.sv-chip {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 8px;
+    border: 1px solid var(--tw-border);
+    border-radius: 999px;
+    background: var(--tw-shell);
+    color: var(--tw-muted);
+    font-size: 11.5px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.sv-chip.is-accent,
+.sv-chip.is-you {
+    border-color: transparent;
+    background: var(--tw-accent-soft);
+    color: var(--tw-accent);
+}
+
+.sv-chip.is-you {
+    height: 18px;
+    font-weight: 500;
+}
+
+.sv-chip.is-ok {
+    color: var(--tw-success);
+}
+
+.sv-chip.is-danger,
+.sv-level.is-error {
+    color: var(--tw-danger);
+}
+
+.sv-level.is-warning {
+    color: var(--tw-warning);
+}
+
+.sv-row-menu-slot {
+    width: 32px;
+}
+
+.sv-empty {
+    padding: 18px 14px;
+    color: var(--tw-muted);
+    text-align: center;
+}
+
+/* the ⋮ menu: a popover under its button; a sheet on a phone */
+.sv-menu {
+    position: absolute;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    min-width: 220px;
+    max-width: calc(100% - 16px);
+    padding: 4px;
+    border: 1px solid var(--tw-border);
+    border-radius: 8px;
+    background: var(--tw-bar);
+    box-shadow: var(--chrome-shadow-float);
+}
+
+.sv-menu-item {
+    display: flex;
+    align-items: center;
+    min-height: 34px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--tw-text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.sv-menu-item.is-danger {
+    color: var(--tw-danger);
+}
+
+.sv-menu-title {
+    padding: 10px 12px 8px;
+    overflow: hidden;
+    color: var(--tw-muted);
+    font-size: 12.5px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sv-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 4;
+    background: color-mix(in srgb, var(--tw-shell) 55%, transparent);
+}
+
+.sv-menu.is-sheet {
+    position: fixed;
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    max-width: none;
+    padding: 4px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+    border-width: 1px 0 0;
+    border-radius: 14px 14px 0 0;
+}
+
+/* Running sessions: the totals beside their limits */
+.sv-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.sv-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding: 12px 14px;
+    border-right: 1px solid var(--tw-border);
+}
+
+.sv-stat:last-child {
+    border-right: 0;
+}
+
+.sv-stat-value {
+    color: var(--tw-text);
+    font-size: 18px;
+    font-variant-numeric: tabular-nums;
+}
+
+.sv-stat-label {
+    color: var(--tw-muted);
+    font-size: 12px;
+}
+
+/* Audit log */
+.sv-toolbar {
+    display: flex;
+    gap: 8px;
+}
+
+.sv-search {
+    flex: 1 1 auto;
+}
+
+/* One grid for the whole log: each row takes its columns from it, so time,
+   level and message line up from row to row whatever the level's word. */
+.sv-log {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    column-gap: 10px;
+}
+
+.sv-log > .sv-empty {
+    grid-column: 1 / -1;
+}
+
+.sv-lrow {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+    align-items: baseline;
+    gap: 10px;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--tw-border);
+}
+
+.sv-lrow-time {
+    color: var(--tw-muted);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.sv-lrow .sv-chip {
+    justify-self: start;
+    height: 20px;
+}
+
+.sv-lrow-main {
+    min-width: 0;
+}
+
+.sv-lrow-message {
+    overflow-wrap: anywhere;
+}
+
+.sv-lrow-details {
+    color: var(--tw-muted);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    overflow-wrap: anywhere;
+}
+
+.sv-pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+
+.sv-page-info {
+    color: var(--tw-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+/* System */
+.sv-changed {
+    color: var(--tw-accent);
+    font-size: 11.5px;
+    font-weight: 600;
+}
+
+.sv-changed::before {
+    content: "\25CF\00A0";
+}
+
+.sv-equals {
+    color: var(--tw-muted);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.sv-rate-unit {
+    min-width: 8.5em;
+}
+
+.sv-row-bare {
+    padding: 0;
+    border: 0;
+    min-height: 44px;
+}
+
+@media (hover: hover) {
+    .sv-menu-item:hover {
+        background: var(--tw-hover);
+    }
+}
+
+.sv-menu-item:active {
+    background: var(--tw-hover);
+}
+
+.sv-menu-item:focus-visible {
+    outline: 2px solid var(--tw-accent);
+    outline-offset: -2px;
+}
+
+@media (pointer: coarse) {
+    .sv-arow {
+        grid-template-columns: 32px minmax(0, 1fr) auto 44px;
+    }
+
+    .sv-row-menu-slot {
+        width: 44px;
+    }
+
+    .sv-menu-item {
+        min-height: 44px;
+    }
+}
+
+@media (max-width: 767px), (pointer: coarse) and (hover: none) and (max-height: 500px) {
+    /* The name and its dates get the whole width, the chips go under them,
+       and the ⋮ keeps its column beside both lines. */
+    .sv-arow {
+        grid-template-columns: minmax(0, 1fr) 44px;
+        grid-template-areas: "main menu" "chips menu";
+        gap: 6px 8px;
+        padding-left: 12px;
+    }
+
+    .sv-avatar {
+        display: none;
+    }
+
+    .sv-arow-main {
+        grid-area: main;
+    }
+
+    /* It wraps here, so nothing is clipped: a line that fits to a fraction
+       of a pixel is laid out on one line by WebKit and then painted with an
+       ellipsis while overflow is hidden (measured: 282 px of text in 282). */
+    .sv-arow-meta {
+        overflow: visible;
+        white-space: normal;
+    }
+
+    .sv-arow-chips {
+        grid-area: chips;
+        justify-content: flex-start;
+    }
+
+    .sv-row-menu,
+    .sv-row-menu-slot {
+        grid-area: menu;
+    }
+
+    .sv-stats {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .sv-stat {
+        flex-direction: row;
+        align-items: baseline;
+        gap: 10px;
+        border-right: 0;
+        border-bottom: 1px solid var(--tw-border);
+    }
+
+    .sv-stat:last-child {
+        border-bottom: 0;
+    }
+
+    .sv-log {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .sv-lrow-main {
+        grid-column: 1 / -1;
     }
 }
 

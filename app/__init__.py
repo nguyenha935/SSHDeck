@@ -7,6 +7,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from engineio import payload as engineio_payload
 import config
 import os
+from datetime import timezone
 from .models import db
 from .auth import (login_manager, init_auth, authenticate_user, register_user,
                    check_rate_limit, password_exceeds_bcrypt_limit)
@@ -305,8 +306,8 @@ def create_app():
     def safe_next():
         """Where to send the reader back to, when the page asked.
 
-        The socket's self-healing redirect carries `next` so a reader who was
-        on /admin when their session lapsed does not land on the terminal.
+        The socket's self-healing redirect carries `next` so a reader whose
+        session lapsed comes back to the page they were on.
         Only a path inside this app is honoured: one leading slash and never
         two, because `//host` is another origin to a browser, and no
         backslash, because browsers have historically read it as one. Anything
@@ -448,23 +449,32 @@ def create_app():
     from .models import User
     from .audit_logger import read_audit_logs
 
+    def _utc_iso(moment):
+        # Written as datetime.now(timezone.utc), read back from SQLite without
+        # the zone: name it, or a browser takes UTC for its own local time.
+        if moment is None:
+            return None
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=timezone.utc)
+        return moment.isoformat()
+
     def _user_to_dict(u):
         return {
             'id': u.id,
             'username': u.username,
             'is_admin': bool(u.is_admin),
             'is_locked': bool(u.is_locked),
-            'created_at': u.created_at.isoformat() if u.created_at else None,
-            'last_login': u.last_login.isoformat() if u.last_login else None,
+            'created_at': _utc_iso(u.created_at),
+            'last_login': _utc_iso(u.last_login),
         }
 
     @app.route('/admin')
     @login_required
     @admin_required
     def admin_page():
-        settings = get_user_settings(current_user.id)
-        theme = settings.get('theme', 'glass')
-        return render_template('admin.html', lang=reader_language(), username=current_user.username, theme=theme)
+        # Administration is part of Settings now (owner ruling 2026-10-05:
+        # one Settings in the app). Old bookmarks land on its first section.
+        return redirect(url_for('index') + '#settings/users')
 
     @app.route('/admin/api/users', methods=['GET'])
     @login_required
@@ -590,12 +600,18 @@ def create_app():
         Every value is validated before any is applied; a refused body
         changes nothing and answers 400 with one reason per key.
         """
-        data = request.get_json(silent=True) or {}
+        data = request.get_json(silent=True)
+        if data is None:
+            data = {}
+        if not isinstance(data, dict):
+            return jsonify({'errors': {'body': 'expected an object'},
+                            **_settings_payload()}), 400
         if 'reset' in data:
             keys = None if data['reset'] == 'all' else data['reset']
-            if keys is not None and not isinstance(keys, list):
+            if keys is not None and not (isinstance(keys, list)
+                                         and all(isinstance(k, str) for k in keys)):
                 return jsonify({'errors': {'reset': 'expected a list of keys or "all"'},
-                                **_settings_payload}), 400
+                                **_settings_payload()}), 400
             app_settings.reset(keys, actor=current_user.username)
             return jsonify(_settings_payload())
         changes = {k: v for k, v in data.items() if k in app_settings.SETTINGS}
@@ -632,6 +648,7 @@ def create_app():
                     'port': sess.get('port'),
                     'username': sess.get('username'),
                     'use_tmux': bool(sess.get('use_tmux')),
+                    'tmux_session_name': sess.get('tmux_session_name'),
                     'display_name': sess.get('display_name'),
                     'last_activity': sess.get('last_activity'),
                     'last_interaction': sess.get('last_interaction'),

@@ -68,14 +68,15 @@ const style = fs.readFileSync(path.join(ROOT, 'static/css/style.css'), 'utf8');
 /*
  * The bridge moved out of deck.css (deck-tokens.css), because
  * every page needs it to read the ten themes and only the shell needs deck.css
- * itself. It is DECLARED in one file and PAINTED FROM in four, so the two are
+ * itself. It is DECLARED in one file and PAINTED FROM in five, so the two are
  * read separately here.
  */
 const tokens = fs.readFileSync(path.join(ROOT, 'static/css/deck-tokens.css'), 'utf8');
 const deck = fs.readFileSync(path.join(ROOT, 'static/css/deck.css'), 'utf8');
 const sftp = fs.readFileSync(path.join(ROOT, 'static/css/sftp-file-manager.css'), 'utf8');
 const auth = fs.readFileSync(path.join(ROOT, 'static/css/auth-v5.css'), 'utf8');
-const admin = fs.readFileSync(path.join(ROOT, 'static/css/admin.css'), 'utf8');
+const settings = fs.readFileSync(path.join(ROOT, 'static/css/settings.css'), 'utf8');
+const filesBrowser = fs.readFileSync(path.join(ROOT, 'static/css/files-browser.css'), 'utf8');
 
 /*
  * Themes are read out of style.css, the same way theme_derived_tokens.mjs does
@@ -336,11 +337,11 @@ console.log('\n== §6 bridge completeness ==');
  *     never been measured.
  */
 {
-    /* Four stylesheets paint from the bridge since the auth pages joined it:
-       the shell, the file manager, the auth/admin sheet and admin's own. A
-       token is live if ANY of them uses it, and declared if the bridge file
-       declares it. */
-    const painters = [deckCode, sftp, auth, admin]
+    /* Five stylesheets paint from the bridge: the shell, the file manager,
+       the expanded Files browser, Settings (which took the admin page's place)
+       and the auth sheet. A token is live if ANY of them uses it, and declared
+       if the bridge file declares it. */
+    const painters = [deckCode, sftp, filesBrowser, settings, auth]
         .map(src => src.replace(/\/\*[\s\S]*?\*\//g, ''));
     const used = new Set(painters.flatMap(src =>
         [...src.matchAll(/var\(\s*(--tw-[a-z-]+)/g)].map(m => m[1])));

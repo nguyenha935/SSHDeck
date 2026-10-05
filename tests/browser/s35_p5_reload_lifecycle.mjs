@@ -34,9 +34,10 @@
  *
  * THE CAUSE, READ FROM THE SOURCE
  * ----------------------------------------------------------------------------
- * A cross-document return re-runs the whole restore loop: templates/index.html
- * :209 <a href="/admin"> and app.js's location.href are real navigations, so
- * the page is built again from the server. (Until a beforeunload
+ * A cross-document return re-runs the whole restore loop: a reload, a return
+ * from the sign-in page and app.js's location.href are real navigations, so
+ * the page is built again from the server. (The admin page that used to be the
+ * common way out is part of Settings now, in the same document.) (Until a beforeunload
  * listener also kept Chromium out of BFCache, which made even Back a full
  * reload; that listener is gone, so Back can now be a bfcache restore --
  * owner_batch_bfcache_lifecycle.mjs covers that path. This suite measures the
@@ -450,8 +451,8 @@ const SEED = ['activeSessionId', S2];
 async function returnJourney(label, order, seed, disableD2 = false, device = null,
     expectedGrid = null) {
     /*
-     * THE CONTEXT IS THE USER'S. A real Terminal -> Admin -> Terminal hop is
-     * the SAME browser context re-navigating: localStorage -- where the
+     * THE CONTEXT IS THE USER'S. A real leave-and-return (a reload, the
+     * sign-in page and back) is the SAME browser context re-navigating: localStorage -- where the
      * deliberate S2 selection and the split layout live -- comes WITH it. A
      * fresh context would start empty and the D2 path under test would never
      * even run; seed therefore injects exactly the key the departed page had

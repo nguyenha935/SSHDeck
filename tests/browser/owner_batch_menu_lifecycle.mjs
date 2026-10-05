@@ -67,9 +67,13 @@ const STUBS = `
     window.JumpHostManager = { getById: () => null, updatePasswordVisibility: noop };
 `;
 
-// SHORT phone portrait: 390x600 — the owner's low-screen repro.
+// SHORT phone portrait. 390x600 was the owner's low-screen repro; since the
+// Admin panel row left the menu (2026-10-05, Settings part B) the sheet's
+// content fits there exactly (scrollHeight 487 = clientHeight 487, measured),
+// so the overflow this section needs is built one step shorter: at 390x560
+// it overflows by 37 px, as it did by 41 px at 600 before.
 {
-    const ctx = await browser.newContext({ viewport: { width: 390, height: 600 }, hasTouch: true, isMobile: true });
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 560 }, hasTouch: true, isMobile: true });
     const page = await ctx.newPage();
     const errors = [];
     page.on('pageerror', e => errors.push(String(e)));
@@ -100,7 +104,7 @@ const STUBS = `
         };
     });
     check('§M sheet opens on the short viewport', before.open, true);
-    check('§M content overflows on a 600px viewport (scroll needed)', before.scrollHeight > before.clientHeight, true);
+    check('§M content overflows on a 560px viewport (scroll needed)', before.scrollHeight > before.clientHeight, true);
 
     // The FIX (owner batch item 3): positionMobileMore() now clamps the
     // inline maxHeight to the real space above the composer dock. Assert the

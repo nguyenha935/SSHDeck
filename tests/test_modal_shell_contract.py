@@ -7,7 +7,7 @@ that pre-v5 design standard was retired, superseded by the v5
 mockup, the amendment (docs/spec/) and static/css/deck-tokens.css. What records
 a deployment is the git log; the contract itself is the
 assertions below.
-The two dynamic SFTP roots and admin addUserModal are not served by the
+The two dynamic SFTP roots are not served by the
 index.html-only browser harness; their contract is enforced here, each
 dynamic constructor isolated as its own bounded block.
 
@@ -22,7 +22,6 @@ import pathlib
 
 S = pathlib.Path(__file__).resolve().parent.parent
 idx = (S / "templates/index.html").read_text()
-adm = (S / "templates/admin.html").read_text()
 js = (S / "static/js/sftp-file-manager.js").read_text()
 css = (S / "static/css/style.css").read_text()
 tp = (S / "tests/test_profile_launcher_ui.py").read_text()
@@ -72,13 +71,6 @@ def test_file_preview_modal_excluded_from_shell():
 def test_index_roots_keep_focusable_close_buttons():
     # Focusable closes on the migrated index roots (template buttons).
     assert len(re.findall(r'<button type="button" class="close"', idx)) >= 11
-
-
-def test_admin_add_user_modal_shell_and_a11y():
-    # admin root verified independently: shell + role + aria-modal.
-    acls, aattrs = root(adm, "addUserModal")
-    assert "modal-shell" in acls.split()
-    assert 'role="dialog"' in aattrs and 'aria-modal="true"' in aattrs
 
 
 def test_sftp_file_manager_modal_constructor_block():
