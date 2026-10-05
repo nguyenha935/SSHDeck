@@ -108,7 +108,10 @@ window.__i18n.en = {
         'connection.host': 'Host *',
         'connection.port': 'Port *',
         'connection.authMethod': 'Authentication Method',
-        'connection.sshKey': 'SSH Key *',
+        // The auth-type CHOICE and the caption of the key field it reveals
+        // are two keys: only the caption marks a required field.
+        'connection.sshKey': 'SSH Key',
+        'connection.sshKeyField': 'SSH Key *',
         'connection.tailscaleSSH': 'Tailscale SSH',
         'connection.selectSSHKey': '-- Select SSH Key --',
         'connection.saveAsProfile': 'Save as profile',
