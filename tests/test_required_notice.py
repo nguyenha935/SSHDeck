@@ -19,9 +19,6 @@ from app.version import (COMMERCIAL_CONTACT, LICENSE_ID, LICENSE_NAME,
                          notice_payload)
 
 ROOT = Path(__file__).resolve().parent.parent
-# /change-password sits behind the login, so an anonymous client is
-# redirected before it renders. Its copy of the notice is pinned by
-# test_one_partial_feeds_all_three_pages instead.
 PUBLIC_AUTH_PAGES = ('/login', '/register')
 
 
@@ -126,10 +123,11 @@ def test_the_notice_is_plain_text_at_rest(client):
     assert 'href' not in block
 
 
-def test_one_partial_feeds_all_three_pages():
-    """So a change that drops the notice is a diff against one obvious file."""
+def test_one_partial_feeds_both_sign_in_pages():
+    """So a change that drops the notice is a diff against one obvious file.
+    (The third page, change_password.html, is gone: Settings → Account.)"""
     partial = ROOT / 'templates' / '_notice_footer.html'
     assert 'notice.required_notice' in partial.read_text(encoding='utf-8')
-    for page in ('login.html', 'register.html', 'change_password.html'):
+    for page in ('login.html', 'register.html'):
         body = (ROOT / 'templates' / page).read_text(encoding='utf-8')
         assert "{% include '_notice_footer.html' %}" in body, page

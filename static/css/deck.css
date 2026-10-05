@@ -1077,14 +1077,6 @@
     }
 }
 
-/* Spec line 275: .tw5-global-menu>button small { margin-left:auto;
-     white-space:nowrap; } -- the app's equivalent trailing note is
-   .account-current (there is no <small> in these rows). */
-#accountDropdownHeader > .account-item .account-current {
-    margin-left: auto;
-    white-space: nowrap;
-}
-
 /* ===========================================================================
    BUCKET S -- session strip, chips and the lifecycle sheet.
    =========================================================================== */
@@ -2527,58 +2519,6 @@
     .session-tabs-row {
         border-top-color: transparent;
     }
-}
-
-/* ── Settings (device-settings.js) ─────────────────────────────────────────
-   Per-device choices that used to be queries in the address, and the
-   scrollback that used to sit in the account menu. Controls are the app's own
-   (.form-control, .checkbox-label, .field-hint); this only groups them. */
-.settings-body {
-    display: flex;
-    flex-direction: column;
-    gap: var(--sp-16);
-}
-
-.settings-group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--sp-12);
-}
-
-/* The group's gap spaces its rows; .form-group's own 20 px margin would add
-   to it. */
-.settings-group .form-group {
-    margin-bottom: 0;
-}
-
-.settings-group + .settings-group {
-    border-top: 1px solid var(--tw-border);
-    padding-top: var(--sp-16);
-}
-
-.settings-group-title {
-    margin: 0;
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--tw-muted);
-}
-
-.settings-inline {
-    display: flex;
-    align-items: center;
-    gap: var(--sp-8);
-    color: var(--tw-muted);
-}
-
-.settings-inline .form-control {
-    width: 8em;
-    text-align: right;
-}
-
-.settings-warning {
-    color: var(--tw-warning);
 }
 
 /* The keyboard log and its screen-diagnostic button (Settings → Diagnostics):

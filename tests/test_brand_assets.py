@@ -14,8 +14,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 ICONS = ROOT / 'static' / 'icons'
-TEMPLATES = ('index.html', 'login.html', 'register.html', 'change_password.html',
-             'admin.html')
+# change_password.html is gone: the form is Settings → Account (2026-10-05).
+TEMPLATES = ('index.html', 'login.html', 'register.html', 'admin.html')
 
 
 def test_the_delivered_artwork_is_vendored():
@@ -56,10 +56,16 @@ def test_every_page_includes_the_symbol_and_uses_it_once():
 
 def test_the_old_glyph_is_no_longer_a_brand_mark():
     """icon-square-terminal stays in the sprite -- profile-manager.js paints an
-    empty pane with it -- but no page may still use it as the logo."""
+    empty pane with it, and Settings marks its Terminal section with it -- but
+    no page may still use it as the logo. Outside Settings' section list it is
+    not in a template at all."""
     for name in TEMPLATES:
         source = (ROOT / 'templates' / name).read_text(encoding='utf-8')
-        assert 'icon-square-terminal' not in source, name
+        for slot in re.finditer(r'class="(?:brand-logo|a5-logo|a5-topbar-logo)[^"]*".*?</span>',
+                                source, flags=re.S):
+            assert 'icon-square-terminal' not in slot.group(0), name
+        outside = re.sub(r'<nav class="sv-nav".*?</nav>', '', source, flags=re.S)
+        assert 'icon-square-terminal' not in outside, name
 
 
 def test_the_favicon_is_valid_xml_and_switches_with_the_os_theme():

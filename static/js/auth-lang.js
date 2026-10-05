@@ -1,5 +1,5 @@
 /*
- * Language selector for the auth pages (login, register, change_password).
+ * Language selector for the auth pages (login, register).
  *
  * This is the SAME behaviour the four auth templates each carried inline
  * before the v5 conversion, extracted once instead of duplicated per page.

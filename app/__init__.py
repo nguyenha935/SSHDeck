@@ -396,51 +396,53 @@ def create_app():
         logout_user()
         return redirect(url_for('login'))
 
-    @app.route('/change-password', methods=['GET', 'POST'])
+    @app.route('/change-password')
     @login_required
     def change_password():
-        if request.method == 'POST':
-            client_ip = get_client_ip()
-            if config.RATELIMIT_ENABLED and check_rate_limit(
-                client_ip,
-                'change_password',
-                config.RATELIMIT_LOGIN_LIMIT
-            ):
-                log_rate_limit_exceeded('change_password', client_ip, user=current_user.username)
-                flash('Too many attempts. Please try again later.', 'error')
-                settings = get_user_settings(current_user.id)
-                theme = settings.get('theme', 'glass')
-                return render_template('change_password.html', lang=reader_language(), theme=theme)
+        # The form is Settings → Account now (owner ruling 2026-10-05: one
+        # Settings in the app). Old bookmarks land there.
+        return redirect(url_for('index') + '#settings/account')
 
-            current_password = request.form.get('current_password', '')
-            new_password = request.form.get('new_password', '')
-            confirm_password = request.form.get('confirm_password', '')
+    @app.route('/api/account/password', methods=['POST'])
+    @login_required
+    def account_change_password():
+        """Change the signed-in user's password (Settings → Account).
 
-            if not current_user.check_password(current_password):
-                flash('Current password is incorrect', 'error')
-            elif new_password != confirm_password:
-                flash('New passwords do not match', 'error')
-            elif len(new_password) < config.MIN_PASSWORD_LENGTH:
-                flash(
-                    f'New password must be at least {config.MIN_PASSWORD_LENGTH} characters',
-                    'error'
-                )
-            elif password_exceeds_bcrypt_limit(new_password):
-                flash(
-                    f'New password must not exceed {config.MAX_PASSWORD_LENGTH} bytes when encoded as UTF-8',
-                    'error'
-                )
-            elif current_user.check_password(new_password):
-                flash('New password must be different from current password', 'error')
-            else:
-                current_user.set_password(new_password)
-                db.session.commit()
-                log_password_change(current_user.username, True, get_client_ip())
-                flash('Password updated successfully', 'success')
-                return redirect(url_for('index'))
-        settings = get_user_settings(current_user.id)
-        theme = settings.get('theme', 'glass')
-        return render_template('change_password.html', lang=reader_language(), theme=theme)
+        The checks, their order, the rate limit and the audit record are the
+        ones the /change-password form had. A refusal names the field and a
+        reason code; the page words it in the reader's language.
+        """
+        client_ip = get_client_ip()
+        if config.RATELIMIT_ENABLED and check_rate_limit(
+                client_ip, 'change_password', config.RATELIMIT_LOGIN_LIMIT):
+            log_rate_limit_exceeded('change_password', client_ip, user=current_user.username)
+            return jsonify({'error': 'rate_limited'}), 429
+
+        data = request.get_json(silent=True) or {}
+        current_password = data.get('current_password')
+        new_password = data.get('new_password')
+        confirm_password = data.get('confirm_password')
+        if not all(isinstance(v, str) for v in (current_password, new_password, confirm_password)):
+            return jsonify({'error': 'invalid'}), 400
+
+        def refuse(field, reason, **extra):
+            return jsonify({'field': field, 'error': reason, **extra}), 400
+
+        if not current_user.check_password(current_password):
+            return refuse('current_password', 'incorrect')
+        if new_password != confirm_password:
+            return refuse('confirm_password', 'mismatch')
+        if len(new_password) < config.MIN_PASSWORD_LENGTH:
+            return refuse('new_password', 'too_short', min=config.MIN_PASSWORD_LENGTH)
+        if password_exceeds_bcrypt_limit(new_password):
+            return refuse('new_password', 'too_long', max=config.MAX_PASSWORD_LENGTH)
+        if current_user.check_password(new_password):
+            return refuse('new_password', 'unchanged')
+
+        current_user.set_password(new_password)
+        db.session.commit()
+        log_password_change(current_user.username, True, client_ip)
+        return jsonify({'ok': True})
 
     from .decorators import admin_required
     from .models import User

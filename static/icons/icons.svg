@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg">
 <!--
-  SSHDeck icon sprite - 67 Lucide glyphs (ISC).
+  SSHDeck icon sprite - 68 Lucide glyphs (ISC).
   Source: lucide-static 1.28.0, sprite.svg, subset to icons actually referenced
   by this app plus every icon in the authoritative v5 mockup
   (docs/spec/sshdeck-ui-plan-v5.html), deduplicated.
@@ -13,9 +13,12 @@
   Required presentation (set in style.css): fill:none; stroke:currentColor;
   stroke-width:2; stroke-linecap:round; stroke-linejoin:round.
 
-  Usage: <svg class="icon" aria-hidden="true"><use href=".../static/icons/icons.svg?v=5#icon-NAME"/></svg>
+  Usage: <svg class="icon" aria-hidden="true"><use href=".../static/icons/icons.svg?v=6#icon-NAME"/></svg>
 -->
   <defs>
+    <symbol id="icon-activity" viewBox="0 0 24 24">
+      <path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2" />
+    </symbol>
     <symbol id="icon-arrow-down" viewBox="0 0 24 24">
       <path d="M12 5v14" />
       <path d="m19 12-7 7-7-7" />

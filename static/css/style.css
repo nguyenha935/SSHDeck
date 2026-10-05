@@ -4788,12 +4788,6 @@ button:focus-visible,
     outline-offset: 2px;
 }
 
-.lang-option:focus-visible,
-.theme-option:focus-visible {
-    outline: none;
-    box-shadow: inset 0 0 0 2px var(--accent-primary);
-}
-
 .btn:active:not(:disabled) {
     transform: translateY(1px) scale(0.98);
     transition: transform 0.1s;
@@ -5008,8 +5002,6 @@ button:focus-visible,
         border-top: none;
     }
 
-    .theme-dropdown-header,
-    .lang-dropdown-header,
     .account-dropdown-header {
         position: fixed;
         left: 16px;
@@ -5019,15 +5011,6 @@ button:focus-visible,
         overflow-y: auto;
     }
 
-    /* Keep the Theme/Language sub-menus inline inside the (fixed) account menu */
-    .account-dropdown-header .theme-dropdown-header,
-    .account-dropdown-header .lang-dropdown-header {
-        position: static;
-        left: auto;
-        right: auto;
-        max-height: none;
-        overflow-y: visible;
-    }
 
     /* Horizontal-only strip. The base .session-tabs rule now pins
        overflow-y:hidden, overscroll-behavior-x:contain and touch-action:pan-x
@@ -5762,34 +5745,6 @@ body.keyboard-open.notepad-focused .notepad-panel {
     border: 1px solid var(--border-color);
 }
 
-.lang-btn-header {
-    min-width: 50px;
-    padding: var(--sp-8) var(--sp-12);
-    position: relative; 
-}
-
-.theme-btn-header {
-    min-width: 120px;
-    padding: var(--sp-8) var(--sp-12);
-    position: relative; 
-}
-
-.theme-btn-header::after,
-.lang-btn-header::after {
-    content: '▼';
-    font-size: 10px;
-    margin-left: var(--sp-6);
-    opacity: 0.6;
-    transition: transform 0.2s ease;
-}
-
-.theme-selector:has(.theme-dropdown-header.show) .theme-btn-header::after,
-.language-selector:has(.lang-dropdown-header.show) .lang-btn-header::after {
-    transform: rotate(180deg);
-}
-
-.theme-selector,
-.language-selector,
 .account-selector {
     position: relative;
     z-index: 10000;
@@ -5874,10 +5829,6 @@ body.keyboard-open.notepad-focused .notepad-panel {
     text-align: center;
 }
 
-.account-expander-label {
-    white-space: nowrap;
-}
-
 .account-caret {
     margin-left: var(--sp-4);
     font-size: 10px;
@@ -5889,100 +5840,10 @@ body.keyboard-open.notepad-focused .notepad-panel {
     transform: rotate(180deg);
 }
 
-.account-expander .account-current {
-    margin-left: auto;
-}
-
-.account-current {
-    font-size: 12px;
-    color: var(--text-muted);
-    max-width: 110px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    display: inline-flex;
-    align-items: center;
-    gap: var(--sp-6);
-}
-
-.account-current-flag {
-    font-size: 16px;
-    overflow: visible;
-}
-
-.account-expander:has(+ .account-submenu.show) .account-caret {
-    transform: rotate(180deg);
-}
-
 .account-divider {
     height: 1px;
     background: var(--border-color);
     margin: var(--sp-6) var(--sp-4);
-}
-
-/* Theme/Language sub-menus rendered inline (accordion) inside the account menu */
-.account-dropdown-header .theme-dropdown-header,
-.account-dropdown-header .lang-dropdown-header {
-    position: static;
-    min-width: 0;
-    width: 100%;
-    background: transparent;
-    backdrop-filter: none;
-    border: none;
-    box-shadow: none;
-    border-radius: 0;
-    padding: 0;
-    margin: 0;
-    z-index: auto;
-}
-
-.account-dropdown-header .theme-option,
-.account-dropdown-header .lang-option {
-    padding-left: 42px;
-    font-size: 13px;
-    border-radius: var(--radius-md);
-}
-
-.lang-dropdown-header {
-    display: none;
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 0;
-    background: var(--bg-modal);
-    backdrop-filter: blur(20px);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-lg), 0 0 40px rgba(0, 0, 0, 0.5); 
-    overflow: visible; 
-    min-width: 180px;
-    z-index: 10001; 
-    pointer-events: auto;
-}
-
-.theme-dropdown-header {
-    display: none;
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 0;
-    background: var(--bg-modal);
-    backdrop-filter: blur(20px);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-lg), 0 0 40px rgba(0, 0, 0, 0.5); 
-    overflow: visible; 
-    min-width: 200px;
-    z-index: 10001; 
-    pointer-events: auto;
-}
-
-.lang-dropdown-header.show {
-    display: block;
-    animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.theme-dropdown-header.show {
-    display: block;
-    animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @keyframes slideDown {
@@ -5994,88 +5855,6 @@ body.keyboard-open.notepad-focused .notepad-panel {
         opacity: 1;
         transform: translateY(0);
     }
-}
-
-.lang-dropdown-header .lang-option {
-    padding: var(--sp-12) var(--sp-16);
-    cursor: pointer;
-    transition: all 0.2s ease; 
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-primary);
-    user-select: none; 
-    border-left: 3px solid transparent; 
-}
-
-.theme-dropdown-header .theme-option {
-    padding: var(--sp-12) var(--sp-16);
-    cursor: pointer;
-    transition: all 0.2s ease; 
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-primary);
-    user-select: none; 
-    border-left: 3px solid transparent; 
-}
-
-@media (hover: hover) {
-    .lang-dropdown-header .lang-option:hover {
-        background: var(--bg-hover);
-        border-left-color: var(--accent-primary);
-    }
-}
-
-.lang-dropdown-header .lang-option:active {
-    background: var(--bg-hover);
-    border-left-color: var(--accent-primary);
-}
-
-@media (hover: hover) {
-    .theme-dropdown-header .theme-option:hover {
-        background: var(--bg-hover);
-        border-left-color: var(--accent-primary);
-    }
-}
-
-.theme-dropdown-header .theme-option:active {
-    background: var(--bg-hover);
-    border-left-color: var(--accent-primary);
-}
-
-.lang-dropdown-header .lang-option.active {
-    background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
-    color: var(--accent-on-text);
-    border-left-color: var(--accent-on-text);
-}
-
-.theme-dropdown-header .theme-option.active {
-    background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
-    color: var(--accent-on-text);
-    border-left-color: var(--accent-on-text);
-}
-
-.theme-color-dot {
-    display: inline-block;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    margin-right: var(--sp-10);
-    vertical-align: middle;
-    box-shadow: 0 0 4px rgba(0, 0, 0, 0.3), inset 0 1px 2px rgba(255, 255, 255, 0.3);
-}
-
-/* A light theme's swatch is a pale colour on a pale dropdown, so without an
-   outline it reads as an empty gap where the other nine show a dot.
-   header-menus.js used to write `border:1px solid #666` inline for exactly this;
-   the colour belongs here, where it can follow the theme. */
-.theme-color-dot.is-light {
-    border: 1px solid var(--border-hover);
-}
-
-.theme-btn-header .theme-color-dot {
-    width: 10px;
-    height: 10px;
-    margin-right: var(--sp-8);
 }
 
 .pane-assignment-info {
@@ -7837,45 +7616,8 @@ body:has(.main-content) .command-rail {
     background: var(--chrome-tint);
 }
 
-.account-expander-label {
-    color: var(--chrome-text-2);
-}
-
-.account-current {
-    color: var(--chrome-navy);
-}
-
 .account-divider {
     background: var(--chrome-hairline);
-}
-
-.theme-option,
-.lang-option {
-    border-radius: var(--chrome-radius-control);
-    color: var(--chrome-text);
-}
-
-@media (hover: hover) {
-    .theme-option:hover,
-    .lang-option:hover {
-        background: var(--chrome-tint);
-    }
-}
-
-.theme-option:active,
-.lang-option:active {
-    background: var(--chrome-tint);
-}
-
-.theme-option.active,
-.lang-option.active {
-    background: var(--chrome-tint);
-    color: var(--chrome-primary);
-}
-
-.theme-dropdown-header::-webkit-scrollbar-thumb,
-.lang-dropdown-header::-webkit-scrollbar-thumb {
-    background: var(--chrome-border-card);
 }
 
 .modal-content {

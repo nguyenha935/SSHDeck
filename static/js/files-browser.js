@@ -1557,6 +1557,9 @@
                 this.skipPop = false;
                 return;
             }
+            // Its own entry is still the current one: Back spent an entry
+            // above it (Settings, opened over the browser), not this one.
+            if (history.state?.filesBrowser) return;
             if (!this.backArmed) return;
             this.backArmed = false;           // Back spent the entry
             if (!this.expanded) return;

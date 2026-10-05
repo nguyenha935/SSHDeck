@@ -898,7 +898,7 @@ console.log('\n--- CONTRACT 2b: P1-LAND SHORT LANDSCAPE TOUCH WORKFLOW (926x428)
 // The fixed-frame contract is tier-independent: html/body lock, pane/grid/
 // wrapper overflow, and the wrapper's scrollLeft===0 invariant must hold at
 // 390x600, 390x844, 926x428 AND desktop 1280x800 (no touch there). Then a
-// REAL settings roundtrip (More sheet → theme change → close) must leave the
+// REAL settings roundtrip (More sheet → Settings → theme → close) must leave the
 // terminal frame geometry byte-identical — root-cause matrix G8/P9a's
 // "settings→terminal round-trip frame stability".
 console.log('\n--- CONTRACT 2c: P1-2 FRAME CASCADE ALL TIERS + SETTINGS ROUNDTRIP ---');
@@ -997,9 +997,10 @@ console.log('\n--- CONTRACT 2c: P1-2 FRAME CASCADE ALL TIERS + SETTINGS ROUNDTRI
     }
 
     // Settings → terminal ROUNDTRIP at the two portrait tiers (touch): open the
-    // More sheet via its production trigger, change the theme through the
-    // sheet's real theme dropdown, close, and compare terminal frame geometry
-    // byte-for-byte against the pre-roundtrip capture.
+    // More sheet via its production trigger, Settings from it, change the theme
+    // in its Appearance section, close, and compare terminal frame geometry
+    // byte-for-byte against the pre-roundtrip capture. The view covers the
+    // whole phone screen, so this is also the proof that it resizes nothing.
     for (const tier of [{ label: 'phone390x600', w: 390, h: 600 },
                         { label: 'phone390x844', w: 390, h: 844 }]) {
         const ctx = await browser.newContext({
@@ -1042,32 +1043,29 @@ console.log('\n--- CONTRACT 2c: P1-2 FRAME CASCADE ALL TIERS + SETTINGS ROUNDTRI
 
         const before = await frame();
         const rt = await page.evaluate(async () => {
-            const out = { sheetOpened: false, themeChanged: false, sheetClosed: false };
+            const out = { sheetOpened: false, settingsOpened: false, themeChanged: false,
+                closed: false };
             const btn = document.getElementById('mobileMoreBtn');
             if (btn) btn.click();
             await new Promise(r => setTimeout(r, 250));
             const sheet = document.getElementById('mobileMoreSheet');
             out.sheetOpened = !!(sheet && !sheet.hidden);
-            // Real theme change through the sheet's hosted tree.
-            const dropdown = document.getElementById('themeDropdownHeader');
-            const trigger = dropdown && dropdown.previousElementSibling;
-            if (trigger) trigger.click();
+            // Settings from the sheet's hosted tree; the sheet closes behind it.
+            document.getElementById('settingsBtn')?.click();
+            await new Promise(r => setTimeout(r, 250));
+            const view = document.getElementById('settingsView');
+            out.settingsOpened = !!(view && !view.hidden && sheet && sheet.hidden);
+            view?.querySelector('.sv-nav-item[data-section="appearance"]')?.click();
             await new Promise(r => setTimeout(r, 120));
-            const option = dropdown
-                && dropdown.querySelector('.theme-option:not(.active)');
+            const option = view?.querySelector('.sv-theme[aria-checked="false"]');
             if (option) {
                 option.click();
                 out.themeChanged = true;
                 out.theme = option.dataset.themeId || null;
             }
-            const dd = document.getElementById('themeDropdownHeader');
-            if (dd && dd.classList.contains('show')) {
-                document.body.click();
-                await new Promise(r => setTimeout(r, 80));
-            }
-            if (btn) btn.click();
+            view?.querySelector('.sv-main [data-act="close"]')?.click();
             await new Promise(r => setTimeout(r, 250));
-            out.sheetClosed = !!(sheet && sheet.hidden);
+            out.closed = !!(view && view.hidden);
             out.themeAttr = document.body.getAttribute('data-theme');
             return out;
         });
@@ -1075,11 +1073,13 @@ console.log('\n--- CONTRACT 2c: P1-2 FRAME CASCADE ALL TIERS + SETTINGS ROUNDTRI
 
         check(`P1-2c ${tier.label}: settings roundtrip — sheet opened via production trigger`,
             rt.sheetOpened, `sheetOpened=${rt.sheetOpened}`);
-        check(`P1-2c ${tier.label}: settings roundtrip — theme really changed through the sheet`,
+        check(`P1-2c ${tier.label}: settings roundtrip — Settings opened from the sheet`,
+            rt.settingsOpened, `settingsOpened=${rt.settingsOpened}`);
+        check(`P1-2c ${tier.label}: settings roundtrip — theme really changed in Settings`,
             rt.themeChanged && rt.themeAttr === rt.theme,
             `changed=${rt.themeChanged} attr=${rt.themeAttr} want=${rt.theme}`);
-        check(`P1-2c ${tier.label}: settings roundtrip — sheet closed back to terminal`,
-            rt.sheetClosed, `sheetClosed=${rt.sheetClosed}`);
+        check(`P1-2c ${tier.label}: settings roundtrip — Settings closed back to terminal`,
+            rt.closed, `closed=${rt.closed}`);
         check(`P1-2c ${tier.label}: settings roundtrip — terminal frame geometry byte-identical`,
             JSON.stringify(before.pane) === JSON.stringify(after.pane)
                 && JSON.stringify(before.wrapper) === JSON.stringify(after.wrapper)

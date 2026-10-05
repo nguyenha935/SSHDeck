@@ -210,7 +210,6 @@ const server = await new Promise(resolve => {
             '/login': 'templates/login.html',
             '/register': 'templates/register.html',
             '/admin': 'templates/admin.html',
-            '/change_password': 'templates/change_password.html',
         };
         if (PAGES[rel]) {
             res.writeHead(200, { 'Content-Type': MIME['.html'] });
@@ -1000,7 +999,7 @@ async function snap(page, errors, name) {
      */
     if (name.startsWith('21-') || name.startsWith('22-')
             || name.startsWith('23-') || name.startsWith('24-')
-            || name.startsWith('27-') || name.startsWith('31-theme-')) {
+            || name.startsWith('31-theme-')) {
         await page.evaluate(async () => {
             const target = document.activeElement instanceof HTMLElement
                 ? document.activeElement : document.querySelector('[autofocus]');
@@ -1967,6 +1966,24 @@ await shell('20-command-rail-desktop', 'desktop', async (page, shotName) => {
     if (!await trustedClick(page, '#commandLibraryBtn', shotName)) return;
     await waitForVisibleState(page, '#commandRail', shotName);
 });
+/*
+ * Settings took over from the change-password page that shot 27 used to show.
+ * Reached the way a user reaches it: the account menu on a desktop, the one
+ * touch menu on a phone.
+ */
+const openSettings = async (page, shotName) => {
+    const touchShell = await page.evaluate(() => TerminalManager.isTouchShell());
+    if (touchShell) {
+        if (!await openTouchMenu(page, shotName)) return;
+        if (!await trustedTap(page, '#settingsBtn', shotName)) return;
+    } else {
+        if (!await trustedClick(page, '#accountBtnHeader', shotName)) return;
+        if (!await trustedClick(page, '#settingsBtn', shotName)) return;
+    }
+    await waitForVisibleState(page, '#settingsView', shotName);
+};
+await shell('27-settings-desktop', 'desktop', openSettings);
+await shell('27a-settings-phone390', 'phone390', openSettings);
 
 // ── Auth / admin pages ──────────────────────────────────────────────────────
 for (const [name, p, vpKey] of [
@@ -1976,7 +1993,6 @@ for (const [name, p, vpKey] of [
     ['24-register-phone390', '/register', 'phone390'],
     ['25-admin-desktop', '/admin', 'desktop'],
     ['26-admin-phone390', '/admin', 'phone390'],
-    ['27-change-password-desktop', '/change_password', 'desktop'],
 ]) {
     const [w, h, touch] = VP[vpKey];
     const { ctx, page, errors } = await open(w, h, { touch, page: p });

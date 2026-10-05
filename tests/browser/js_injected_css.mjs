@@ -111,7 +111,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
 {
     console.log('--- the CSS no longer ships from JavaScript ---');
     const files = ['sftp-file-manager.js', 'files-browser.js', 'perf-probe.js', 'session-manager.js',
-                   'header-menus.js', 'app.js', 'device-settings.js'];
+                   'header-menus.js', 'app.js', 'device-settings.js', 'settings-view.js'];
     for (const f of files) {
         const src = fs.readFileSync(path.join(ROOT, 'static/js', f), 'utf8');
         check(`${f}: no <style> element built at runtime`,
@@ -124,9 +124,13 @@ const base = `http://127.0.0.1:${server.address().port}`;
     // index.html pins a version on.
     const css = fs.readFileSync(path.join(ROOT, 'static/css/style.css'), 'utf8');
     for (const cls of ['.upload-progress-notification', '.drop-overlay',
-                       '.session-overlay-tmux', '.theme-color-dot.is-light']) {
+                       '.session-overlay-tmux']) {
         check(`style.css declares ${cls}`, css.includes(`${cls} {`), true);
     }
+    // The light theme's swatch outline, once an inline border written by the
+    // account menu's theme picker, went with the picker to Settings.
+    check('settings.css declares .sv-swatch.is-light',
+        fs.readFileSync(path.join(ROOT, 'static/css/settings.css'), 'utf8').includes('.sv-swatch.is-light {'), true);
 
     /*
      * The retired module's own rules must be gone, not relocated: a selector
@@ -193,7 +197,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v75: a checkbox or radio row in a form group is a flex row again
         // (it had lost to the caption rule), and touch fields are 44 px at
         // 16 px at every width. A cached v74 keeps the text under the box.
-        ['css/style.css', 75],
+        ['css/style.css', 76],
         // deck.css owns the v5 shell and is edited every bucket, so it needs the
         // same pin contract as style.css. It was missing from this table -- which
         // is exactly the "no pin at all" failure described above.
@@ -205,12 +209,14 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // button take their look from the theme.
         // v43: the Settings rows' own flex, bleed and touch sizes are gone;
         // style.css v75 gives every dialog the same.
-        ['css/deck.css', 43],
+        ['css/deck.css', 44],
         ['css/deck-tokens.css', 1],
         // v9: the panel head gains the Files browser's Expand control.
         ['css/sftp-file-manager.css', 9],
         // v2: the menu is as tall as the room under its control.
         ['css/files-browser.css', 2],
+        // New: Settings (owner ruling 2026-10-05).
+        ['css/settings.css', 1],
         // v28: owner batch (terminal-manager untouched by P1 D1-D3,
         // re-pinned to the served version).
         // v29: P1 steps S1/S3-S8 -- strict scrollback sanitizer, wheel sign fix,
@@ -422,16 +428,18 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v97: a column change, a grow included, stays covered until the
         // repaint has been quiet (omp replays its transcript after a settle).
         // v102: the renderer and the diagnostics follow Settings, live.
-        ['js/terminal-manager.js', 102],
+        ['js/terminal-manager.js', 103],
         // v18: the Files browser hooks (expand, delegated render and menu).
         // v20: the quick-connect captions mark the required fields.
         ['js/sftp-file-manager.js', 20],
         // v2: the control that opened a menu closes it; Upload / Download in
         // the phone's menu.
-        ['js/files-browser.js', 2],
+        ['js/files-browser.js', 3],
         // v3: started and stopped by the Settings toggle.
         ['js/perf-probe.js', 3],
-        ['js/device-settings.js', 1],
+        // v2: the dialog binding moved to settings-view.js.
+        ['js/device-settings.js', 2],
+        ['js/settings-view.js', 1],
         // v11: S17 FIX 4d completion -- the insert-at-prompt write routes through
         // window.emitTerminalInput, so it is no longer swallowed by tmux copy
         // mode. v10 is RELEASED, so the pin must move or the fix ships invisibly.
@@ -628,10 +636,11 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v97: wakeSocket leaves a socket that is still connecting alone.
         // v101: a socket error the Files UI toasts itself is not toasted twice.
         // v102: scrollback moved into Settings.
-        ['js/app.js', 102],
+        ['js/app.js', 103],
         // v9: 0209f10 raise. v10: P1 D2 trigger-anchored More-sheet position
         // (top = trigger.bottom+1, bottom auto, measured maxHeight) — Entry 27 R4.
-        ['js/header-menus.js', 13],
+        // v14: the theme and language pickers moved to Settings.
+        ['js/header-menus.js', 14],
         // The touch global/action row module. Added at v=1 and pinned here like
         // every other production asset; bumped on each change since.
         // v8: W14 item 7 — SECONDARY drops the strip-owned newConnectionBtn.

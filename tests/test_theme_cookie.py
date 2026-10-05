@@ -67,7 +67,8 @@ def test_the_app_page_hands_the_saved_theme_to_the_browser(app, client):
 
 
 def test_the_picker_writes_the_cookie():
-    source = (ROOT / 'static' / 'js' / 'header-menus.js').read_text(encoding='utf-8')
+    # The picker is Settings → Appearance since 2026-10-05.
+    source = (ROOT / 'static' / 'js' / 'settings-view.js').read_text(encoding='utf-8')
     block = source[source.index('function applyTheme(themeId)'):]
     block = block[:block.index('\n    }')]
     assert 'document.cookie' in block

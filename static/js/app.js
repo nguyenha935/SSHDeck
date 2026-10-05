@@ -4427,8 +4427,8 @@
             { labelKey: 'commands.library', hint: 'F1', action: () => CommandLibrary.openLibrary({ focusSearch: true }) },
             { labelKey: 'files.fileTransfer', hint: '', action: () => document.getElementById('fileTransferBtn').click() },
             { labelKey: 'keys.manageKeys', hint: '', action: () => document.getElementById('manageKeysBtn').click() },
-            { labelKey: 'auth.changePassword', hint: '', action: () => document.getElementById('changePasswordBtn').click() },
-            { labelKey: 'settings.title', hint: '', action: () => document.getElementById('settingsBtn').click() },
+            { labelKey: 'auth.changePassword', hint: '', action: () => window.SettingsView?.open('account') },
+            { labelKey: 'settings.title', hint: '', action: () => window.SettingsView?.open() },
             { labelKey: 'terminal.saveTranscript', hint: '', action: () => document.getElementById('saveTranscriptBtn').click() },
             { labelKey: 'shortcuts.title', hint: 'Ctrl+?', action: () => openShortcuts() }
         ];
@@ -4993,13 +4993,6 @@
                 window.JumpHostManager.save(name, host, port, username, authType, keyId);
             }
         });
-
-        const changePasswordBtn = document.getElementById('changePasswordBtn');
-        if (changePasswordBtn) {
-            changePasswordBtn.addEventListener('click', () => {
-                window.location.href = APP_ROOT + '/change-password';
-            });
-        }
 
         // Scrollback lines setting
         const scrollbackInput = document.getElementById('scrollbackInput');

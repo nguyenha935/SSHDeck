@@ -6,6 +6,9 @@ onclick= attributes. Inline script cannot be cache-busted -- it ships inside the
 cached HTML, so a browser holding a stale page holds stale handlers -- and inline
 onclick= forces every handler to be a window global.
 
+The theme and language pickers moved to Settings on 2026-10-05
+(static/js/settings-view.js); the rows about them read that file now.
+
 These are static checks over the extracted file and the template. The behaviour
 that a static check cannot see (a click actually opening the menu, a theme
 actually applying) is measured in tests/browser/header_menus.mjs.
@@ -14,6 +17,7 @@ import re
 from pathlib import Path
 
 HEADER_MENUS = Path('static/js/header-menus.js')
+SETTINGS_VIEW = Path('static/js/settings-view.js')
 INDEX = Path('templates/index.html')
 STYLE = Path('static/css/style.css')
 
@@ -30,6 +34,10 @@ def _js_code() -> str:
     uses them for every load-bearing note.
     """
     return re.sub(r'/\*.*?\*/', '', _js(), flags=re.S)
+
+
+def _settings_js() -> str:
+    return SETTINGS_VIEW.read_text(encoding='utf-8')
 
 
 def _html() -> str:
@@ -60,7 +68,7 @@ def test_extracted_file_is_loaded_and_pinned():
     assert html.count("filename='js/header-menus.js'") == 1
     tag_start = html.index("filename='js/header-menus.js'")
     tag = html[tag_start:html.index('>', tag_start)]
-    assert '?v=13' in tag, 'header-menus.js must use the current production cache pin'
+    assert '?v=14' in tag, 'header-menus.js must use the current production cache pin'
 
 
 def test_every_theme_in_the_picker_has_a_stylesheet_block():
@@ -69,7 +77,7 @@ def test_every_theme_in_the_picker_has_a_stylesheet_block():
     `glass` is the exception and is asserted separately below: it has no
     [data-theme="glass"] block because it IS :root.
     """
-    js = _js()
+    js = _settings_js()
     css = STYLE.read_text(encoding='utf-8')
     ids = [line.split("id: '")[1].split("'")[0]
            for line in js.splitlines() if "{ id: '" in line]
@@ -83,7 +91,7 @@ def test_glass_is_the_default_and_is_root_not_a_data_theme_block():
     css = STYLE.read_text(encoding='utf-8')
     assert '[data-theme="glass"]' not in css
     assert "data-theme=\"{{ theme|default('glass') }}\"" in _html()
-    assert "|| 'glass'" in _js(), 'the picker must fall back to the default theme'
+    assert "|| 'glass'" in _settings_js(), 'the picker must fall back to the default theme'
 
 
 def test_apply_theme_stays_global_and_repaints_the_terminals():
@@ -94,9 +102,11 @@ def test_apply_theme_stays_global_and_repaints_the_terminals():
     that call leaves the page themed and every terminal on the old palette, which
     no CSS test would catch.
     """
-    js = _js()
+    js = _settings_js()
     assert 'window.applyTheme = applyTheme' in js
-    assert 'TerminalManager.applyThemeToAll()' in js
+    block = js[js.index('function applyTheme(themeId)'):]
+    block = block[:block.index('\n    }')]
+    assert 'TerminalManager?.applyThemeToAll?.()' in block
 
 
 def test_account_menu_closes_on_actions_but_not_on_the_expanders():
@@ -107,14 +117,15 @@ def test_account_menu_closes_on_actions_but_not_on_the_expanders():
 
 
 def test_option_clicks_are_delegated_not_bound_per_option():
-    """Both lists are rebuilt with innerHTML on every init.
+    """The theme list is rebuilt each time Settings opens.
 
     A per-option listener would need re-attaching after each rebuild, which is
-    how you end up with dead options or handlers stacked two deep.
+    how you end up with dead options or handlers stacked two deep. The language
+    is a <select>, which has no per-option listener to get wrong.
     """
-    js = _js()
-    assert "closest('.theme-option')" in js
-    assert "closest('.lang-option')" in js
+    js = _settings_js()
+    assert "closest('.sv-theme')" in js
+    assert "byId('languageSelect')?.addEventListener('change'" in js
     assert '.onclick =' not in js, 'use addEventListener, not .onclick ='
 
 
@@ -129,13 +140,21 @@ def test_the_two_reattached_buttons_have_a_binding_somewhere():
     assert "getElementById('reloadPageBtn')" in app
 
 
-def test_expanders_carry_ids_so_handlers_need_not_live_in_the_markup():
+def test_the_pickers_live_in_settings_not_in_the_menu():
+    """Owner ruling 2026-10-05: one Settings. The account menu's two expanders
+    are gone from the markup and from this file, and the controls that replace
+    them carry ids Settings binds by, so no handler lives in the markup."""
     html = _html()
-    assert 'id="themeExpanderHeader"' in html
-    assert 'id="langExpanderHeader"' in html
-    js = _js()
-    assert "byId('themeExpanderHeader')" in js
-    assert "byId('langExpanderHeader')" in js
+    js_code = _js_code()
+    for gone in ('themeExpanderHeader', 'langExpanderHeader',
+                 'themeDropdownHeader', 'langDropdownHeader'):
+        assert f'id="{gone}"' not in html, gone
+        assert gone not in js_code, gone
+    assert html.count('id="themeOptions"') == 1
+    assert html.count('id="languageSelect"') == 1
+    js = _settings_js()
+    assert "byId('themeOptions')" in js
+    assert "byId('languageSelect')" in js
 
 
 def test_mobile_more_settings_structure_and_lifecycle_ownership():

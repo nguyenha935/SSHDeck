@@ -1,6 +1,5 @@
 /*
- * The header account menu: theme picker, language picker, and the account
- * dropdown that holds them.
+ * The header account menu, and the touch More sheet that hosts it.
  *
  * This was 146 lines of inline <script> in templates/index.html, driven by five
  * inline onclick= attributes. It moved out for three reasons, none cosmetic:
@@ -14,12 +13,10 @@
  *     controls. Handlers written into the markup have to be edited in lockstep
  *     with it; handlers bound by id or by delegation survive the move.
  *
- * Behaviour is deliberately unchanged. The open/close semantics below are the
- * ones that shipped, including the part that is easy to "tidy" wrongly: a click
- * inside the account dropdown closes it only when it lands on .account-action
- * (Admin / Change Password / Logout). The Theme and Language rows are
- * .account-expander and toggle a sub-section in place, so closing on those would
- * shut the menu the moment you tried to pick a theme.
+ * A click inside the account dropdown closes it only when it lands on
+ * .account-action; the identity block at its top is not one. The theme and
+ * language pickers it used to expand in place moved to Settings
+ * (settings-view.js, owner ruling 2026-10-05).
  */
 (function () {
     'use strict';
@@ -27,23 +24,6 @@
     // Module-scoped MutationObserver for sessionBar visibility tracking.
     // Disconnected before creating a new one (re-init guard) and on page unload.
     let sessionBarObserver = null;
-
-    // Theme ids must match the [data-theme] blocks in static/css/style.css.
-    // `glass` has no block of its own -- it IS :root, which is why it is also
-    // the default below. The colour is the swatch dot, not a token: it only has
-    // to identify the theme in the list.
-    const THEMES = [
-        { id: 'glass', name: 'Glass Ops', color: '#58a6ff' },
-        { id: 'retro', name: 'Retro Future', color: '#ffb454' },
-        { id: 'solar', name: 'Solar Drift', color: '#6ea8ff' },
-        { id: 'paper', name: 'Paper Ops', color: '#c77d48', light: true },
-        { id: 'noir', name: 'Noir Terminal', color: '#7f91ff' },
-        { id: 'arctic-ice', name: 'Arctic Ice', color: '#06b6d4' },
-        { id: 'rose-gold', name: 'Rose Gold', color: '#f43f5e' },
-        { id: 'cyberpunk-neon', name: 'Cyberpunk Neon', color: '#d946ef' },
-        { id: 'emerald-matrix', name: 'Emerald Matrix', color: '#10b981' },
-        { id: 'obsidian', name: 'Obsidian', color: '#ffffff' }
-    ];
 
     const byId = id => document.getElementById(id);
     let initialized = false;
@@ -85,20 +65,6 @@
         element.hidden = inactive;
         element.toggleAttribute('inert', inactive);
         element.setAttribute('aria-hidden', String(inactive));
-    }
-
-    function setThemeDropdownOpen(open) {
-        const dropdown = byId('themeDropdownHeader');
-        dropdown?.classList.toggle('show', open);
-        dropdown?.setAttribute('aria-hidden', String(!open));
-        setExpanded('themeExpanderHeader', open);
-    }
-
-    function setLangDropdownOpen(open) {
-        const dropdown = byId('langDropdownHeader');
-        dropdown?.classList.toggle('show', open);
-        dropdown?.setAttribute('aria-hidden', String(!open));
-        setExpanded('langExpanderHeader', open);
     }
 
     function setAccountDropdownOpen(open) {
@@ -226,38 +192,10 @@
      * HostAccountDropdown and the close path is restoreAccountDropdown.
      */
 
-    function closeThemeDropdown() {
-        setThemeDropdownOpen(false);
-    }
-
-    function closeLangDropdown() {
-        setLangDropdownOpen(false);
-    }
-
-    function toggleThemeDropdown(event) {
-        if (event) {
-            event.stopPropagation();
-        }
-        closeLangDropdown();
-        const dropdown = byId('themeDropdownHeader');
-        setThemeDropdownOpen(!dropdown?.classList.contains('show'));
-    }
-
-    function toggleLangDropdown(event) {
-        if (event) {
-            event.stopPropagation();
-        }
-        closeThemeDropdown();
-        const dropdown = byId('langDropdownHeader');
-        setLangDropdownOpen(!dropdown?.classList.contains('show'));
-    }
-
     function toggleAccountDropdown(event) {
         if (event) {
             event.stopPropagation();
         }
-        closeThemeDropdown();
-        closeLangDropdown();
         const dropdown = byId('accountDropdownHeader');
         setAccountDropdownOpen(!dropdown?.classList.contains('show'));
     }
@@ -270,8 +208,6 @@
     function restoreAccountDropdown() {
         const dropdown = byId('accountDropdownHeader');
         const marker = byId('accountDropdownRestoreMarker');
-        closeThemeDropdown();
-        closeLangDropdown();
         setAccountDropdownOpen(false);
         if (dropdown && marker && marker.nextElementSibling !== dropdown) {
             marker.after(dropdown);
@@ -283,8 +219,8 @@
      *
      * This is a MOVE, not a clone: appendChild reparents the live
      * #accountDropdownHeader, so every control inside it -- Profiles, File
-     * Transfer, theme, language, scrollback, keys, jump hosts, admin, change
-     * password, logout -- exists exactly once in the document and keeps the
+     * Transfer, Settings, keys, jump hosts, admin, logout -- exists exactly
+     * once in the document and keeps the
      * Listener that was bound to it at startup. restoreAccountDropdown puts it
      * back after its marker in .account-selector on close, which is why the
      * desktop account button keeps working after any number of touch opens.
@@ -355,161 +291,11 @@
         }
     }
 
-    function updateCurrentThemeLabel(name, color) {
-        const label = byId('currentThemeLabel');
-        if (!label) {
-            return;
-        }
-        if (color) {
-            label.innerHTML =
-                `<span class="theme-color-dot" style="background:${color}"></span>${name}`;
-        } else {
-            label.textContent = name;
-        }
-    }
-
-    /*
-     * Exported as a window global on purpose: it is the one function here with
-     * callers outside this file's own markup, and the terminal colour contract
-     * runs through it. TerminalManager reads --term-* and --accent-* out of CSS
-     * With getCssVar (terminal-manager.js), so a theme change only reaches the
-     * Xterm instances via applyThemeToAll below -- dropping that call leaves
-     * the page themed and every terminal on the old palette.
-     */
-    function applyTheme(themeId) {
-        document.body.setAttribute('data-theme', themeId);
-        if (window.socket) {
-            window.socket.emit('set_theme', { theme: themeId });
-        }
-        /*
-         * And a cookie, because the socket cannot set one and /login renders
-         * before there is a user to look up. Without this the sign-in page is
-         * the one surface that ignores the reader's theme, which is what made
-         * it look like a different product (app/__init__.py, reader_theme).
-         */
-        try {
-            document.cookie = `theme=${themeId}; path=/; max-age=31536000; SameSite=Lax`;
-        } catch (e) {
-            console.error('[SSHDeck] Could not remember the theme:', e);
-        }
-        const dropdown = byId('themeDropdownHeader');
-        if (dropdown) {
-            dropdown.querySelectorAll('.theme-option').forEach(option => {
-                option.classList.toggle('active', option.dataset.themeId === themeId);
-            });
-        }
-        if (window.TerminalManager
-            && typeof TerminalManager.applyThemeToAll === 'function') {
-            TerminalManager.applyThemeToAll();
-        }
-    }
-
-    function initThemeSelector() {
-        const dropdown = byId('themeDropdownHeader');
-        if (!dropdown) {
-            return;
-        }
-        const currentTheme = document.body.getAttribute('data-theme') || 'glass';
-
-        dropdown.innerHTML = '';
-        THEMES.forEach(theme => {
-            const option = document.createElement('div');
-            option.className =
-                'theme-option' + (theme.id === currentTheme ? ' active' : '');
-            // A class rather than an inline border. The swatch for a light theme
-            // needs an outline or it vanishes against a light dropdown; which
-            // colour that outline is belongs to the stylesheet, not here. Only
-            // the swatch colour stays inline, because it is data from THEMES.
-            const dot = 'theme-color-dot' + (theme.light ? ' is-light' : '');
-            option.innerHTML = `<span class="${dot}" `
-                + `style="background:${theme.color}"></span>${theme.name}`;
-            option.dataset.themeId = theme.id;
-            dropdown.appendChild(option);
-        });
-
-        const current = THEMES.find(t => t.id === currentTheme);
-        if (current) {
-            updateCurrentThemeLabel(current.name, current.color);
-        }
-    }
-
-    function updateCurrentLangHeader(lang) {
-        const flag = byId('currentLangFlagHeader');
-        if (flag) {
-            flag.textContent = lang.flag;
-        }
-    }
-
-    function initLanguageSelector() {
-        const dropdown = byId('langDropdownHeader');
-        if (!dropdown || !window.i18n) {
-            return;
-        }
-        const languages = i18n.getLanguages();
-        const currentLang = i18n.getLanguage();
-
-        dropdown.innerHTML = '';
-        languages.forEach(lang => {
-            const option = document.createElement('div');
-            option.className = 'lang-option' + (lang.code === currentLang ? ' active' : '');
-            option.innerHTML = `${lang.flag} ${lang.name}`;
-            option.dataset.langCode = lang.code;
-            dropdown.appendChild(option);
-        });
-
-        const current = languages.find(l => l.code === currentLang);
-        if (current) {
-            updateCurrentLangHeader(current);
-        }
-    }
-
-    /*
-     * Delegated on the two dropdowns rather than bound per option. Both lists
-     * are rebuilt with innerHTML on every init, so a per-option listener would
-     * have to be re-attached after each rebuild -- the classic way to end up
-     * with either dead options or handlers stacked two deep.
-     */
-    function bindDelegatedOptionClicks() {
-        byId('themeDropdownHeader')?.addEventListener('click', event => {
-            const option = event.target.closest('.theme-option');
-            if (!option) {
-                return;
-            }
-            const theme = THEMES.find(t => t.id === option.dataset.themeId);
-            if (!theme) {
-                return;
-            }
-            applyTheme(theme.id);
-            updateCurrentThemeLabel(theme.name, theme.color);
-            toggleThemeDropdown();
-        });
-
-        byId('langDropdownHeader')?.addEventListener('click', event => {
-            const option = event.target.closest('.lang-option');
-            if (!option || !window.i18n) {
-                return;
-            }
-            const lang = i18n.getLanguages().find(l => l.code === option.dataset.langCode);
-            if (!lang) {
-                return;
-            }
-            i18n.setLanguage(lang.code);
-            updateCurrentLangHeader(lang);
-            toggleLangDropdown();
-        });
-    }
-
     function bindTriggers() {
-        setThemeDropdownOpen(
-            byId('themeDropdownHeader')?.classList.contains('show') || false);
-        setLangDropdownOpen(
-            byId('langDropdownHeader')?.classList.contains('show') || false);
         setAccountDropdownOpen(
             byId('accountDropdownHeader')?.classList.contains('show') || false);
 
         byId('accountBtnHeader')?.addEventListener('click', toggleAccountDropdown);
-        byId('themeExpanderHeader')?.addEventListener('click', toggleThemeDropdown);
-        byId('langExpanderHeader')?.addEventListener('click', toggleLangDropdown);
         // ONE trigger for the one canonical menu on touch. The former
         // #mobileSettingsBtn (open the Settings view) and #mobileSettingsBackBtn
         // (go back to the proxy list) bindings are gone with the views they
@@ -517,9 +303,7 @@
         byId('mobileMoreBtn')?.addEventListener('click', toggleMobileMore);
 
         byId('accountDropdownHeader')?.addEventListener('click', event => {
-            // Close on a real action only. .account-expander rows (Theme,
-            // Language) open a sub-section in place; closing on those would shut
-            // the menu the instant you reached for a theme.
+            // Close on a real action only: the identity block is not one.
             if (event.target.closest('.account-action')) {
                 if (accountDropdownIsHosted()) {
                     closeMobileMore({ restoreFocus: false });
@@ -561,12 +345,6 @@
                 return;
             }
 
-            if (!event.target.closest('.language-selector')) {
-                closeLangDropdown();
-            }
-            if (!event.target.closest('.theme-selector')) {
-                closeThemeDropdown();
-            }
             const insideAccount = event.target.closest('.account-selector')
                 || event.target.closest('.mobile-settings-host')
                 // While hosted, the complete Settings surface is account-menu
@@ -648,17 +426,10 @@
             return;
         }
         initialized = true;
-        initThemeSelector();
-        initLanguageSelector();
-        bindDelegatedOptionClicks();
         bindTriggers();
         bindOutsideClick();
         bindMobileLifecycle();
     }
-
-    // Kept global: called from terminal-manager's theme path and by any later
-    // caller that needs to set a theme without going through the menu.
-    window.applyTheme = applyTheme;
 
     /*
      * Teardown entry point; app.js registers it on `pagehide`. It owns

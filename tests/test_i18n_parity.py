@@ -156,8 +156,7 @@ def test_the_engine_carries_no_strings_and_can_fetch_a_locale():
 def test_every_page_loads_english_plus_the_readers_language():
     """The server decides which file the page carries, from the `lang` cookie,
     so a reader never sees English flash before their own language lands."""
-    for name in ('index.html', 'admin.html', 'login.html', 'register.html',
-                 'change_password.html'):
+    for name in ('index.html', 'admin.html', 'login.html', 'register.html'):
         page = Path('templates') / name
         source = page.read_text(encoding='utf-8')
         assert "filename='js/i18n/en.js'" in source, f'{name} must load English'
