@@ -1,24 +1,28 @@
 #!/usr/bin/env python3
 """A stand-in for how the omp CLI answers a resize, for the resize-replay gates.
 
-omp (oh-my-pi, @oh-my-pi/pi-tui 18.3.0) draws on the NORMAL screen, straight
-into the terminal's scrollback, and answers a SIGWINCH with one transaction
-(src/tui.ts, read 2026-09-24):
+omp (oh-my-pi) draws on the NORMAL screen, straight into the terminal's
+scrollback, and answers a SIGWINCH with one transaction. Measured 2026-10-06 on
+omp 18.4.4 under tmux 3.7c (pipe-pane on a copy of a real session):
 
-  1. the first SIGWINCH of a burst enters the alternate screen (1049h) and
-     draws the live viewport there (lines 1490-1551);
-  2. every further SIGWINCH re-arms a 120 ms settle window
-     (RESIZE_VIEWPORT_SETTLE_MS, line 837);
+  1. the first SIGWINCH of a burst enters the alternate screen (1049h, at
+     2 ms) and draws the live viewport there (6 ms);
+  2. every further SIGWINCH re-arms a 120 ms settle window;
   3. once quiet it leaves the alternate screen (1049l) and asks where the
-     cursor is (CSI 6n), waiting up to 200 ms for the answer
-     (RESIZE_PROBE_TIMEOUT_MS, line 839);
-  4. if the WIDTH changed it replays the whole transcript at the new width
-     below what is on screen (#prepareResizeReplay, lines 2691-2722); a
-     height-only change repaints the viewport alone.
+     cursor is (CSI 6n), both at 123 ms, waiting up to 200 ms for the answer;
+  4. it then clears the screen AND the scrollback (2J 3J) and replays its whole
+     transcript at the current size, at 267 ms -- the time in between is the
+     rebuild being computed. This happens on EVERY size change, rows as well as
+     columns: `tui.resizeScrollback` defaults to "rebuild", and #ls(cols, rows)
+     rebuilds for any change unless it is "preserve". 18.3.0 replayed on a
+     change of width only, which is what this file reproduced until then.
 
 Step 4 is what a person sees as the screen running from the top of the
 conversation down to the prompt. Only the escape sequences and their timing
-are reproduced; nothing here is an agent.
+are reproduced; nothing here is an agent. The replay is written in 8 KB pieces,
+as omp's were; FAKE_OMP_PAUSE_MS holds the replay that long halfway through, as
+omp does when the terminal is behind (#Lt waits on pendingOutputBytes; pauses of
+174-602 ms were measured).
 
 Every transaction is appended to $FAKE_OMP_LOG (one JSON line) so a gate can
 count replays. Ctrl-C exits.
@@ -35,6 +39,9 @@ import tty
 
 SETTLE = 0.12
 PROBE_TIMEOUT = 0.2
+REBUILD = 0.14
+CHUNK = 8190
+PAUSE = int(os.environ.get('FAKE_OMP_PAUSE_MS', '0')) / 1000
 HISTORY = int(os.environ.get('FAKE_OMP_HISTORY', '400'))
 LOG = os.environ.get('FAKE_OMP_LOG', '/tmp/fake_omp_resize.log')
 WORDS = ('the pane replays every committed row at the new width so the '
@@ -55,8 +62,14 @@ def viewport(cols):
     return [f'╭{bar}╮', 'omp-live prompt', f'╰{bar}╯']
 
 
+def write_all(data):
+    # A SIGWINCH can cut a write to a terminal short.
+    while data:
+        data = data[os.write(1, data):]
+
+
 def out(data):
-    os.write(1, data.encode())
+    write_all(data.encode())
 
 
 def log(entry):
@@ -67,9 +80,13 @@ def log(entry):
         pass
 
 
-def paint_history(cols):
+def paint_history(cols, pause=0):
     rows = [row for i in range(HISTORY) for row in wrap(message(i), cols)]
-    out('\r\n'.join(rows) + '\r\n')
+    data = ('\r\n'.join(rows) + '\r\n').encode()
+    for at in range(0, len(data), CHUNK):
+        if pause and at <= len(data) // 2 < at + CHUNK:
+            time.sleep(pause)
+        write_all(data[at:at + CHUNK])
     return len(rows)
 
 
@@ -111,12 +128,11 @@ def main():
                 in_alt = False
                 out('\x1b[?1049l')
                 reply = probe_cursor()
+                time.sleep(REBUILD)
                 size = shutil.get_terminal_size()
-                replayed = 0
-                if size.columns != cols:
-                    out('\r\n')
-                    replayed = paint_history(size.columns)
-                    paint_viewport(size.columns)
+                out('\x1b[2J\x1b[3J\x1b[H')
+                replayed = paint_history(size.columns, PAUSE)
+                paint_viewport(size.columns)
                 log({'t': time.time(), 'from': cols, 'to': size.columns,
                      'rows': size.lines, 'replayed_rows': replayed,
                      'cpr': bool(reply)})

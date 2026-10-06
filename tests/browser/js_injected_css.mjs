@@ -430,7 +430,9 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v97: a column change, a grow included, stays covered until the
         // repaint has been quiet (omp replays its transcript after a settle).
         // v102: the renderer and the diagnostics follow Settings, live.
-        ['js/terminal-manager.js', 103],
+        // v104: every change of the grid is covered, rows too, for as long as
+        // the repaint's volume says; the composer's growth is not a resize.
+        ['js/terminal-manager.js', 104],
         // v18: the Files browser hooks (expand, delegated render and menu).
         // v20: the quick-connect captions mark the required fields.
         ['js/sftp-file-manager.js', 20],
@@ -641,7 +643,8 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v97: wakeSocket leaves a socket that is still connecting alone.
         // v101: a socket error the Files UI toasts itself is not toasted twice.
         // v102: scrollback moved into Settings.
-        ['js/app.js', 103],
+        // v104: the composer's lines past the first push the content up.
+        ['js/app.js', 104],
         // v9: 0209f10 raise. v10: P1 D2 trigger-anchored More-sheet position
         // (top = trigger.bottom+1, bottom auto, measured maxHeight) — Entry 27 R4.
         // v14: the theme and language pickers moved to Settings.

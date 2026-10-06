@@ -15,15 +15,26 @@
  * running past. After it: 0 such frames and 2 top rows (old frame, new frame)
  * in all six scenarios.
  *
+ * 2026-10-06: omp 18.4.4 replays on EVERY size change, rows as well as columns
+ * (the fixture now does too), and the owner saw it on the keyboard -- a change
+ * of rows, which was never covered. §3 and §4 change the height the way the
+ * keyboard does, with a replay large enough to be a storm and a pause in the
+ * middle of it (FAKE_OMP_PAUSE_MS), as omp makes when the terminal is behind.
+ *
  * Every frame is read from what is PAINTED: the cover when there is one,
  * otherwise the terminal's own rows.
  *
  *   §1 a drag: a replay really happened (floor), and no painted frame shows
  *      the transcript without the prompt (ceiling);
  *   §2 a single grow: the same;
- *   both: the settled pane is uncovered and shows the prompt.
+ *   §3 the height shrinks (a keyboard opening): the same;
+ *   §4 the height grows back (the keyboard closing): the same;
+ *   all: the settled pane is uncovered and shows the prompt.
  *
- * Run (from source/): node tests/browser/live_omp_resize_replay.mjs
+ * Run (from source/): node tests/browser/live_omp_resize_replay.mjs [--local-js]
+ * --local-js serves this tree's terminal-manager.js and app.js to the page in
+ * place of the deployed ones: the client of a branch, against the live server,
+ * before it is deployed.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -45,6 +56,14 @@ const transactions = () => {
 };
 
 const { browser, page } = await launch({ width: 1440, height: 900 });
+if (process.argv.includes('--local-js')) {
+    for (const file of ['terminal-manager.js', 'app.js']) {
+        await page.route(`**/static/js/${file}*`, route => route.fulfill({
+            contentType: 'text/javascript; charset=utf-8',
+            body: fs.readFileSync(path.resolve(import.meta.dirname, '../../static/js', file)),
+        }));
+    }
+}
 let sid = null;
 try {
     await login(page);
@@ -52,7 +71,8 @@ try {
     await settle(page, sid);
     await page.waitForTimeout(1500);
     await page.evaluate(({ s, f, l }) => window.socket.emit('ssh_input',
-        { session_id: s, data: `clear; FAKE_OMP_LOG=${l} python3 ${f}\n` }), { s: sid, f: FIXTURE, l: LOG });
+        { session_id: s, data: `clear; FAKE_OMP_HISTORY=1500 FAKE_OMP_PAUSE_MS=450 `
+            + `FAKE_OMP_LOG=${l} python3 ${f}\n` }), { s: sid, f: FIXTURE, l: LOG });
     await page.waitForTimeout(5000);
 
     await page.evaluate((s) => {
@@ -72,11 +92,11 @@ try {
         requestAnimationFrame(tick);
     }, sid);
 
-    const scenario = async (label, widths) => {
+    const scenario = async (label, sizes) => {
         const before = transactions().length;
         await page.evaluate(() => { window.__rec.frames = []; });
-        for (const w of widths) {
-            await page.setViewportSize({ width: w, height: 900 });
+        for (const [width, height] of sizes) {
+            await page.setViewportSize({ width, height });
             await page.waitForTimeout(40);
         }
         await page.waitForTimeout(6000);
@@ -93,9 +113,11 @@ try {
             { covered: last.covered, prompt: last.prompt }, { covered: false, prompt: true });
     };
     const drag = [];
-    for (let w = 1440; w >= 1080; w -= 30) drag.push(w);
+    for (let w = 1440; w >= 1080; w -= 30) drag.push([w, 900]);
     await scenario('§1 a drag', drag);
-    await scenario('§2 a single grow', [1440]);
+    await scenario('§2 a single grow', [[1440, 900]]);
+    await scenario('§3 the height shrinks, as a keyboard opening', [[1440, 520]]);
+    await scenario('§4 the height grows back, as the keyboard closing', [[1440, 900]]);
 } finally {
     if (sid) {
         await page.evaluate(s => window.socket.emit('ssh_input', { session_id: s, data: '\x03' }), sid);
