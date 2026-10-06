@@ -21,9 +21,17 @@ const TerminalManager = {
     // What happened to the engines, oldest first, at most TIMELINE_MAX entries
     // across every session (noteTimeline); shipped with a screen diagnostic.
     timeline: [],
-    // Panes held on their last good frame while a column change waits for
-    // the repaint to finish, keyed by terminal key (freezePaneForResize).
+    // Panes held on their last good frame while a size change waits for the
+    // repaint to finish, keyed by terminal key (freezePaneForResize).
     frozenPanes: {},
+    // Row-sized writes of the last REPAINT_RATE_MS per terminal key, as
+    // [time, length, covered] (noteRepaintWrite).
+    repaintWrites: {},
+    // Sessions whose program has answered a size change with a replay.
+    replaysOnResize: {},
+    // Pixels of each pane taken by the composer's lines past the first,
+    // keyed by terminal (composerResized).
+    composerPan: new Map(),
     // The window size when the app's own chrome took space from the pane;
     // null when no chrome is holding the grid (holdChromeGrid).
     chromeHold: null,
@@ -762,27 +770,23 @@ const TerminalManager = {
                 return;
             }
             try {
-                // A column change is answered by a repaint that is not one
+                // A size change is answered by a repaint that is not one
                 // frame: a shrink leaves the OLD frame's leftovers until tmux
                 // repaints, and a program like omp replays its whole
-                // transcript at the new width. The pane is held on its last
+                // transcript at the new size. The pane is held on its last
                 // good frame until that repaint has finished (see
                 // freezePaneForResize).
-                const shrinking = win.cols < terminal.cols;
-                if (win.cols !== terminal.cols) {
-                    this.noteTimeline(sessionId, 'cover',
-                        { from: terminal.cols, to: win.cols });
-                    this.freezePaneForResize(key, terminal);
+                if (win.cols !== terminal.cols || win.rows !== terminal.rows) {
+                    this.noteTimeline(sessionId, 'cover', {
+                        from: `${terminal.cols}x${terminal.rows}`,
+                        to: `${win.cols}x${win.rows}`,
+                    });
+                    this.freezePaneForResize(key, terminal, sessionId);
                 }
                 this.resizeTerminalPreservingAltRows(
                     terminal, win.cols, win.rows, true);
                 this.presentWindowGrid(terminal, sessionId);
                 this.recentreTerminalScreen(terminal);
-                if (shrinking && this.staleWideRows(terminal) === 0) {
-                    // Nothing was left behind (the frame was narrower than the
-                    // new grid): there is nothing to hide.
-                    this.releaseFrozenPane(key);
-                }
             } catch (e) {
                 console.error('Error applying the window geometry:', e);
             }
@@ -3599,9 +3603,7 @@ const TerminalManager = {
 
         if (this.terminalReady[terminalKey]) {
             this.writeToTerminalWithScroll(terminal, data, sessionId);
-            if (this.frozenPanes[terminalKey]) {
-                this.noteFrozenPaneWrite(terminalKey, data);
-            }
+            this.noteRepaintWrite(terminalKey, terminal, data.length);
         } else {
             if (!this.pendingOutput[terminalKey]) {
                 this.pendingOutput[terminalKey] = [];
@@ -4511,11 +4513,24 @@ const TerminalManager = {
         const ruler = terminal.options.scrollback === 0 ? 0 : gutter + rulerWidth;
         const outer = getComputedStyle(parent);
         const inner = getComputedStyle(xterm);
-        const height = parseInt(outer.getPropertyValue('height'))
-            - (parseInt(inner.paddingTop) + parseInt(inner.paddingBottom));
+        // As if the composer were one line (composerResized).
+        const height = this.paneHeight(terminal) + this.composerPanFor(terminal);
         const width = Math.max(0, parseInt(outer.getPropertyValue('width')))
             - (parseInt(inner.paddingRight) + parseInt(inner.paddingLeft)) - ruler;
         return { width, height, baseCell };
+    },
+
+    // The pane's height for the grid as it is: the parent's box less the
+    // terminal's own padding.
+    paneHeight(terminal) {
+        const xterm = terminal?.element;
+        const parent = xterm?.parentElement;
+        if (!parent) {
+            return null;
+        }
+        const inner = getComputedStyle(xterm);
+        return parseInt(getComputedStyle(parent).getPropertyValue('height'))
+            - (parseInt(inner.paddingTop) + parseInt(inner.paddingBottom));
     },
 
     /*
@@ -5123,6 +5138,7 @@ const TerminalManager = {
         clearTimeout(this.resizeHoldTimers[sessionId]);
         delete this.resizeHoldTimers[sessionId];
         delete this.geometryAnsweredAt[sessionId];
+        delete this.replaysOnResize[sessionId];
         const terminalKeys = this.sessionTerminals[sessionId] || [];
         terminalKeys.forEach(key => {
             this.releaseFrozenPane(key);
@@ -5300,6 +5316,8 @@ const TerminalManager = {
         this.liveEdgeDisposables[terminalKey]?.();
         delete this.liveEdgeDisposables[terminalKey];
         delete this.liveEdgeIntent[terminalKey];
+        delete this.repaintWrites[terminalKey];
+        this.composerPan.delete(terminal);
 
         if (sessionId && this.sessionTerminals[sessionId]) {
             this.sessionTerminals[sessionId] = this.sessionTerminals[sessionId].filter(key => key !== terminalKey);
@@ -5778,7 +5796,7 @@ const TerminalManager = {
     WRITE_CONTROLS: /\x1b\[[0-?]*[ -\/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b.|[\x00-\x1f\x7f]/g,
 
     /*
-     * HOLD THE LAST GOOD FRAME UNTIL A COLUMN CHANGE HAS BEEN REPAINTED.
+     * HOLD THE LAST GOOD FRAME UNTIL A SIZE CHANGE HAS BEEN REPAINTED.
      *
      * A shrink, measured from three screen diagnostics and a bare engine:
      *   - every attached tmux client draws on the ALTERNATE buffer (tmux's own
@@ -5788,40 +5806,59 @@ const TerminalManager = {
      *     cells wide were still 118 after resize(59, 20), where the same
      *     content on the normal buffer became 59. So after a shrink the pane
      *     renders the LEFT 59 COLUMNS OF THE OLD 118-COLUMN FRAME -- words cut
-     *     mid-way, box drawing broken;
-     *   - nothing overwrites those cells until something repaints. A
-     *     full-screen TUI repaints itself on SIGWINCH within a frame or two,
-     *     which is exactly why claude code looks clean; an idle shell prompt
-     *     writes nothing, so the only repaint is this module's own
-     *     `refresh-client`, ~700 ms away (250 ms coalesce + a 432-472 ms exec
-     *     channel). That gap IS the jitter.
+     *     mid-way, box drawing broken -- until something repaints.
      *
-     * A grow or a shrink under omp (oh-my-pi), measured 2026-09-24 against
-     * tests/fixtures/fake_omp_resize.py, a stand-in built from
-     * @oh-my-pi/pi-tui 18.3.0: omp answers a width change by blanking to the
-     * alternate screen, waiting out a 120 ms settle window and then REPLAYING
-     * ITS WHOLE TRANSCRIPT at the new width -- 66 KB for a 400-message
-     * history, one to three times over in one 13-step drag. The owner saw that
-     * replay run from the top of the conversation down to the prompt: "nhay
-     * giat tu tren xuong khu su dung phien OMP".
+     * A program that replays, measured 2026-10-06 on a copy of the owner's omp
+     * session (omp 18.4.4, tmux 3.7c, 59 columns), after the owner reported omp
+     * "giật liên tục lên xuống" on every size change, the keyboard included:
+     * omp answers EVERY size change -- rows as well as columns -- by clearing
+     * the screen and the scrollback and replaying its whole transcript. With a
+     * 9.9 MB session the tmux client sends 1.7-1.9 MB in ~700 writes for one
+     * change of rows: tmux's own redraw at once, a frame at ~120 ms, then the
+     * replay from ~300 ms to 1.0-1.25 s. Written into an engine write by write,
+     * every frame from the first write to the last showed transcript that the
+     * settled screen does not: the conversation running past. A 1.3 MB session
+     * answers with 14-16 KB, still with ~300 ms of strange frames. This cover
+     * used to start on column changes only, so the keyboard -- a change of
+     * rows -- was never covered at all.
      *
-     * So the pane is covered with a snapshot of its last good frame, and the
-     * cover stays until the repaint has FINISHED: no repaint-sized write for
-     * FREEZE_QUIET_MS. The first write is not the end -- under omp it is the
-     * blank alternate screen, and the replay follows the settle window -- so
-     * the quiet window is longer than omp's settle. The engine underneath
-     * resizes and is written to exactly as before; only the picture is held.
-     * FREEZE_MAX_MS is a belt, re-armed by every geometry of a drag.
+     * So every change of the grid is covered, and how long is decided by how
+     * much is being repainted, not by which program is painting:
+     *   - a repaint of a screen or so (tmux, a TUI, a prompt) lifts the cover
+     *     after FREEZE_QUIET_MS without a row-sized write;
+     *   - more than STORM_SCREENS screens of it (characters per cell of the
+     *     grid) is a replay. Measured in those units: a repaint, colours and
+     *     all, is 1-6; the small session's answers 6-17; the large one's ~1300.
+     *     The cover then waits for STORM_QUIET_MS without a write -- longer
+     *     than any pause measured inside a replay (up to 602 ms under load) --
+     *     and the session is remembered as one that replays (replaysOnResize),
+     *     so its next change starts with the long window: the large session's
+     *     answer to a change of columns is 19-23 KB with 573 ms between its two
+     *     halves, too little to look like a replay on its own;
+     *   - output that was already flowing before the change is not repaint:
+     *     writes at up to twice the rate of the second before the cover do not
+     *     hold it, so a log or a model streaming its answer is not frozen;
+     *   - FREEZE_MAX_MS, or STORM_MAX_MS for a replay, is the belt, re-armed by
+     *     every geometry of a drag.
+     * Only writes of at least a row count. The rest are cursor moves and
+     * spinner ticks, which repaint nothing (measured: the ~600 small writes in
+     * the middle of omp's column change are cursor moves alone).
      *
      * The snapshot is a DOM clone of the DOM renderer's rows (a pane on the
-     * WebGL trial gets a plain cover). The renderer's generated CSS is scoped
-     * by an owner class on the terminal root, so the clone's copy of it is
-     * re-scoped to a class of its own -- otherwise those stale rules would
-     * also match the live terminal, which is the one thing a snapshot must
-     * not touch.
+     * WebGL trial gets a plain cover), anchored to the pane's BOTTOM as the
+     * live grid is (recentreTerminalScreen): the keyboard shrinks the pane from
+     * below, and the rows worth keeping in view are the prompt's. The
+     * renderer's generated CSS is scoped by an owner class on the terminal
+     * root, so the clone's copy of it is re-scoped to a class of its own --
+     * otherwise those stale rules would also match the live terminal, which is
+     * the one thing a snapshot must not touch.
      */
     FREEZE_MAX_MS: 1200,
     FREEZE_QUIET_MS: 250,
+    STORM_SCREENS: 32,
+    STORM_QUIET_MS: 750,
+    STORM_MAX_MS: 4000,
+    REPAINT_RATE_MS: 1000,
     _freezeSeq: 0,
 
     /*
@@ -5900,31 +5937,71 @@ const TerminalManager = {
         return held.deltas.get(terminal);
     },
 
-    staleWideRows(terminal) {
-        const buffer = terminal.buffer?.active;
-        if (!buffer) {
-            return 0;
-        }
-        let stale = 0;
-        for (let y = 0; y < terminal.rows; y += 1) {
-            const line = buffer.getLine(buffer.viewportY + y);
-            if (line && line.translateToString(true).length > terminal.cols) {
-                stale += 1;
+    /*
+     * THE COMPOSER'S EXTRA LINES DO NOT RESIZE THE REMOTE PANE.
+     *
+     * Measured in the prod log for one typing turn on a phone: the keyboard
+     * took the grid 45 -> 24 rows, the composer growing a line at a time took
+     * it 24 -> 22 -> 21 -> 19, Send put it back 19 -> 24 and the keyboard
+     * closing 24 -> 45. Six SIGWINCHes, each answered by omp with a replay of
+     * its transcript (freezePaneForResize). OWNER RULING 2026-10-06: the
+     * composer pushes the content up instead; the keyboard still resizes
+     * (OWNER RULING 2026-09-19).
+     *
+     * So every pixel the composer takes past its first line is given back to
+     * the pane in paneCellBox, the measurement every fit, report and zoom is
+     * made from: the grid, the report and the font stay what they were with
+     * one line. recentreTerminalScreen alone reads the box as it is, and its
+     * bottom anchor hides the grid's top rows instead of the prompt.
+     *
+     * Measured around the change itself, per pane: the composer calls
+     * composerMeasure before a write that can move the dock and
+     * composerResized after it. A split gives each pane its own share of the
+     * dock; a pane first shown while the composer is grown takes the largest.
+     */
+    composerMeasure() {
+        const heights = new Map();
+        Object.keys(this.terminals).forEach(key => {
+            const terminal = this.terminals[key];
+            const height = terminal && this.isTerminalVisible(key)
+                ? this.paneHeight(terminal) : null;
+            if (height !== null) {
+                heights.set(terminal, height);
             }
-        }
-        return stale;
+        });
+        return heights;
     },
 
-    freezePaneForResize(terminalKey, terminal) {
+    composerResized(before, oneLine) {
+        if (oneLine) {
+            this.composerPan.clear();
+            return;
+        }
+        before.forEach((height, terminal) => {
+            const now = this.paneHeight(terminal);
+            if (now !== null) {
+                this.composerPan.set(terminal, Math.max(0,
+                    (this.composerPan.get(terminal) || 0) + height - now));
+            }
+        });
+    },
+
+    composerPanFor(terminal) {
+        if (this.composerPan.has(terminal)) {
+            return this.composerPan.get(terminal);
+        }
+        return this.composerPan.size ? Math.max(...this.composerPan.values()) : 0;
+    },
+
+    freezePaneForResize(terminalKey, terminal, sessionId) {
         const held = this.frozenPanes[terminalKey];
         if (held) {
             // A drag lands geometry after geometry: each is a repaint still to
-            // come, so the quiet window restarts and the belt is re-armed.
-            clearTimeout(held.quiet);
-            held.quiet = null;
-            clearTimeout(held.timer);
-            held.timer = setTimeout(
-                () => this.releaseFrozenPane(terminalKey), this.FREEZE_MAX_MS);
+            // come, so the quiet window waits for its first write again and the
+            // belt is re-armed.
+            clearTimeout(held.check);
+            held.check = null;
+            this.armFreezeBelt(terminalKey);
             return;
         }
         const screen = terminal.element
@@ -5955,7 +6032,7 @@ const TerminalManager = {
             copy.style.position = 'absolute';
             copy.style.margin = '0';
             copy.style.left = `${rect.left - pane.left}px`;
-            copy.style.top = `${rect.top - pane.top}px`;
+            copy.style.bottom = `${pane.bottom - rect.bottom}px`;
             if (owner) {
                 copy.querySelectorAll('style').forEach(style => {
                     style.textContent = style.textContent.split(owner).join(mine);
@@ -5966,12 +6043,41 @@ const TerminalManager = {
         document.body.appendChild(cover);
         this.frozenPanes[terminalKey] = {
             cover,
+            session: sessionId || terminalKey,
             since: Date.now(),
-            quiet: null,
-            timer: setTimeout(
-                () => this.releaseFrozenPane(terminalKey), this.FREEZE_MAX_MS),
+            // Row-sized output since the change, and the rate of it before.
+            bytes: 0,
+            baseRate: this.repaintRate(terminalKey),
+            storm: false,
+            check: null,
+            timer: null,
         };
+        this.armFreezeBelt(terminalKey);
         this.fitFrozenPane(terminalKey);
+    },
+
+    armFreezeBelt(terminalKey) {
+        const frozen = this.frozenPanes[terminalKey];
+        clearTimeout(frozen.timer);
+        frozen.timer = setTimeout(() => this.releaseFrozenPane(terminalKey, 'belt'),
+            this.coverReplays(frozen) ? this.STORM_MAX_MS : this.FREEZE_MAX_MS);
+    },
+
+    coverReplays(frozen) {
+        return frozen.storm || !!this.replaysOnResize[frozen.session];
+    },
+
+    // Row-sized output per millisecond over the last REPAINT_RATE_MS, outside
+    // any cover: what was flowing before a change, not the change's repaint.
+    repaintRate(terminalKey) {
+        const now = Date.now();
+        let bytes = 0;
+        (this.repaintWrites[terminalKey] || []).forEach(([at, length, covered]) => {
+            if (!covered && now - at < this.REPAINT_RATE_MS) {
+                bytes += length;
+            }
+        });
+        return bytes / this.REPAINT_RATE_MS;
     },
 
     /*
@@ -5995,44 +6101,85 @@ const TerminalManager = {
     },
 
     /*
-     * What ends a freeze is a repaint that has FINISHED, and a repaint has to
-     * be recognised by its size, not by the screen going clean.
-     *
-     * Measured while building this: the stale cells are never trimmed. A line
-     * that is 118 cells wide under a 59-column grid stays 118 -- `\x1b[2K`
-     * erases to the grid, writing touches the first 59 -- so "no row is wider
-     * than the grid" is true only before the shrink and after the buffer is
-     * replaced wholesale. As a release signal it never fires.
-     *
-     * A row's worth of bytes is the line: tmux's answer to a resize is a full
-     * redraw, thousands of bytes; the only traffic smaller than one row is a
-     * cursor move or a spinner tick, which repaints nothing and neither lifts
-     * the cover nor holds it. Each repaint-sized write restarts the quiet
-     * window, so a replay that streams in many writes keeps the cover until
-     * its last one; the rAF puts the release AFTER the frame that drew it.
+     * What ends a freeze is a repaint that has FINISHED, recognised by its
+     * size, not by the screen going clean: the stale cells of a shrink are
+     * never trimmed (a line 118 cells wide under a 59-column grid stays 118),
+     * so "no row wider than the grid" is true only after the buffer is
+     * replaced wholesale. A row's worth of output is the unit: tmux's answer to
+     * a resize is thousands of characters, and what is smaller than a row is a
+     * cursor move or a spinner tick, which repaints nothing. Every write is
+     * counted, covered or not, so a cover knows the rate it started from.
      */
-    noteFrozenPaneWrite(terminalKey, data) {
-        const terminal = this.terminals[terminalKey];
-        const frozen = this.frozenPanes[terminalKey];
-        if (!terminal || !frozen || !data || data.length < terminal.cols) {
+    noteRepaintWrite(terminalKey, terminal, length) {
+        if (length < terminal.cols) {
             return;
         }
-        clearTimeout(frozen.quiet);
-        frozen.quiet = setTimeout(
-            () => requestAnimationFrame(() => this.releaseFrozenPane(terminalKey)),
-            this.FREEZE_QUIET_MS);
+        const now = Date.now();
+        const frozen = this.frozenPanes[terminalKey];
+        const writes = this.repaintWrites[terminalKey]
+            || (this.repaintWrites[terminalKey] = []);
+        writes.push([now, length, !!frozen]);
+        let old = 0;
+        while (now - writes[old][0] > this.REPAINT_RATE_MS) {
+            old += 1;
+        }
+        if (old) {
+            writes.splice(0, old);
+        }
+        if (!frozen) {
+            return;
+        }
+        frozen.bytes += length;
+        if (!frozen.storm && frozen.bytes - frozen.baseRate * (now - frozen.since)
+                >= this.STORM_SCREENS * terminal.cols * terminal.rows) {
+            frozen.storm = true;
+            this.replaysOnResize[frozen.session] = true;
+            this.armFreezeBelt(terminalKey);
+        }
+        if (!frozen.check) {
+            frozen.check = setTimeout(() => this.checkFrozenPane(terminalKey),
+                this.coverReplays(frozen) ? this.STORM_QUIET_MS : this.FREEZE_QUIET_MS);
+        }
     },
 
-    releaseFrozenPane(terminalKey) {
+    // Quiet means: no more row-sized output over the window than the rate the
+    // pane had before the change would bring. The rAF puts the release after
+    // the frame that drew the last of it.
+    checkFrozenPane(terminalKey) {
+        const frozen = this.frozenPanes[terminalKey];
+        if (!frozen) {
+            return;
+        }
+        frozen.check = null;
+        const quiet = this.coverReplays(frozen) ? this.STORM_QUIET_MS : this.FREEZE_QUIET_MS;
+        const now = Date.now();
+        const writes = this.repaintWrites[terminalKey] || [];
+        let recent = 0;
+        for (let i = writes.length - 1; i >= 0 && now - writes[i][0] < quiet; i -= 1) {
+            recent += writes[i][1];
+        }
+        if (recent <= 2 * frozen.baseRate * quiet) {
+            requestAnimationFrame(() => this.releaseFrozenPane(terminalKey, 'quiet'));
+            return;
+        }
+        frozen.check = setTimeout(() => this.checkFrozenPane(terminalKey), quiet / 3);
+    },
+
+    releaseFrozenPane(terminalKey, reason) {
         const frozen = this.frozenPanes[terminalKey];
         if (!frozen) {
             return;
         }
         delete this.frozenPanes[terminalKey];
         clearTimeout(frozen.timer);
-        clearTimeout(frozen.quiet);
+        clearTimeout(frozen.check);
         frozen.cover.remove();
-        this.noteTimeline(terminalKey, 'uncover', { held: Date.now() - frozen.since });
+        this.noteTimeline(frozen.session, 'uncover', {
+            held: Date.now() - frozen.since,
+            bytes: frozen.bytes,
+            storm: frozen.storm,
+            why: reason || 'call',
+        });
     },
 
     /*

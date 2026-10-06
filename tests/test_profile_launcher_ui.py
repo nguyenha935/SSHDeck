@@ -255,7 +255,9 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # v102: scrollback is set in Settings; the per-frame and lifecycle
         # console lines are gone.
         # v103: the change-password page is gone; the palette opens Settings.
-        "filename='js/app.js'": '?v=103',
+        # v104: the composer's lines past the first push the content up
+        # instead of resizing the remote pane.
+        "filename='js/app.js'": '?v=104',
         # v18: the Files browser hooks (expand, delegated render and menu, the
         # selection kept by name across a relist, one toast per error).
         # v19: the [SFTP]/[FM] console lines are gone.
@@ -599,7 +601,9 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # v97: a column change -- a grow too -- stays covered until the repaint
         # has been quiet for FREEZE_QUIET_MS, so omp's transcript replay is not
         # seen running from the top of the conversation to the prompt.
-        "filename='js/terminal-manager.js'": '?v=103',
+        # v104: every change of the grid is covered, rows too, for as long as
+        # the repaint's volume says; the composer's growth is not a resize.
+        "filename='js/terminal-manager.js'": '?v=104',
         # touch-action-row.js owns the six-action global row. It did not exist
         # when this table was written; an unpinned copy of it is the single most
         # damaging stale asset on touch, because the row it builds is the only

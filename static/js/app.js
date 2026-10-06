@@ -2295,6 +2295,20 @@
          */
         const SETTLE_RETRIES = 2;
         let composerSettleAttempt = 0;
+        /*
+         * Lines past the first push the terminal's content up instead of
+         * resizing the remote pane (OWNER RULING 2026-10-06). Every write that
+         * can move the dock -- the box's own height, which the touch dock
+         * follows, and the published height term -- is measured around, and
+         * TerminalManager gives what the panes lost back to their fit.
+         */
+        const composerPanes = () => (typeof TerminalManager !== 'undefined'
+            ? TerminalManager.composerMeasure() : null);
+        const composerResized = (panes, oneLine) => {
+            if (panes) {
+                TerminalManager.composerResized(panes, oneLine);
+            }
+        };
         const publishComposerContentHeight = () => {
             if (!mobileInput) return;
             cancelAnimationFrame(composerMeasureFrame);
@@ -2332,7 +2346,9 @@
                 const next = height + 'px';
                 const root = document.documentElement;
                 if (root.style.getPropertyValue('--composer-content-height') !== next) {
+                    const panes = composerPanes();
                     root.style.setProperty('--composer-content-height', next);
+                    composerResized(panes, lines === 1);
                 }
             });
         };
@@ -2369,6 +2385,8 @@
             growFrame = 0;
             if (!mobileInput) return;
             const cap = Math.min(composerCap(), Math.floor(usableHeight() * 0.30));
+            const panes = composerPanes();
+            const previous = mobileInput.style.height;
             let target;
             if (mobileInput.value === '') {
                 target = 44;
@@ -2381,6 +2399,10 @@
             const next = `${target}px`;
             if (mobileInput.style.height !== next) {
                 mobileInput.style.height = next;
+            }
+            if (next !== previous) {
+                // One line or not is the publish's to say, a frame later.
+                composerResized(panes, false);
             }
             publishComposerContentHeight();
         };
