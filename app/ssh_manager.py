@@ -4118,6 +4118,13 @@ def get_session(session_id):
             }
     return None
 
+
+LATENCY_PROBE_TIMEOUT_S = 5.0
+# Session ids with a latency request still out (see measure_session_latency).
+_latency_probes = set()
+_latency_probes_lock = Lock()
+
+
 def measure_session_latency(session_id):
     """Round-trip time in ms to the SSH host of one session, or None.
 
@@ -4136,6 +4143,12 @@ def measure_session_latency(session_id):
 
     sessions_lock is held only to look the client up, never across the network
     round trip.
+
+    BOUNDED. global_request(wait=True) has no timeout: on a host that stops
+    answering it waits for as long as the transport stays up, and the poll asks
+    again every 15 s. So the request runs on its own thread, this returns None
+    after LATENCY_PROBE_TIMEOUT_S, and while a request is still out no second
+    one is sent -- a silent host costs one waiting probe, not one per poll.
     """
     with sessions_lock:
         session = sessions.get(session_id)
@@ -4146,20 +4159,35 @@ def measure_session_latency(session_id):
         return None
     try:
         transport = client.get_transport()
-        if not transport or not transport.is_active():
-            return None
-        started = time.monotonic()
-        # keepalive@sshdeck is deliberately not a real request name; the
-        # server's REQUEST_FAILURE is the reply we time.
-        transport.global_request('keepalive@sshdeck', wait=True)
-        elapsed_ms = int(round((time.monotonic() - started) * 1000))
-        # A negative or absurd figure is a broken clock, not a measurement.
-        if elapsed_ms < 0 or elapsed_ms > 60000:
-            return None
-        return elapsed_ms
     except Exception as e:
         log_debug("Latency probe failed", session_id=session_id, error=str(e))
         return None
+    if not transport or not transport.is_active():
+        return None
+    with _latency_probes_lock:
+        if session_id in _latency_probes:
+            return None
+        _latency_probes.add(session_id)
+    elapsed = []
+
+    def probe():
+        try:
+            started = time.monotonic()
+            # keepalive@sshdeck is deliberately not a real request name; the
+            # server's REQUEST_FAILURE is the reply we time.
+            transport.global_request('keepalive@sshdeck', wait=True)
+            elapsed.append(int(round((time.monotonic() - started) * 1000)))
+        except Exception as e:
+            log_debug("Latency probe failed", session_id=session_id,
+                      error=str(e))
+        finally:
+            with _latency_probes_lock:
+                _latency_probes.discard(session_id)
+
+    worker = Thread(target=probe, daemon=True)
+    worker.start()
+    worker.join(LATENCY_PROBE_TIMEOUT_S)
+    return elapsed[0] if elapsed else None
 
 
 # W3 replay bounds. The server buffer holds up to 512KB (output_buffer_max);

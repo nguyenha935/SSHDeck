@@ -1,3 +1,4 @@
+from flask import has_app_context
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from datetime import datetime, timezone
@@ -5,6 +6,30 @@ import bcrypt
 from pathlib import Path
 
 db = SQLAlchemy()
+
+
+def release_db_connection():
+    """Hand this context's database connection back before a wait that may be long.
+
+    A socket handler's first query -- the login check in socket_login_required
+    -- checks a pooled connection out, and Flask-SQLAlchemy returns it only
+    when the handler returns. A handler blocked on a remote host therefore kept
+    one, and on 2026-10-08 Files requests queued behind one SFTP call that never
+    came back took the whole pool (5 + 10 overflow): every page, which loads
+    its user from the same pool, then failed with 500.
+
+    Ending the transaction returns the connection; an attribute read afterwards
+    checks one out again for as long as that read takes. Nothing is committed on
+    a caller's behalf: with changes pending the session is left alone, and the
+    wait keeps its connection as before.
+    """
+    if not has_app_context():
+        return
+    session = db.session
+    if session.new or session.dirty or session.deleted:
+        return
+    session.commit()
+
 
 class User(db.Model, UserMixin):
     """User model for authentication."""

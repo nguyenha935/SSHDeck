@@ -160,12 +160,15 @@ class TemporaryConnectionPool:
                 return None, "Connection has been closed"
 
             conn['last_used'] = time.time()
+            client = conn['client']
 
-            try:
-                sftp = conn['client'].open_sftp()
-                return sftp, None
-            except Exception as e:
-                return None, f"Failed to open SFTP channel: {str(e)}"
+        # Opened OUTSIDE the pool lock: an SFTP open waits on the remote host,
+        # and every user's quick connections share that lock.
+        from .sftp_handler import open_bounded_sftp
+        try:
+            return open_bounded_sftp(client), None
+        except Exception as e:
+            return None, f"Failed to open SFTP channel: {str(e)}"
 
     def close_connection(self, connection_id):
         """
