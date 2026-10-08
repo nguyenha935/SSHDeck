@@ -435,7 +435,8 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // the repaint's volume says; the composer's growth is not a resize.
         // v105: no chrome of the app's own resizes the remote pane; the held
         // frame is blurred.
-        ['js/terminal-manager.js', 105],
+        // v106: the text is never drawn under 12 px on the app's account.
+        ['js/terminal-manager.js', 106],
         // v18: the Files browser hooks (expand, delegated render and menu).
         // v20: the quick-connect captions mark the required fields.
         // v21: opening and closing the Files panel is chrome, not a resize.

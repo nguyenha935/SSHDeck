@@ -4516,8 +4516,8 @@ const TerminalManager = {
      * this pane is DRAWN -- presentWindowGrid above all -- keeps using
      * proposeBaseFit, the box as it is: the text has to fit the room there is,
      * and a grid presented against a box it does not have is a clipped pane.
-     * Past CHROME_ZOOM_MIN_FONT the text would be too small to read, so the
-     * pane is reported as it is.
+     * Where the text would fall under minFontSize the pane is reported as it
+     * is.
      */
     proposeReportedFit(terminal) {
         const box = this.paneCellBox(terminal);
@@ -4530,7 +4530,7 @@ const TerminalManager = {
         }
         const scale = Math.min(box.width / (box.width + held.width),
             box.height / (box.height + held.height));
-        if (this.getBaseFontSize() * scale < this.CHROME_ZOOM_MIN_FONT) {
+        if (this.getBaseFontSize() * scale < this.minFontSize()) {
             return this.proposeBaseFit(terminal);
         }
         return {
@@ -4601,8 +4601,8 @@ const TerminalManager = {
      * mirrored at a size the desktop can read.
      *
      * Only UP: a window larger than the pane is transient (the minimum never
-     * exceeds a fit) or the keyboard hold, and recentreTerminalScreen anchors
-     * that one. Never on a window that is this pane's own fit -- the slack
+     * exceeds a fit) or a side panel of ours holding the grid (chromeResized),
+     * and that one is bounded by minFontSize. Never on a window that is this pane's own fit -- the slack
      * inside one cell is under one font pixel, so the floor leaves the base.
      *
      * The cap is a guard against a transient one-row window, not a look: at
@@ -4613,13 +4613,27 @@ const TerminalManager = {
      * the text. The font follows the tighter axis, and the other axis is
      * filled with letter spacing (width) or line height (height), so a
      * phone-shaped window fills a desktop pane with no band on either side.
-     * A window LARGER than the pane -- the keyboard up on a phone holding a
-     * full-screen program's grid -- shrinks the text the same way instead of
-     * anchoring the grid and painting slack: nothing moves, nothing is
-     * black. ZOOM_MIN_FONT is the floor below which text is not text.
+     * A window LARGER than the pane shrinks the text the same way instead of
+     * anchoring the grid and painting slack -- down to minFontSize, and past
+     * it the grid is clipped (bottom anchored) rather than drawn smaller.
      */
     ZOOM_MAX: 6,
-    ZOOM_MIN_FONT: 6,
+    /*
+     * THE SMALLEST TEXT THIS APP DRAWS ON ITS OWN ACCOUNT (OWNER RULING
+     * 2026-10-08): "Chữ bị thu nhỏ lại quá mức ở 1 số màn hình lớn ... không
+     * tính đến kích thước chữ tối thiểu có thể đọc". The floors were 6 px here
+     * and 9 px for a side panel holding the grid, neither chosen for reading.
+     * Measured with the default panels open, 14 px base: 1440x900 10.7-10.9,
+     * 1728x1117 11.2-11.4, 1920x1080 11.5-11.7, 2195x1372 11.8-12.0,
+     * 2560x1440 12.2-12.3, 3840x2160 12.8 -- and a panel dragged wider went
+     * on to 9. Never above the reader's own size: a base chosen under it is
+     * not enlarged, and any shrink of it is reported as it is instead.
+     */
+    ZOOM_MIN_FONT: 12,
+
+    minFontSize() {
+        return Math.min(this.getBaseFontSize(), this.ZOOM_MIN_FONT);
+    },
     LINE_HEIGHT_MAX: 3,
     /*
      * How much of a character may be added between characters before the text
@@ -4658,8 +4672,8 @@ const TerminalManager = {
              * 3.8% of a character across a sweep of pane widths. With the
              * fraction kept it is 0.00-0.01px.
              */
-            font = Math.max(this.ZOOM_MIN_FONT,
-                            Math.floor(base * zoom * 100) / 100);
+            const floor = this.minFontSize();
+            font = Math.max(floor, Math.floor(base * zoom * 100) / 100);
             // Glyph metrics are not linear in the font size (an 8px font
             // measures 9px tall, not 14*8/12): set the font first and read
             // the character it actually produced before filling the rest.
@@ -4682,11 +4696,10 @@ const TerminalManager = {
                 const over = Math.max(
                     (terminal.cols * cell.width) / box.width,
                     (terminal.rows * cell.height) / box.height);
-                if (!(over > 1) || font <= this.ZOOM_MIN_FONT) {
+                if (!(over > 1) || font <= floor) {
                     break;
                 }
-                font = Math.max(this.ZOOM_MIN_FONT,
-                                Math.floor((font / over) * 100) / 100);
+                font = Math.max(floor, Math.floor((font / over) * 100) / 100);
                 terminal.options.fontSize = font;
                 charSize.measure();
             }
@@ -5961,10 +5974,10 @@ const TerminalManager = {
      *           sizes more at least; Broadcast took 52 px of height, 48 rows
      *           to 45.
      *           OWNER RULING 2026-10-08, with a floor: where the text would
-     *           fall under CHROME_ZOOM_MIN_FONT, the pane is reported as it is.
+     *           fall under minFontSize (12 px), the pane is reported as it is
+     *           -- on screens up to ~2200 px wide a default panel already does.
      */
     CHROME_KINDS: { composer: 'pan', keyboard: 'pan', keypad: 'pan', panel: 'zoom', broadcast: 'zoom' },
-    CHROME_ZOOM_MIN_FONT: 9,
 
     chromeMeasure() {
         const boxes = new Map();
