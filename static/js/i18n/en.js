@@ -574,6 +574,9 @@ window.__i18n.en = {
         'diag.sendScreen': 'Send screen diagnostic',
         'diag.saved': 'Screen diagnostic saved: {name}',
         'diag.failed': 'Screen diagnostic not saved ({error})',
+        'tmux.provisioned': 'This host had no tmux: SSHDeck put tmux {version} in ~/.local/share/sshdeck/bin, so this session is kept when you close the page.',
+        'tmux.unsupported': 'This session is not kept: the host ({platform}) has no tmux, and SSHDeck has none for it.',
+        'tmux.installFailed': 'This session is not kept: the host ({platform}) has no tmux, and SSHDeck could not put its own there.',
 
         'settings.title': 'Settings',
         'settings.thisDevice': 'These settings apply to this device only.',

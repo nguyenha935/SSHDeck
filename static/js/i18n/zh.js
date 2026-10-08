@@ -102,6 +102,9 @@ window.__i18n.zh = {
         'diag.sendScreen': '发送屏幕诊断',
         'diag.saved': '屏幕诊断已保存：{name}',
         'diag.failed': '屏幕诊断未保存（{error}）',
+        'tmux.provisioned': '此主机没有 tmux：SSHDeck 已将 tmux {version} 放入 ~/.local/share/sshdeck/bin，关闭页面后会话仍会保留。',
+        'tmux.unsupported': '此会话不会保留：主机（{platform}）没有 tmux，且 SSHDeck 没有适用于它的版本。',
+        'tmux.installFailed': '此会话不会保留：主机（{platform}）没有 tmux，且 SSHDeck 无法将自带的 tmux 放到该主机上。',
 
         'settings.title': '设置',
         'settings.thisDevice': '这些设置仅适用于本设备。',

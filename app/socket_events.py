@@ -796,6 +796,10 @@ def handle_ssh_connect(data, current_user=None):
         if display_name:
             display_name = display_name.strip()[:128] or None
 
+        # Connecting waits on the remote host -- and on a host without tmux,
+        # on copying SSHDeck's onto it -- so the pooled connection the login
+        # check took goes back first (models.release_db_connection).
+        release_db_connection()
         session_id, error = ssh_manager.create_ssh_connection(
             host=host,
             port=int(port),
@@ -942,6 +946,11 @@ def handle_ssh_connect(data, current_user=None):
                 # so it is still declared here even though the history itself
                 # now arrives with the view.
                 'replay_max_lines': ssh_manager.REPLAY_MAX_LINES,
+                # The version SSHDeck just placed on a host that had no tmux,
+                # or why a session that asked for tmux is a plain shell; the
+                # page says which, once.
+                'tmux_provisioned': created_session.get('tmux_provisioned'),
+                'tmux_unavailable': created_session.get('tmux_unavailable'),
             })
             log_ssh_connection(current_user.username, host, port, True, request.remote_addr)
 

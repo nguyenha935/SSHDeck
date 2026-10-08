@@ -568,6 +568,9 @@ window.__i18n.vi = {
         'diag.sendScreen': 'Gửi chẩn đoán màn hình',
         'diag.saved': 'Đã lưu chẩn đoán màn hình: {name}',
         'diag.failed': 'Không lưu được chẩn đoán màn hình ({error})',
+        'tmux.provisioned': 'Máy này chưa có tmux: SSHDeck đã đặt tmux {version} vào ~/.local/share/sshdeck/bin, nên phiên được giữ lại khi đóng trang.',
+        'tmux.unsupported': 'Phiên này không được giữ lại: máy ({platform}) không có tmux, và SSHDeck không có bản cho hệ này.',
+        'tmux.installFailed': 'Phiên này không được giữ lại: máy ({platform}) không có tmux, và SSHDeck không đặt được bản của mình lên đó.',
 
         'settings.title': 'Cài đặt',
         'settings.thisDevice': 'Các cài đặt này chỉ áp dụng cho thiết bị này.',

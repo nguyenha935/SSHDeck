@@ -789,9 +789,12 @@ for (const closer of ['closeConnectionModal', 'cancelConnectionBtn']) {
     // legacy path, ' -CC' under the control-mode transport), so the literal
     // `tmux -u` became `tmux{control_flag} -u`. The property is unchanged: the
     // slice must reach the RETURN, not stop inside the docstring.
+    // RE-POINTED 2026-10-09: the return goes through _tmux, which puts the
+    // tmux a host without one on PATH has (SSHDeck's static copy) in place of
+    // the bare word. The property is unchanged: the slice reaches the RETURN.
     check('§9 the region really reaches the builder body',
         tmuxEnd > tmuxStart
-            && /return \(?f'\{prefix\}tmux(\{control_flag\})?/.test(tmuxRegion),
+            && /return prefix \+ _tmux\(f'tmux -u new-session/.test(tmuxRegion),
         true);
     check('§9 the builder takes NO auth_type argument',
         /def build_tmux_command\([^)]*auth_type/.test(mgr), false);
@@ -868,8 +871,9 @@ for (const closer of ['closeConnectionModal', 'cancelConnectionBtn']) {
         tmuxRegion.indexOf('"""', tmuxRegion.indexOf('"""') + 3) + 3);
     check('§9 no attach-or-create verb survives in the builder code',
         /new-session -A/.test(tmuxCode), false);
+    // RE-POINTED 2026-10-09: same command, its binary chosen by _tmux.
     check('§9 the create is the only launch the builder emits, and it is detached',
-        /return \(f'\{prefix\}tmux -u new-session -d\{env_args\} ' f'-s \{tmux_session_name\}'\)/
+        /return prefix \+ _tmux\(f'tmux -u new-session -d\{env_args\} ' f'-s \{tmux_session_name\}', tmux_bin\)/
             .test(tmuxCode.replace(/\s+/g, ' ')), true);
     check('§9 the builder cannot attach at all (that is the view\'s job)',
         /attach-session/.test(tmuxCode), false);

@@ -148,13 +148,13 @@
          gates render this template with a plain substitution that cannot
          evaluate Jinja expressions, and a computed src would reach them as an
          empty one. -->
-    <script src="{{ url_for('static', filename='js/i18n/en.js') }}?v=8"></script>
-{% if lang == 'vi' %}    <script src="{{ url_for('static', filename='js/i18n/vi.js') }}?v=8"></script>
-{% elif lang == 'de' %}    <script src="{{ url_for('static', filename='js/i18n/de.js') }}?v=8"></script>
-{% elif lang == 'fr' %}    <script src="{{ url_for('static', filename='js/i18n/fr.js') }}?v=8"></script>
-{% elif lang == 'es' %}    <script src="{{ url_for('static', filename='js/i18n/es.js') }}?v=8"></script>
-{% elif lang == 'zh' %}    <script src="{{ url_for('static', filename='js/i18n/zh.js') }}?v=8"></script>
-{% endif %}    <script src="{{ url_for('static', filename='js/i18n.js') }}?v=52" data-i18n-version="8"></script>
+    <script src="{{ url_for('static', filename='js/i18n/en.js') }}?v=9"></script>
+{% if lang == 'vi' %}    <script src="{{ url_for('static', filename='js/i18n/vi.js') }}?v=9"></script>
+{% elif lang == 'de' %}    <script src="{{ url_for('static', filename='js/i18n/de.js') }}?v=9"></script>
+{% elif lang == 'fr' %}    <script src="{{ url_for('static', filename='js/i18n/fr.js') }}?v=9"></script>
+{% elif lang == 'es' %}    <script src="{{ url_for('static', filename='js/i18n/es.js') }}?v=9"></script>
+{% elif lang == 'zh' %}    <script src="{{ url_for('static', filename='js/i18n/zh.js') }}?v=9"></script>
+{% endif %}    <script src="{{ url_for('static', filename='js/i18n.js') }}?v=52" data-i18n-version="9"></script>
     <script src="{{ url_for('static', filename='js/auth.js') }}?v=5"></script>
     <script src="{{ url_for('static', filename='js/auth-lang.js') }}?v=1"></script>
 </body>

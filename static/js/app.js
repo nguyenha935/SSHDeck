@@ -1134,6 +1134,27 @@
         SessionManager.abortAutoRestore();
     });
 
+    /*
+     * A host with no tmux either got SSHDeck's (the server copied it into the
+     * user's home) or the session is a plain shell that ends with the page.
+     * The owner chose not to be asked first, so this is where it is said, once.
+     */
+    function noteTmuxOutcome(data) {
+        const text = (key, fallback) => (window.i18n ? i18n.t(key) : fallback);
+        if (data.tmux_provisioned) {
+            showNotification(text('tmux.provisioned',
+                'This host had no tmux: SSHDeck put tmux {version} in ~/.local/share/sshdeck/bin, so this session is kept when you close the page.')
+                .replace('{version}', data.tmux_provisioned), 'info');
+        } else if (data.tmux_unavailable) {
+            const unsupported = data.tmux_unavailable.code === 'unsupported';
+            showNotification(text(unsupported ? 'tmux.unsupported' : 'tmux.installFailed',
+                unsupported
+                    ? 'This session is not kept: the host ({platform}) has no tmux, and SSHDeck has none for it.'
+                    : 'This session is not kept: the host ({platform}) has no tmux, and SSHDeck could not put its own there.')
+                .replace('{platform}', data.tmux_unavailable.platform || '?'), 'warning');
+        }
+    }
+
     socket.on('ssh_connected', (data) => {
         // Capture the request-keyed non-secret metadata BEFORE the pending
         // record is cleared, then pass it into createSession so the right
@@ -1189,6 +1210,7 @@
         TerminalManager.noteServerReplayLines(data.replay_max_lines);
 
         const sessionId = SessionManager.createSession(data, pending);
+        noteTmuxOutcome(data);
 
         /*
          * Open the replay window when this connect carries scrollback.

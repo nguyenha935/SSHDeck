@@ -60,6 +60,24 @@ files it holds.
 `scripts/vendor.js` copies each licence next to the files it covers, so
 re-vendoring a library cannot drop its notice again.
 
+## tmux binaries shipped in `vendor/tmux/`
+
+SSHDeck copies one of these onto a Linux host that has no tmux (see
+[`vendor/tmux/README.md`](vendor/tmux/README.md)). Each is tmux statically
+linked with the libraries below, built from unmodified sources by
+`scripts/build_static_tmux.sh`.
+
+| Component | Version | Licence |
+| --- | --- | --- |
+| tmux | 3.8 | ISC |
+| libevent | 2.1.13-stable | BSD-3-Clause |
+| ncurses | 6.5 | MIT-style (X11) |
+| musl | 1.2.5 | MIT |
+
+The full texts travel with the binaries in
+[`vendor/tmux/LICENSES.txt`](vendor/tmux/LICENSES.txt), which the build script
+writes from the same source tarballs.
+
 ## Python packages
 
 Installed from PyPI at the versions pinned in `requirements.txt`, unmodified.
