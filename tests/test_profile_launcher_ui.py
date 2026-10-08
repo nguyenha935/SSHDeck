@@ -610,7 +610,8 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # v105: no chrome of the app's own resizes the remote pane -- the
         # keyboards push the content up, the side panels scale the text down
         # to a 9 px floor -- and the held frame is blurred.
-        "filename='js/terminal-manager.js'": '?v=105',
+        # v106: the floor is 12 px, never above the reader's own size.
+        "filename='js/terminal-manager.js'": '?v=106',
         # touch-action-row.js owns the six-action global row. It did not exist
         # when this table was written; an unpinned copy of it is the single most
         # damaging stale asset on touch, because the row it builds is the only

@@ -401,7 +401,10 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # keyboards push the content up, the side panels scale the text), and the
     # held frame is blurred. A browser on v104 still makes omp replay on every
     # keyboard and every panel.
-    assert "filename='js/terminal-manager.js') }}?v=105" in idx
+    # v105 -> v106: the text is never drawn under 12 px (or the reader's own
+    # size) on the app's account; a panel that would take it lower resizes the
+    # pane instead. A browser on v105 shrinks it to 9 px.
+    assert "filename='js/terminal-manager.js') }}?v=106" in idx
     assert "\"filename='css/style.css'\": '?v=77'," in tp
     assert "\"filename='js/sftp-file-manager.js'\": '?v=21'," in tp
     assert "\"filename='js/app.js'\": '?v=105'," in tp
@@ -420,7 +423,7 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # Desurgery v59 -> v60: the pty_source_changed handler now re-fits (a moved
     # source changes what a wider pane renders under the S36 minimum).
     assert "\"filename='js/session-manager.js'\": '?v=72'," in tp
-    assert "\"filename='js/terminal-manager.js'\": '?v=105'," in tp
+    assert "\"filename='js/terminal-manager.js'\": '?v=106'," in tp
     assert "style.css') }}?v=77\" in template" in tp
 
 

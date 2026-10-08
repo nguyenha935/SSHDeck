@@ -16,7 +16,10 @@
  * answer did not move the content (restated, class a): no proposal goes out
  * and the grid keeps its rows. §3 and §4 pinned the hold on this page's OWN
  * proposal, which a keyboard no longer makes; they now make it with a change
- * of the window's width, which still is one.
+ * of the window's width, which still is one. The same day the text got a
+ * floor of 12 px that is never above the reader's own size, so the phone's
+ * 12 px base is never shrunk at all: §3 and §4 set a 16 px base, and what they
+ * pin -- WHEN the held window is zoomed into -- is unchanged (restated, a).
  *
  * The server here is a stand-in: it answers view_attach and ssh_resize with
  * tmux_window_geometry after RTT ms, with the size asked for, the size it
@@ -234,9 +237,16 @@ async function closes(page, label, trigger) {
     await ctx.close();
 }
 
+// A base above the floor, so a zoom into the held window can be seen.
+async function largerBase(page) {
+    await page.evaluate(() => TerminalManager.updateFontSize(16));
+    await page.waitForTimeout(900);
+}
+
 /* ---------------------------- §3 another view holds the window as it was */
 {
     const { ctx, page } = await openPage();
+    await largerBase(page);
     // A production round trip: the server's resize path is an exec channel,
     // measured at 432-472 ms, so the answer lands AFTER the settle present --
     // with 120 ms here the settle timer happened to present it and hid a
@@ -253,6 +263,7 @@ async function closes(page, label, trigger) {
 /* ------------------------------------------------------ §4 no answer */
 {
     const { ctx, page } = await openPage();
+    await largerBase(page);
     await page.evaluate(() => { window.__ANSWER = 'none'; });
     const r = await record(page, () => page.setViewportSize({ width: W - 60, height: H }), 2200);
     const hold = await page.evaluate(() => TerminalManager.RESIZE_HOLD_MS);
