@@ -9,13 +9,23 @@
  * presentWindowGrid zoomed the OLD window into the new box while this page's
  * own proposal was still on its way, and the answer zoomed it back.
  *
+ * OWNER RULING 2026-10-08: a keyboard no longer resizes the remote pane at
+ * all -- it holds its grid and pushes the content up, like the composer
+ * (TerminalManager.chromeResized), because every resize is a transcript
+ * replay under omp. §1 and §2 asserted that a proposal went out and that its
+ * answer did not move the content (restated, class a): no proposal goes out
+ * and the grid keeps its rows. §3 and §4 pinned the hold on this page's OWN
+ * proposal, which a keyboard no longer makes; they now make it with a change
+ * of the window's width, which still is one.
+ *
  * The server here is a stand-in: it answers view_attach and ssh_resize with
  * tmux_window_geometry after RTT ms, with the size asked for, the size it
  * already had (another view holds the window), or not at all.
  *
- *   §1 the iOS keyboard (visual viewport 926 -> 469): the font never changes,
- *      the last row takes two positions (before, after), the answer does not
- *      move it, and it is anchored within two frames of the box shrinking;
+ *   §1 the iOS keyboard (visual viewport 926 -> 469): nothing is proposed,
+ *      the grid and the font keep their size, the last row takes two
+ *      positions (before, after) and is anchored within two frames of the box
+ *      shrinking; closing it proposes nothing either;
  *   §2 the function keypad: the same;
  *   §3 another view holds the window (the answer is the old size): the zoom
  *      happens as soon as that answer lands, not after the hold runs out;
@@ -171,8 +181,8 @@ async function record(page, trigger, ms) {
 function settleRows(label, { rec, resizes, base }) {
     const first = rec[0];
     const last = rec[rec.length - 1];
-    check(`${label}: a proposal went out and the grid took it`,
-        resizes > 0 && last.rows < first.rows, true);
+    check(`${label}: nothing is proposed and the grid keeps its rows`,
+        [resizes, last.rows], [0, first.rows]);
     check(`${label}: the text never changes size`,
         [...new Set(rec.map(f => f.font))], [base]);
     const tops = rec.map(f => f.marker && f.marker[0]);
@@ -184,9 +194,19 @@ function settleRows(label, { rec, resizes, base }) {
     const anchored = rec.findIndex((f, i) => i >= shrunk && f.marker && f.marker[1] <= f.bottom);
     check(`${label}: it is above the new edge within two frames of the box shrinking`,
         shrunk >= 0 && anchored >= shrunk && anchored - shrunk <= 2, true);
-    const answered = rec.findIndex(f => f.rows < first.rows);
-    check(`${label}: the answer does not move it`,
-        answered > 0 && rec[answered].marker[0] === rec[answered - 1].marker[0], true);
+}
+
+// Closing it: nothing proposed, the grid as it was.
+async function closes(page, label, trigger) {
+    const before = await page.evaluate(() => TerminalManager.terminals[
+        TerminalManager.sessionTerminals[SessionManager.activeSessionId][0]].rows);
+    await page.evaluate(() => { window.__emits.length = 0; });
+    await trigger();
+    await page.waitForTimeout(900);
+    check(`${label}: closing it proposes nothing either`, await page.evaluate(() => [
+        window.__emits.filter(e => e.ev === 'ssh_resize').length,
+        TerminalManager.terminals[TerminalManager.sessionTerminals[SessionManager.activeSessionId][0]].rows,
+    ]), [0, before]);
 }
 
 /* ------------------------------------------------- §1 the iOS keyboard */
@@ -198,6 +218,10 @@ function settleRows(label, { rec, resizes, base }) {
         window.visualViewport.dispatchEvent(new Event('resize'));
     }, KB_VV), 1200);
     settleRows('§1 iOS keyboard', r);
+    await closes(page, '§1 iOS keyboard', () => page.evaluate(() => {
+        window.__vvH = null;
+        window.visualViewport.dispatchEvent(new Event('resize'));
+    }));
     await ctx.close();
 }
 
@@ -206,6 +230,7 @@ function settleRows(label, { rec, resizes, base }) {
     const { ctx, page } = await openPage();
     const r = await record(page, () => page.click('#mobileKeypadBtn'), 1200);
     settleRows('§2 keypad', r);
+    await closes(page, '§2 keypad', () => page.click('#mobileKeypadBtn'));
     await ctx.close();
 }
 
@@ -217,7 +242,7 @@ function settleRows(label, { rec, resizes, base }) {
     // with 120 ms here the settle timer happened to present it and hid a
     // missing presentNow on the unchanged-geometry path (mutation M3).
     await page.evaluate(() => { window.__ANSWER = 'held'; window.__RTT = 400; });
-    const r = await record(page, () => page.click('#mobileKeypadBtn'), 1200);
+    const r = await record(page, () => page.setViewportSize({ width: W - 60, height: H }), 1200);
     const zoomed = r.rec.find(f => f.font < r.base);
     check('§3 the old window stays, so the text zooms to fit it', !!zoomed, true);
     check('§3 as soon as the answer lands, not after the hold (RESIZE_HOLD_MS)',
@@ -229,7 +254,7 @@ function settleRows(label, { rec, resizes, base }) {
 {
     const { ctx, page } = await openPage();
     await page.evaluate(() => { window.__ANSWER = 'none'; });
-    const r = await record(page, () => page.click('#mobileKeypadBtn'), 2200);
+    const r = await record(page, () => page.setViewportSize({ width: W - 60, height: H }), 2200);
     const hold = await page.evaluate(() => TerminalManager.RESIZE_HOLD_MS);
     const early = r.rec.filter(f => f.t < hold - 100).some(f => f.font < r.base);
     const late = r.rec.find(f => f.font < r.base);

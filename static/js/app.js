@@ -2303,10 +2303,10 @@
          * TerminalManager gives what the panes lost back to their fit.
          */
         const composerPanes = () => (typeof TerminalManager !== 'undefined'
-            ? TerminalManager.composerMeasure() : null);
+            ? TerminalManager.chromeMeasure() : null);
         const composerResized = (panes, oneLine) => {
             if (panes) {
-                TerminalManager.composerResized(panes, oneLine);
+                TerminalManager.chromeResized('composer', panes, oneLine);
             }
         };
         const publishComposerContentHeight = () => {
@@ -2870,13 +2870,15 @@
                 // The reveal takes 52 px of the terminal area on desktop. That
                 // is OUR panel, not a change in what the remote pane should be,
                 // so the grid is held across the toggle and the text scales
-                // instead -- otherwise opening and closing Broadcast resizes
-                // the tmux window twice and every attached device repaints
-                // change, so the resize it causes is already covered.
+                // instead (TerminalManager.chromeResized) -- otherwise opening
+                // and closing Broadcast resizes the tmux window twice and every
+                // attached device repaints.
+                const reveal = () => document.body.classList.toggle('broadcast-composer', active);
                 if (typeof TerminalManager !== 'undefined') {
-                    TerminalManager.holdChromeGrid(active);
+                    TerminalManager.chromeChange('broadcast', reveal, !active);
+                } else {
+                    reveal();
                 }
-                document.body.classList.toggle('broadcast-composer', active);
                 if (mobileSendBtn) {
                     // Touch keeps this control icon-only; only its accessible name
                     // changes. CSS reveals the text label on desktop Broadcast.
@@ -3068,11 +3070,15 @@
             };
 
             const setKeypad = (open) => {
-                mobileKeypad.classList.toggle('mobile-open', open);
+                // The keypad is chrome like the soft keyboard: the room it takes
+                // is held, not reported (TerminalManager.chromeResized).
+                TerminalManager.chromeChange('keypad', () => {
+                    mobileKeypad.classList.toggle('mobile-open', open);
+                    document.body.classList.toggle('keypad-open', open);
+                }, !open);
                 mobileKeypad.setAttribute('aria-hidden', open ? 'false' : 'true');
                 mobileKeypadBtn.classList.toggle('active', open);
                 mobileKeypadBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
-                document.body.classList.toggle('keypad-open', open);
                 if (open) {
                     // Swap the system keyboard for the panel: blurring the box is
                     // what makes iOS retract its keyboard so the sheet has the room.
@@ -4169,11 +4175,13 @@
                 newNotepadWidth = workspaceWidth - minTerminalWidth;
             }
 
-            workspace.style.setProperty('--notepad-width', `${newNotepadWidth}px`);
-
             // The terminal wrapper changes size with this grid track. Its
             // debounced ResizeObserver is the single fit owner; scheduling one
             // more timeout per pointermove creates an unbounded fit backlog.
+            // The panel is chrome: the width it takes is held, not reported.
+            TerminalManager.chromeChange('panel',
+                () => workspace.style.setProperty('--notepad-width', `${newNotepadWidth}px`),
+                () => !TerminalManager.sidePanelOpen());
 
             e.preventDefault();
         };
@@ -4223,7 +4231,11 @@
                         detail: { panel: 'notepad' },
                     }));
                 }
-                notepadPanel.classList.toggle('collapsed', isCollapsed);
+                // The panel is chrome: the width it takes is held, not
+                // reported (TerminalManager.chromeResized).
+                TerminalManager.chromeChange('panel',
+                    () => notepadPanel.classList.toggle('collapsed', isCollapsed),
+                    () => !TerminalManager.sidePanelOpen());
                 // Sole aria-expanded owner, updated on every state change.
                 document.getElementById('notepadOpenBtn')
                     ?.setAttribute('aria-expanded', String(!isCollapsed));
@@ -4261,7 +4273,9 @@
         }
 
         handle.addEventListener('dblclick', (e) => {
-            workspace.style.removeProperty('--notepad-width');
+            TerminalManager.chromeChange('panel',
+                () => workspace.style.removeProperty('--notepad-width'),
+                () => !TerminalManager.sidePanelOpen());
             localStorage.removeItem('workspace-notepad-width');
             showNotification('Layout reset to default', 'info');
 

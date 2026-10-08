@@ -5653,11 +5653,17 @@ body.keyboard-open.notepad-focused .notepad-panel {
    surface, and tmux's own frame is what the eye follows. The inset survived
    as a band of background on all four sides -- and a rounded corner over a
    full-bleed grid clips glyphs -- so both go. terminal_frame_geometry's §B
-   still holds: the bands are symmetric, they are simply zero now. */
+   still holds: the bands are symmetric, they are simply zero now.
+   The pane clips its grid; it never scrolls it. `.xterm { overflow-x: hidden }`
+   alone computes overflow-y to auto, and a grid that follows the cursor with
+   a keyboard up (recentreTerminalScreen) runs past the pane's bottom: measured
+   742 px of content in a 316 px box, a scroll container a swipe or a focus
+   could move and a classic scrollbar would paint. */
 .terminal-pane .xterm,
 .terminal-wrapper .xterm {
     padding: 0;
     border-radius: 0;
+    overflow-y: hidden;
 }
 
 /* The vendored xterm.css paints `.xterm .xterm-viewport` opaque #000 "so the

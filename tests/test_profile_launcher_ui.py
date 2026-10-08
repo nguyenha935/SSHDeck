@@ -65,7 +65,8 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # landscape takes the >=768 touch tier (the min-height: 501px terms dropped).
         # v76: the theme and language pickers' rules went with them to Settings
         # (settings.css).
-        "filename='css/style.css'": '?v=76',
+        # v77: the pane clips its grid vertically instead of scrolling it.
+        "filename='css/style.css'": '?v=77',
         # v30: W13-A4 legacy tmux locale chip badge (.chip-locale-warning).
         # v31: W14 item 2 bounded menus + item 6 broadcast picker.
         # v35: the drag-armed chip's lift was a black rgba() literal -- the one
@@ -127,7 +128,8 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # window.emitTerminalInput, so it is no longer swallowed by tmux copy
         # mode. v10 is RELEASED, so the pin must move or the fix ships invisibly.
         # v13: the OS-detection console line is gone.
-        "filename='js/command-library.js'": '?v=13',
+        # v14: opening and closing the Commands rail is chrome, not a resize.
+        "filename='js/command-library.js'": '?v=14',
         "filename='js/command-set-manager.js'": '?v=2',
         # v45: W13-B5 reconnect payload carries the SOURCE session id so the
         # server can bind the reattach claim to the exact saved row.
@@ -257,12 +259,14 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # v103: the change-password page is gone; the palette opens Settings.
         # v104: the composer's lines past the first push the content up
         # instead of resizing the remote pane.
-        "filename='js/app.js'": '?v=104',
+        # v105: the keypad, Notes and its splitter are chrome, not a resize.
+        "filename='js/app.js'": '?v=105',
         # v18: the Files browser hooks (expand, delegated render and menu, the
         # selection kept by name across a relist, one toast per error).
         # v19: the [SFTP]/[FM] console lines are gone.
         # v20: the quick-connect captions mark the required fields.
-        "filename='js/sftp-file-manager.js'": '?v=20',
+        # v21: opening and closing the Files panel is chrome, not a resize.
+        "filename='js/sftp-file-manager.js'": '?v=21',
         # New: the expanded Files browser; loads before sftp-file-manager.js,
         # which constructs it.
         # v2: the control that opened a menu closes it; Upload / Download in
@@ -603,7 +607,10 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # seen running from the top of the conversation to the prompt.
         # v104: every change of the grid is covered, rows too, for as long as
         # the repaint's volume says; the composer's growth is not a resize.
-        "filename='js/terminal-manager.js'": '?v=104',
+        # v105: no chrome of the app's own resizes the remote pane -- the
+        # keyboards push the content up, the side panels scale the text down
+        # to a 9 px floor -- and the held frame is blurred.
+        "filename='js/terminal-manager.js'": '?v=105',
         # touch-action-row.js owns the six-action global row. It did not exist
         # when this table was written; an unpinned copy of it is the single most
         # damaging stale asset on touch, because the row it builds is the only
@@ -703,7 +710,7 @@ def test_profile_launcher_stylesheet_uses_current_cache_version():
     # test_merged_profile_frontend_assets_have_distinct_cache_versions above --
     # this file states the style.css pin TWICE, so a raise must move both or one
     # row goes red while the other passes.
-    assert "filename='css/style.css') }}?v=76" in template
+    assert "filename='css/style.css') }}?v=77" in template
 
 
 def test_retired_upload_modules_are_fully_gone():

@@ -198,7 +198,8 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v75: a checkbox or radio row in a form group is a flex row again
         // (it had lost to the caption rule), and touch fields are 44 px at
         // 16 px at every width. A cached v74 keeps the text under the box.
-        ['css/style.css', 76],
+        // v77: the pane clips its grid vertically instead of scrolling it.
+        ['css/style.css', 77],
         // deck.css owns the v5 shell and is edited every bucket, so it needs the
         // same pin contract as style.css. It was missing from this table -- which
         // is exactly the "no pin at all" failure described above.
@@ -432,10 +433,13 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v102: the renderer and the diagnostics follow Settings, live.
         // v104: every change of the grid is covered, rows too, for as long as
         // the repaint's volume says; the composer's growth is not a resize.
-        ['js/terminal-manager.js', 104],
+        // v105: no chrome of the app's own resizes the remote pane; the held
+        // frame is blurred.
+        ['js/terminal-manager.js', 105],
         // v18: the Files browser hooks (expand, delegated render and menu).
         // v20: the quick-connect captions mark the required fields.
-        ['js/sftp-file-manager.js', 20],
+        // v21: opening and closing the Files panel is chrome, not a resize.
+        ['js/sftp-file-manager.js', 21],
         // v2: the control that opened a menu closes it; Upload / Download in
         // the phone's menu.
         ['js/files-browser.js', 3],
@@ -450,7 +454,8 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v11: S17 FIX 4d completion -- the insert-at-prompt write routes through
         // window.emitTerminalInput, so it is no longer swallowed by tmux copy
         // mode. v10 is RELEASED, so the pin must move or the fix ships invisibly.
-        ['js/command-library.js', 13],
+        // v14: opening and closing the Commands rail is chrome, not a resize.
+        ['js/command-library.js', 14],
         // v36: W13-A4 session.legacyTmuxLocale keys in all six locales.
         // v37: W13-B5 session.reconnectRetainBody key in all six locales.
         // v39: W14 items 5/6 keys in all six locales.
@@ -644,7 +649,8 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v101: a socket error the Files UI toasts itself is not toasted twice.
         // v102: scrollback moved into Settings.
         // v104: the composer's lines past the first push the content up.
-        ['js/app.js', 104],
+        // v105: the keypad, Notes and its splitter are chrome, not a resize.
+        ['js/app.js', 105],
         // v9: 0209f10 raise. v10: P1 D2 trigger-anchored More-sheet position
         // (top = trigger.bottom+1, bottom auto, measured maxHeight) — Entry 27 R4.
         // v14: the theme and language pickers moved to Settings.
