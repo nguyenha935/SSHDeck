@@ -280,10 +280,12 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # the flex-truncation idiom and the toggle is `flex: none`, so the deficit falls
     # on the static label instead of on the control's height. A browser on v63 keeps
     # the thickened toggle and the shortened note area, so the pin must move.
-    assert "filename='css/style.css') }}?v=76" in idx
+    # v76 -> v77: the pane clips its grid vertically instead of scrolling it.
+    assert "filename='css/style.css') }}?v=77" in idx
     # sftp-file-manager.js 19 -> 20: the quick-connect captions mark the
     # required fields.
-    assert "filename='js/sftp-file-manager.js') }}?v=20" in idx
+    # 20 -> 21: opening and closing the Files panel is chrome, not a resize.
+    assert "filename='js/sftp-file-manager.js') }}?v=21" in idx
     # app.js v69 -> v70 (S35 A, owner's composer/erase requirement): after the
     # empty-composer erase spends its last DEL, the draft is released from the
     # taint applyTerminalTruth set when it installed the shell's line. Measured on
@@ -333,7 +335,9 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # toasted twice.
     # app.js 103 -> 104: the composer's lines past the first push the content
     # up instead of resizing the remote pane.
-    assert "filename='js/app.js') }}?v=104" in idx
+    # app.js 104 -> 105: the keypad, Notes and its splitter are chrome, not a
+    # resize.
+    assert "filename='js/app.js') }}?v=105" in idx
     # S34: v46 -- the control-mode transport. pty_geometry may now arrive with
     # `render_local`, which this client must NOT adopt as its grid (it wraps the
     # relative %output stream at its own fit instead). A browser on v45 would adopt
@@ -393,10 +397,14 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # repaint's volume says (omp 18.4.4 replays on a change of rows too), and
     # the composer's growth is given back to the fit. A browser on v103 shows
     # omp's replay run past whenever the keyboard opens.
-    assert "filename='js/terminal-manager.js') }}?v=104" in idx
-    assert "\"filename='css/style.css'\": '?v=76'," in tp
-    assert "\"filename='js/sftp-file-manager.js'\": '?v=20'," in tp
-    assert "\"filename='js/app.js'\": '?v=104'," in tp
+    # v104 -> v105: no chrome of the app's own resizes the remote pane (the
+    # keyboards push the content up, the side panels scale the text), and the
+    # held frame is blurred. A browser on v104 still makes omp replay on every
+    # keyboard and every panel.
+    assert "filename='js/terminal-manager.js') }}?v=105" in idx
+    assert "\"filename='css/style.css'\": '?v=77'," in tp
+    assert "\"filename='js/sftp-file-manager.js'\": '?v=21'," in tp
+    assert "\"filename='js/app.js'\": '?v=105'," in tp
     # session-manager v51 -> v52 (S35 P5): restore-driven pane eviction stopped
     # (displaceOccupant:false) and the remembered session selection is applied on
     # arrival. v51 is RELEASED without the fix, so the pin must move.
@@ -412,8 +420,8 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # Desurgery v59 -> v60: the pty_source_changed handler now re-fits (a moved
     # source changes what a wider pane renders under the S36 minimum).
     assert "\"filename='js/session-manager.js'\": '?v=72'," in tp
-    assert "\"filename='js/terminal-manager.js'\": '?v=104'," in tp
-    assert "style.css') }}?v=76\" in template" in tp
+    assert "\"filename='js/terminal-manager.js'\": '?v=105'," in tp
+    assert "style.css') }}?v=77\" in template" in tp
 
 
 def test_command_workspace_modal_renamed_to_command_sets():

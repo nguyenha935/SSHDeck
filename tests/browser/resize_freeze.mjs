@@ -43,7 +43,9 @@
  * smaller change covered to the end (§10); output already flowing does not
  * hold the cover to the belt (§11); a replay longer than FREEZE_MAX_MS is
  * covered to its end (§12). §14 pins what was already true and still must
- * be: a spinner ticking under the cover does not hold it. "What is seen" is read per animation frame from
+ * be: a spinner ticking under the cover does not hold it. §15 pins OWNER
+ * RULING 2026-10-08: the held frame is blurred, and fades out when it is
+ * lifted, both without motion for a reader who asked for less. "What is seen" is read per animation frame from
  * what is painted -- the cover when there is one, the terminal's rows when not
  * -- and a frame that is neither the one before the change nor the settled one
  * is a frame the person saw the screen jump through.
@@ -590,6 +592,58 @@ check('§14 the pane is rendering', ticking.rendering, true);
 check('§14 a spinner ticking under the cover does not hold it past the quiet window',
     ticking.coveredTo - ticking.coveredFrom < await page.evaluate(() => TerminalManager.FREEZE_QUIET_MS + 200), true);
 await drop(T);
+
+/* ------------------ §15 the held frame is blurred, and fades when lifted */
+// OWNER RULING 2026-10-08: a pane holding still for up to two seconds read as
+// frozen; the held frame is shown blurred instead of as if it were live.
+const lifecycle = (id) => page.evaluate(async ({ id }) => {
+    const frames = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    TerminalManager.noteWindowGeometry(id, 90, 20);
+    const cover = document.querySelector('.sshdeck-frozen-pane');
+    if (!cover) return null;
+    await frames();
+    const copy = cover.firstElementChild;
+    const held = { filter: copy.style.filter, eased: copy.style.transition.includes('filter') };
+    const t0 = performance.now();
+    const seen = { lifted: null, gone: null, fading: null, stillCover: null };
+    const look = () => {
+        if (seen.lifted === null && cover.classList.contains('sshdeck-frozen-leaving')) {
+            seen.lifted = performance.now() - t0;
+            seen.fading = cover.style.transition.includes('opacity');
+            seen.stillCover = !!document.querySelector('.sshdeck-frozen-pane');
+        }
+        if (seen.gone === null && !cover.isConnected) seen.gone = performance.now() - t0;
+    };
+    const watcher = new MutationObserver(look);
+    watcher.observe(cover, { attributes: true, attributeFilter: ['class'] });
+    watcher.observe(document.body, { childList: true });
+    TerminalManager.writeOutput(id, window.__screen(90, 20, 'lifted'));
+    const until = performance.now() + 3000;
+    while (seen.gone === null && performance.now() < until) await frames();
+    watcher.disconnect();
+    return { held, fading: seen.fading, stillCover: seen.stillCover,
+        fadeMs: seen.gone === null || seen.lifted === null ? null : Math.round(seen.gone - seen.lifted) };
+}, { id });
+const B = 'freeze-blur';
+await makePane(B, [100, 20], 'old');
+const blur = await lifecycle(B);
+const FADE = await page.evaluate(() => TerminalManager.FREEZE_FADE_MS);
+console.log(`      [§15] ${JSON.stringify(blur)}`);
+check('§15 the held frame is blurred, eased in',
+    blur && blur.held, { filter: 'blur(3px)', eased: true });
+check('§15 lifted, it is no longer a cover to anything that looks for one, and fades',
+    blur && [blur.stillCover, blur.fading], [false, true]);
+check('§15 and it is gone once the fade is over',
+    !!blur && blur.fadeMs !== null && blur.fadeMs >= FADE - 20 && blur.fadeMs <= FADE + 150, true);
+await drop(B);
+await page.emulateMedia({ reducedMotion: 'reduce' });
+await makePane(B, [100, 20], 'old');
+const still = await lifecycle(B);
+console.log(`      [§15 reduced motion] ${JSON.stringify(still)}`);
+check('§15 asked for less motion: the frame is blurred at once, and removed at once',
+    still && [still.held, still.fadeMs], [{ filter: 'blur(3px)', eased: false }, 0]);
+await page.emulateMedia({ reducedMotion: 'no-preference' });
+await drop(B);
 
 check('§7 no page errors', errors, []);
 await browser.close();

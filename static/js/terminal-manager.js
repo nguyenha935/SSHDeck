@@ -29,12 +29,9 @@ const TerminalManager = {
     repaintWrites: {},
     // Sessions whose program has answered a size change with a replay.
     replaysOnResize: {},
-    // Pixels of each pane taken by the composer's lines past the first,
-    // keyed by terminal (composerResized).
-    composerPan: new Map(),
-    // The window size when the app's own chrome took space from the pane;
-    // null when no chrome is holding the grid (holdChromeGrid).
-    chromeHold: null,
+    // Pixels of each pane the app's own chrome is holding, keyed by terminal,
+    // then by kind (chromeResized).
+    chromeOffsets: new Map(),
     touchScrollControllers: {},
     resizeObservers: {},
     scrollbarCleanups: {},
@@ -348,13 +345,13 @@ const TerminalManager = {
          * terminal-construction path, so this cannot be missed.
          */
         this.ScrollOwner.attach(terminal);
-        /*
-         * ' — subscribe to the buffer-type change HERE, for the same reason
-         * ScrollOwner attaches here: this is the only terminal-construction path,
-         * and the first write can arrive before anything else runs. A listener
-         * registered later would miss a TUI that is already on screen when the
-         * client joins.
-         */
+        // While a keyboard or the composer holds the grid taller than its
+        // pane, the rows in view follow the cursor (recentreTerminalScreen).
+        terminal.onCursorMove(() => {
+            if (terminal.__sshdeckFollowsCursor) {
+                this.scheduleRecentre(terminal);
+            }
+        });
 
         const isMac = this.isMacPlatform();
         terminal.attachCustomKeyEventHandler(event => (
@@ -3635,6 +3632,15 @@ const TerminalManager = {
             return;
         }
         this.scrollStateBySession[sessionId] = next;
+        // A grid that follows the cursor does so only while nothing is
+        // scrolled (recentreTerminalScreen); the frame goes back to its bottom
+        // as the scroll starts, not at the next cursor move.
+        (this.sessionTerminals[sessionId] || []).forEach(key => {
+            const terminal = this.terminals[key];
+            if (terminal?.__sshdeckFollowsCursor) {
+                this.scheduleRecentre(terminal);
+            }
+        });
         document.dispatchEvent(new CustomEvent('sshdeck:terminal-scroll-state', {
             detail: { sessionId, active: next },
         }));
@@ -4389,14 +4395,52 @@ const TerminalManager = {
          * for a terminal: the last line is the one being read.
          */
         const overflow = screenRect.height - (xtermRect.height - vborders - vpads);
-        screen.style.marginTop = overflow === 0
-            ? '' : `${overflow > 0 ? -Math.ceil(overflow) : Math.floor(-overflow)}px`;
+        /*
+         * Unless the program's cursor is in the rows that would be hidden: a
+         * grid the composer or a keyboard is holding (chromeResized) can hide
+         * half the screen, and an editor's cursor may be there. Then the rows
+         * from the cursor's down are shown instead (the pane clips them:
+         * overflow-y hidden in style.css). Only for that room: a grid taller
+         * than its pane for any other reason keeps its last rows. Not while
+         * the content is scrolled either: tmux's copy cursor is not where the
+         * program is working.
+         */
+        let lift = overflow > 0 ? Math.ceil(overflow) : -Math.floor(-overflow);
+        const buffer = terminal.buffer?.active;
+        terminal.__sshdeckFollowsCursor = overflow > 0 && !!buffer
+            && this.chromeHeld(terminal, 'pan').height > 0;
+        if (terminal.__sshdeckFollowsCursor && buffer.viewportY === buffer.baseY
+                && !terminal._core?.coreService?.isCursorHidden
+                && !this.scrollStateBySession[this.sessionOfTerminal(terminal)]) {
+            lift = Math.min(lift, Math.floor(buffer.cursorY * screenRect.height / terminal.rows));
+        }
+        screen.style.marginTop = lift === 0 ? '' : `${-lift}px`;
         // A focus-driven scroll of an overflow:hidden box would add its own
         // offset on top of these margins and stay; the box is pinned instead.
         xterm.scrollTop = 0;
         if (xterm.parentElement) {
             xterm.parentElement.scrollTop = 0;
         }
+    },
+
+    recentreRequests: new Map(),
+
+    // At most once a frame, for cursor moves while the grid follows them.
+    scheduleRecentre(terminal) {
+        if (this.recentreRequests.has(terminal)) {
+            return;
+        }
+        this.recentreRequests.set(terminal, requestAnimationFrame(() => {
+            this.recentreRequests.delete(terminal);
+            if (terminal.element?.isConnected) {
+                this.recentreTerminalScreen(terminal);
+            }
+        }));
+    },
+
+    sessionOfTerminal(terminal) {
+        return Object.keys(this.sessionTerminals).find(sessionId =>
+            this.sessionTerminals[sessionId].some(key => this.terminals[key] === terminal));
     },
 
     /*
@@ -4466,20 +4510,27 @@ const TerminalManager = {
     /*
      * What the SERVER is told, which is not always what the pane measures.
      *
-     * While the app's own chrome is holding space (holdChromeGrid), the pane
-     * is reported as it would be WITHOUT that chrome, so a panel of ours never
-     * moves the shared tmux window. Everything that decides how this pane is
-     * DRAWN -- presentWindowGrid above all -- keeps using proposeBaseFit, the
-     * box as it really is: the text has to fit the room there is, and a grid
-     * presented against a box it does not have is a clipped pane.
+     * While a panel of the app's own is holding room (the zoom chrome, see
+     * chromeResized), the pane is reported as it would be WITHOUT it, so the
+     * panel never moves the shared tmux window. Everything that decides how
+     * this pane is DRAWN -- presentWindowGrid above all -- keeps using
+     * proposeBaseFit, the box as it is: the text has to fit the room there is,
+     * and a grid presented against a box it does not have is a clipped pane.
+     * Past CHROME_ZOOM_MIN_FONT the text would be too small to read, so the
+     * pane is reported as it is.
      */
     proposeReportedFit(terminal) {
         const box = this.paneCellBox(terminal);
         if (!box) {
             return null;
         }
-        const held = this.chromeHeldOffset(terminal, box);
-        if (!held || (!held.width && !held.height)) {
+        const held = this.chromeHeld(terminal, 'zoom');
+        if (!held.width && !held.height) {
+            return this.proposeBaseFit(terminal);
+        }
+        const scale = Math.min(box.width / (box.width + held.width),
+            box.height / (box.height + held.height));
+        if (this.getBaseFontSize() * scale < this.CHROME_ZOOM_MIN_FONT) {
             return this.proposeBaseFit(terminal);
         }
         return {
@@ -4491,21 +4542,40 @@ const TerminalManager = {
     },
 
     paneCellBox(terminal) {
-        const xterm = terminal?.element;
-        const parent = xterm?.parentElement;
         const charSize = terminal?._core?._charSizeService;
-        if (!parent || !charSize || !(charSize.width > 0) || !(charSize.height > 0)) {
+        if (!charSize || !(charSize.width > 0) || !(charSize.height > 0)) {
             return null;
         }
-        const baseCell = this.baseCharMetrics(terminal);
-        /*
-         * MEASURE THE GUTTER, DO NOT GUESS IT. This reserved a flat 14px for
-         * an overview ruler xterm only draws when `overviewRuler.width` is
-         * set -- it is `{}` by default, so nothing was drawn there and the
-         * grid stopped 14px short of the right edge (owner: * the scrollbar gutter: 8px where the page styles a scrollbar,
-         * nothing on an overlay-scrollbar platform. The viewport reports it
-         * exactly.
-         */
+        const box = this.paneBox(terminal);
+        if (!box) {
+            return null;
+        }
+        // As if the composer and the keyboards were not there (chromeResized).
+        const pan = this.chromeHeld(terminal, 'pan');
+        return {
+            width: box.width + pan.width,
+            height: box.height + pan.height,
+            baseCell: this.baseCharMetrics(terminal),
+        };
+    },
+
+    /*
+     * The pane's room for the grid as it is: the parent's box less the
+     * terminal's own padding and the scrollbar gutter.
+     *
+     * MEASURE THE GUTTER, DO NOT GUESS IT. This reserved a flat 14px for an
+     * overview ruler xterm only draws when `overviewRuler.width` is set -- it
+     * is `{}` by default, so nothing was drawn there and the grid stopped 14px
+     * short of the right edge. The gutter is 8px where the page styles a
+     * scrollbar, nothing on an overlay-scrollbar platform; the viewport
+     * reports it exactly.
+     */
+    paneBox(terminal) {
+        const xterm = terminal?.element;
+        const parent = xterm?.parentElement;
+        if (!parent) {
+            return null;
+        }
         const viewportEl = xterm.querySelector('.xterm-viewport');
         const gutter = viewportEl
             ? Math.max(0, viewportEl.offsetWidth - viewportEl.clientWidth) : 0;
@@ -4513,24 +4583,12 @@ const TerminalManager = {
         const ruler = terminal.options.scrollback === 0 ? 0 : gutter + rulerWidth;
         const outer = getComputedStyle(parent);
         const inner = getComputedStyle(xterm);
-        // As if the composer were one line (composerResized).
-        const height = this.paneHeight(terminal) + this.composerPanFor(terminal);
-        const width = Math.max(0, parseInt(outer.getPropertyValue('width')))
-            - (parseInt(inner.paddingRight) + parseInt(inner.paddingLeft)) - ruler;
-        return { width, height, baseCell };
-    },
-
-    // The pane's height for the grid as it is: the parent's box less the
-    // terminal's own padding.
-    paneHeight(terminal) {
-        const xterm = terminal?.element;
-        const parent = xterm?.parentElement;
-        if (!parent) {
-            return null;
-        }
-        const inner = getComputedStyle(xterm);
-        return parseInt(getComputedStyle(parent).getPropertyValue('height'))
-            - (parseInt(inner.paddingTop) + parseInt(inner.paddingBottom));
+        return {
+            width: Math.max(0, parseInt(outer.getPropertyValue('width')))
+                - (parseInt(inner.paddingRight) + parseInt(inner.paddingLeft)) - ruler,
+            height: parseInt(outer.getPropertyValue('height'))
+                - (parseInt(inner.paddingTop) + parseInt(inner.paddingBottom)),
+        };
     },
 
     /*
@@ -5317,7 +5375,7 @@ const TerminalManager = {
         delete this.liveEdgeDisposables[terminalKey];
         delete this.liveEdgeIntent[terminalKey];
         delete this.repaintWrites[terminalKey];
-        this.composerPan.delete(terminal);
+        this.chromeOffsets.delete(terminal);
 
         if (sessionId && this.sessionTerminals[sessionId]) {
             this.sessionTerminals[sessionId] = this.sessionTerminals[sessionId].filter(key => key !== terminalKey);
@@ -5859,138 +5917,126 @@ const TerminalManager = {
     STORM_QUIET_MS: 750,
     STORM_MAX_MS: 4000,
     REPAINT_RATE_MS: 1000,
+    FREEZE_BLUR_PX: 3,
+    FREEZE_BLUR_MS: 120,
+    FREEZE_FADE_MS: 150,
     _freezeSeq: 0,
+
+    reducedMotion() {
+        return typeof window.matchMedia === 'function'
+            && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    },
 
     /*
      * THE APP'S OWN CHROME MUST NOT RESIZE THE REMOTE PANE.
      *
-     * Measured: turning Broadcast on puts #sessionBar into the desktop flex
-     * flow (style.css, the fine-pointer block) -- 52 px of real height, so the
-     * terminal area goes 780 -> 728 and the fit proposes 45 rows where it
-     * proposed 48. That proposal is the SHARED window: the server takes the
-     * minimum over the views, tmux resizes the window, every attached device
-     * repaints, and a prompt like omp redraws itself in front of the owner.
-     * Turning Broadcast off does it all again in reverse. Two full redraws,
-     * for a panel that belongs to one browser.
+     * The remote pane is one size for every device (window-size smallest),
+     * and every change of it is a SIGWINCH that a program like omp answers by
+     * replaying its whole transcript (freezePaneForResize). So when the app's
+     * own chrome takes room from a pane -- a panel, the composer, a keyboard --
+     * the pane keeps its grid and nothing is proposed. What still resizes it
+     * is the browser window itself, a rotation, a layout choice, another
+     * device.
      *
-     * So while our own chrome is holding space, the pane KEEPS its grid and
-     * the text scales into the smaller box instead -- which is the app's rule
-     * for every other size disagreement (presentWindowGrid: the tmux frame
-     * fills the pane, the text is what gives). Nothing is proposed, so nothing
-     * resizes, so nothing repaints -- and because `reportedSizes` is left
-     * alone, closing the panel proposes the size the server already has and is
-     * deduped there. The whole toggle costs zero frames on the wire.
+     * The room is measured around each change -- chromeMeasure before the
+     * write that moves the chrome, chromeResized after it -- per pane and per
+     * kind: a split gives each pane its own share, a pane first shown while a
+     * kind holds room takes the largest measured, and a kind back at rest is
+     * forgotten outright rather than trusted to sum back to zero. It is given
+     * back in one of two ways:
      *
-     * A GENUINE window resize while the panel is open is not chrome and must
-     * still be reported: the held window size is the baseline, and a change to
-     * it releases this pass and re-baselines.
+     *   pan  -- the composer, the soft keyboard, the function keypad (OWNER
+     *           RULINGS 2026-10-06 and 2026-10-08): given back in paneCellBox,
+     *           so the fit, the report and the font are what they were without
+     *           it, and recentreTerminalScreen shows the grid's last rows, or
+     *           the cursor's. Measured in the prod log, one typing turn on a
+     *           phone was six SIGWINCHes: keyboard, composer line by line,
+     *           Send, keyboard.
+     *   zoom -- the desktop side panels and the Broadcast composer: given back
+     *           to the REPORT only (proposeReportedFit), so the grid is kept and
+     *           the text scales into the box, the app's rule for every other
+     *           size disagreement (presentWindowGrid). Measured on desktop:
+     *           opening Notes, Files or Commands proposed 130 or 127 columns
+     *           where the pane had 167, and every drag of the splitter two
+     *           sizes more at least; Broadcast took 52 px of height, 48 rows
+     *           to 45.
+     *           OWNER RULING 2026-10-08, with a floor: where the text would
+     *           fall under CHROME_ZOOM_MIN_FONT, the pane is reported as it is.
      */
-    holdChromeGrid(active) {
-        if (!active) {
-            this.chromeHold = null;
-            return;
-        }
-        // Measured BEFORE the panel is in the flow -- the caller sets this in
-        // the same synchronous block as the class change, and nothing can fit
-        // in between, so these are the boxes without it.
+    CHROME_KINDS: { composer: 'pan', keyboard: 'pan', keypad: 'pan', panel: 'zoom', broadcast: 'zoom' },
+    CHROME_ZOOM_MIN_FONT: 9,
+
+    chromeMeasure() {
         const boxes = new Map();
         Object.keys(this.terminals).forEach(key => {
             const terminal = this.terminals[key];
-            if (!terminal || !this.isTerminalVisible(key)) {
-                return;
-            }
-            const box = this.paneCellBox(terminal);
+            const box = terminal && this.isTerminalVisible(key) ? this.paneBox(terminal) : null;
             if (box) {
-                boxes.set(terminal, { width: box.width, height: box.height });
+                boxes.set(terminal, box);
             }
         });
-        this.chromeHold = { boxes, deltas: new Map() };
+        return boxes;
     },
 
-    /*
-     * How much of this pane our own chrome is holding, in pixels.
-     *
-     * Measured once per pane, the first time it is fitted after the hold: the
-     * box it had before the panel, less the box it has now. From then on every
-     * proposal is computed on the box PLUS that offset, so what the server is
-     * told is the pane as it would be without our panel -- and since the size
-     * is then unchanged, reportLocalFit's own dedupe drops it. A genuine
-     * window resize moves the box underneath the same offset, so it is
-     * reported at once, and closing the panel proposes the size the server
-     * already has. There is nothing to un-hold.
-     */
-    chromeHeldOffset(terminal, box) {
-        const held = this.chromeHold;
-        if (!held) {
-            return null;
-        }
-        if (!held.deltas.has(terminal)) {
-            const before = held.boxes.get(terminal);
-            if (!before) {
-                return null;
-            }
-            held.deltas.set(terminal, {
-                width: Math.max(0, before.width - box.width),
-                height: Math.max(0, before.height - box.height),
-            });
-        }
-        return held.deltas.get(terminal);
-    },
-
-    /*
-     * THE COMPOSER'S EXTRA LINES DO NOT RESIZE THE REMOTE PANE.
-     *
-     * Measured in the prod log for one typing turn on a phone: the keyboard
-     * took the grid 45 -> 24 rows, the composer growing a line at a time took
-     * it 24 -> 22 -> 21 -> 19, Send put it back 19 -> 24 and the keyboard
-     * closing 24 -> 45. Six SIGWINCHes, each answered by omp with a replay of
-     * its transcript (freezePaneForResize). OWNER RULING 2026-10-06: the
-     * composer pushes the content up instead; the keyboard still resizes
-     * (OWNER RULING 2026-09-19).
-     *
-     * So every pixel the composer takes past its first line is given back to
-     * the pane in paneCellBox, the measurement every fit, report and zoom is
-     * made from: the grid, the report and the font stay what they were with
-     * one line. recentreTerminalScreen alone reads the box as it is, and its
-     * bottom anchor hides the grid's top rows instead of the prompt.
-     *
-     * Measured around the change itself, per pane: the composer calls
-     * composerMeasure before a write that can move the dock and
-     * composerResized after it. A split gives each pane its own share of the
-     * dock; a pane first shown while the composer is grown takes the largest.
-     */
-    composerMeasure() {
-        const heights = new Map();
-        Object.keys(this.terminals).forEach(key => {
-            const terminal = this.terminals[key];
-            const height = terminal && this.isTerminalVisible(key)
-                ? this.paneHeight(terminal) : null;
-            if (height !== null) {
-                heights.set(terminal, height);
-            }
-        });
-        return heights;
-    },
-
-    composerResized(before, oneLine) {
-        if (oneLine) {
-            this.composerPan.clear();
+    chromeResized(kind, before, atRest) {
+        if (atRest) {
+            this.chromeOffsets.forEach(kinds => delete kinds[kind]);
             return;
         }
-        before.forEach((height, terminal) => {
-            const now = this.paneHeight(terminal);
-            if (now !== null) {
-                this.composerPan.set(terminal, Math.max(0,
-                    (this.composerPan.get(terminal) || 0) + height - now));
+        before.forEach((was, terminal) => {
+            const now = this.paneBox(terminal);
+            if (!now) {
+                return;
             }
+            const kinds = this.chromeOffsets.get(terminal) || {};
+            const held = kinds[kind] || { width: 0, height: 0 };
+            kinds[kind] = {
+                width: Math.max(0, held.width + was.width - now.width),
+                height: Math.max(0, held.height + was.height - now.height),
+            };
+            this.chromeOffsets.set(terminal, kinds);
         });
     },
 
-    composerPanFor(terminal) {
-        if (this.composerPan.has(terminal)) {
-            return this.composerPan.get(terminal);
-        }
-        return this.composerPan.size ? Math.max(...this.composerPan.values()) : 0;
+    // Whether a side panel holds the auxiliary track. One test for all three:
+    // opening one shows it before the event that closes the other.
+    sidePanelOpen() {
+        return !!document.querySelector(
+            '#notepadPanel:not(.collapsed), #commandRail.aux-open, #sftpPanel.sftp-panel-open');
+    },
+
+    // One measured change. `atRest` says whether the kind is back where it
+    // takes no room, after `apply` has run.
+    chromeChange(kind, apply, atRest) {
+        const before = this.chromeMeasure();
+        apply();
+        this.chromeResized(kind, before, typeof atRest === 'function' ? atRest() : atRest);
+    },
+
+    // What the chrome given back one way (`pan` or `zoom`) holds of a pane.
+    chromeHeld(terminal, mode) {
+        const own = this.chromeOffsets.get(terminal) || {};
+        const held = { width: 0, height: 0 };
+        Object.keys(this.CHROME_KINDS).forEach(kind => {
+            if (this.CHROME_KINDS[kind] !== mode) {
+                return;
+            }
+            let room = own[kind];
+            if (!room) {
+                // Not measured for this pane: the largest that was.
+                this.chromeOffsets.forEach(kinds => {
+                    const other = kinds[kind];
+                    if (other && (!room || other.width + other.height > room.width + room.height)) {
+                        room = other;
+                    }
+                });
+            }
+            if (room) {
+                held.width += room.width;
+                held.height += room.height;
+            }
+        });
+        return held;
     },
 
     freezePaneForResize(terminalKey, terminal, sessionId) {
@@ -6041,6 +6087,20 @@ const TerminalManager = {
             cover.appendChild(copy);
         }
         document.body.appendChild(cover);
+        /*
+         * The held frame is blurred, not shown as if it were live (OWNER
+         * RULING 2026-10-08): a pane that holds still for up to two seconds
+         * read as frozen. Eased in, and out again in releaseFrozenPane, unless
+         * the reader asked for less motion.
+         */
+        const copy = cover.firstChild;
+        if (copy) {
+            copy.style.transition = this.reducedMotion()
+                ? '' : `filter ${this.FREEZE_BLUR_MS}ms ease-out`;
+            requestAnimationFrame(() => {
+                copy.style.filter = `blur(${this.FREEZE_BLUR_PX}px)`;
+            });
+        }
         this.frozenPanes[terminalKey] = {
             cover,
             session: sessionId || terminalKey,
@@ -6173,7 +6233,16 @@ const TerminalManager = {
         delete this.frozenPanes[terminalKey];
         clearTimeout(frozen.timer);
         clearTimeout(frozen.check);
-        frozen.cover.remove();
+        // No longer a cover to anything that looks for one, while it fades.
+        const cover = frozen.cover;
+        cover.classList.replace('sshdeck-frozen-pane', 'sshdeck-frozen-leaving');
+        if (this.reducedMotion()) {
+            cover.remove();
+        } else {
+            cover.style.transition = `opacity ${this.FREEZE_FADE_MS}ms ease-out`;
+            cover.style.opacity = '0';
+            setTimeout(() => cover.remove(), this.FREEZE_FADE_MS + 20);
+        }
         this.noteTimeline(frozen.session, 'uncover', {
             held: Date.now() - frozen.since,
             bytes: frozen.bytes,
@@ -6970,9 +7039,22 @@ if (window.visualViewport) {
             'notepad-focused', keyboardVisible && notepadFocused);
     }
 
+    /*
+     * The soft keyboard is chrome (OWNER RULING 2026-10-08): the room it takes
+     * is held, not reported (TerminalManager.chromeResized). Measured around
+     * the two writes that give it that room, --app-height and keyboard-open --
+     * but only when the viewport kept its width and its reading: a rotation
+     * is the viewport itself changing, and is reported as it is.
+     */
     const applyKeyboardState = () => {
+        const vv = window.visualViewport;
+        const rotating = Math.abs(vv.width - viewportBaselineWidth) > 1
+            || currentViewportOrientation() !== viewportReadOrientation;
+        const panes = !rotating && softKeyboardPossible()
+            ? TerminalManager.chromeMeasure() : null;
         const kv = applyViewportVars();
         setKeyboardVisible(kv);
+        TerminalManager.chromeResized('keyboard', panes, !kv || !panes);
         return kv;
     };
 

@@ -1557,8 +1557,11 @@ class SFTPFileManager {
                 });
         }
 
-        // Show the panel and hide it from AT while closed.
-        panel.classList.add('sftp-panel-open');
+        // Show the panel and hide it from AT while closed. The panel is
+        // chrome: the width it takes is held, not reported
+        // (TerminalManager.chromeResized).
+        TerminalManager.chromeChange('panel', () => panel.classList.add('sftp-panel-open'),
+            () => !TerminalManager.sidePanelOpen());
         panel.removeAttribute('aria-hidden');
         panel.removeAttribute('inert');
 
@@ -1607,7 +1610,8 @@ class SFTPFileManager {
         if (state) {
             state.loading = false;
         }
-        panel.classList.remove('sftp-panel-open');
+        TerminalManager.chromeChange('panel', () => panel.classList.remove('sftp-panel-open'),
+            () => !TerminalManager.sidePanelOpen());
         panel.setAttribute('aria-hidden', 'true');
         panel.setAttribute('inert', '');
     }

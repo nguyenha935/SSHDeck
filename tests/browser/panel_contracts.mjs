@@ -17,9 +17,10 @@
  *       localized no-match string, and the threshold case where the addon
  *       reports resultIndex -1.
  *   §2  P6 keypad vs terminal: the keypad PUSHES the terminal rather than
- *       covering it -- zero overlap against both the grid box and the rendered
- *       .xterm-screen box, at phone and iPad, with the surviving row count
- *       recorded at each tier.
+ *       covering it -- zero overlap against both the grid box and the rows in
+ *       view, at phone and iPad, with the rows still in view recorded at each
+ *       tier. OWNER RULING 2026-10-08: it pushes the CONTENT up and keeps the
+ *       grid (no resize of the remote pane), where it used to refit it.
  *   §3  P1 notes panel head: mockup line 177 shape -- flex head, 2px title
  *       grid, the "Tự lưu · <host>" subtitle, a working close control, and the
  *       textarea on the terminal plane.
@@ -390,11 +391,19 @@ console.log('\n== §2 P6 keypad never covers the terminal ==');
             const compEl = document.getElementById('mobileInputBar');
             const comp = compEl ? compEl.getBoundingClientRect() : null;
             const screenEl = document.querySelector('#terminalGrid .xterm-screen');
-            const scr = screenEl ? screenEl.getBoundingClientRect() : null;
+            const full = screenEl ? screenEl.getBoundingClientRect() : null;
+            // The rows in view: the screen as the pane clips it. A grid held
+            // taller than its pane runs past it (recentreTerminalScreen).
+            const clip = term ? term.element.getBoundingClientRect() : null;
+            const scr = full && clip ? {
+                top: Math.max(full.top, clip.top), bottom: Math.min(full.bottom, clip.bottom),
+            } : full;
             const ov = (a, b) => (a && b)
                 ? Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top)) : 0;
             return {
                 rows: term ? term.rows : null,
+                visibleRows: full && scr && term
+                    ? Math.floor((scr.bottom - scr.top + 1) / (full.height / term.rows)) : null,
                 open: kpEl ? getComputedStyle(kpEl).display !== 'none' : false,
                 kpH: kp ? Math.round(kp.height) : 0,
                 kpWidth: kp ? Math.round(kp.width) : null,
@@ -448,7 +457,7 @@ console.log('\n== §2 P6 keypad never covers the terminal ==');
         }
         check(`§2 ${vp.label}: zero overlap with the terminal grid`,
             opened.overlapGrid, 0);
-        check(`§2 ${vp.label}: zero overlap with the RENDERED rows box`,
+        check(`§2 ${vp.label}: zero overlap with the rows in view`,
             opened.overlapScreen, 0);
         atMost(`§2 ${vp.label}: the rows box ends at or above the keypad`,
             opened.screenBottom, opened.kpTop, 'px');
@@ -492,12 +501,15 @@ console.log('\n== §2 P6 keypad never covers the terminal ==');
         check(`§2 ${vp.label}: the workspace stays positive with the keypad open`,
             opened.workspaceH > 0, true);
         // The keypad takes rows because it is IN FLOW -- that is the whole
-        // point. What must not happen is the terminal keeping its row count
-        // while the keypad paints on top of it, which is what an overlay does.
+        // point. What must not happen is the keypad painting over rows that
+        // are still in view, which is what an overlay does. Restated (class a)
+        // for OWNER RULING 2026-10-08: the rows it takes are the grid's top
+        // rows going out of view, not a smaller grid -- every resize of the
+        // remote pane is a transcript replay under omp.
         atLeast(`§2 ${vp.label}: rows remain usable with the keypad open`,
-            opened.rows, 7);
-        check(`§2 ${vp.label}: opening the keypad reduced rows (it pushes, not covers)`,
-            opened.rows < closed.rows, true);
+            opened.visibleRows, 7);
+        check(`§2 ${vp.label}: opening the keypad keeps the grid and takes rows from view`,
+            opened.rows === closed.rows && opened.visibleRows < closed.visibleRows, true);
         check(`§2 ${vp.label}: no page errors`, errors.join(' | '), '');
         await ctx.close();
     }
@@ -870,9 +882,11 @@ console.log('\n== §2e Broadcast refuses sticky modifiers ==');
 // §2d  exact PTY resize accounting for the keypad.
 //
 // terminal.onResize in terminal-manager.js is the ONE emitter of ssh_resize, so
-// these counts describe real geometry changes: open and close each move the
-// terminal box exactly once, and a page change -- both pages being the same 4x2
-// grid inside one fixed-height track -- must move nothing. 844x390 is RETAINED
+// these counts describe real geometry changes. Open and close each move the
+// terminal box, and OWNER RULING 2026-10-08 holds the grid across them: the
+// keypad is chrome, so neither is a PTY resize (restated, class a -- it was
+// exactly one each). A page change -- both pages being the same 4x2 grid
+// inside one fixed-height track -- moves nothing at all. 844x390 is RETAINED
 // and 926x428 is added alongside it.
 console.log('\n== §2d keypad PTY resize accounting ==');
 for (const vp of [
@@ -913,6 +927,11 @@ for (const vp of [
         const t = key ? TerminalManager.terminals[key] : null;
         return t ? `${t.rows}x${t.cols}` : 'none';
     });
+    const paneHeight = () => page.evaluate(() => {
+        const key = Object.keys(TerminalManager.terminals)[0];
+        return key ? Math.round(TerminalManager.terminals[key].element
+            .getBoundingClientRect().height) : 0;
+    });
 
     // Anti-vacuity: a live terminal must exist, or every count below is a
     // statement about an emitter that was never wired.
@@ -923,14 +942,18 @@ for (const vp of [
     // Settle first: attach/fit churn from setup is not charged to the open.
     await page.evaluate(() => { window.__emits.length = 0; });
     const closedGeom = await geom();
+    const closedHeight = await paneHeight();
 
     await page.click('#mobileKeypadBtn', { force: true });
     await page.waitForTimeout(700);
     const openGeom = await geom();
-    check(`§2d ${vp.label}: opening the keypad emits exactly one PTY resize`,
-        await resizes(), 1);
-    check(`§2d ${vp.label}: and the terminal geometry really changed`,
-        openGeom !== closedGeom, true);
+    // Anti-vacuity: the box really moved, so a zero below is a held grid.
+    atLeast(`§2d ${vp.label}: opening the keypad really takes the pane's height`,
+        closedHeight - await paneHeight(), 40, 'px');
+    check(`§2d ${vp.label}: opening the keypad emits no PTY resize`,
+        await resizes(), 0);
+    check(`§2d ${vp.label}: and the terminal geometry is held`,
+        openGeom, closedGeom);
 
     await page.evaluate(() => { window.__emits.length = 0; });
     await page.evaluate(() =>
@@ -944,9 +967,9 @@ for (const vp of [
     await page.evaluate(() => { window.__emits.length = 0; });
     await page.click('#mobileKeypadBtn', { force: true });
     await page.waitForTimeout(700);
-    check(`§2d ${vp.label}: closing the keypad emits exactly one PTY resize`,
-        await resizes(), 1);
-    check(`§2d ${vp.label}: and the geometry is restored`, await geom(), closedGeom);
+    check(`§2d ${vp.label}: closing the keypad emits no PTY resize`,
+        await resizes(), 0);
+    check(`§2d ${vp.label}: and the geometry is the one it had`, await geom(), closedGeom);
 
     check(`§2d ${vp.label}: no page errors`, errors.join(' | '), '');
     await ctx.close();

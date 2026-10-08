@@ -196,7 +196,10 @@ const CommandLibrary = {
             document.dispatchEvent(new CustomEvent('sshdeck:aux-panel-opening', {
                 detail: { panel: 'command' },
             }));
-            rail.classList.add('aux-open');
+            // The rail is chrome: the width it takes is held, not reported
+            // (TerminalManager.chromeResized).
+            TerminalManager.chromeChange('panel', () => rail.classList.add('aux-open'),
+                () => !TerminalManager.sidePanelOpen());
             rail.removeAttribute('inert');
             rail.setAttribute('aria-hidden', 'false');
             this.scheduleRailFit();
@@ -233,7 +236,8 @@ const CommandLibrary = {
         clearTimeout(this.railFocusTimer);
 
         if (rail) {
-            rail.classList.remove('aux-open');
+            TerminalManager.chromeChange('panel', () => rail.classList.remove('aux-open'),
+                () => !TerminalManager.sidePanelOpen());
             rail.setAttribute('inert', '');
             rail.setAttribute('aria-hidden', 'true');
         }
