@@ -1,15 +1,18 @@
 import os
+import socket
 import stat
 import secrets
 import time
 import posixpath
 import uuid
 from pathlib import Path
-from threading import Lock
+from threading import Lock, Timer
 from contextlib import contextmanager
+import paramiko
 import config
 from . import ssh_manager
 from .audit_logger import log_info, log_warning, log_error, log_debug
+from .models import release_db_connection
 
 # == W13 SFTP cache ownership and serialization ==============================
 #
@@ -77,6 +80,97 @@ def _get_sftp_lock(session_id):
         return lock
 
 
+# == Every SFTP wait ends ====================================================
+#
+# paramiko waits on the network with no limit: open_sftp() opens the channel
+# with no timeout, waits for the subsystem reply on a bare Event, and reads
+# every response from a channel whose timeout is None. One server that stops
+# answering therefore held its Files request forever -- and the per-session
+# Lock, so every later request on that session queued behind it. On
+# 2026-10-08 that queue took the database pool with it (see
+# models.release_db_connection). The owner set the limit: 20 seconds in which
+# nothing at all arrives.
+SFTP_IO_TIMEOUT_S = 20
+SERVER_SILENT = (f"The server stopped answering (nothing received for "
+                 f"{SFTP_IO_TIMEOUT_S} s)")
+SESSION_NOT_FOUND = "Session not found"
+
+
+class BoundedSFTPClient(paramiko.SFTPClient):
+    """An SFTP client whose reads and writes give up after SFTP_IO_TIMEOUT_S.
+
+    The timeout itself is the channel's. What this adds is that the first one
+    CLOSES the channel: callers catch OSError freely (_exists, _link_details),
+    so a timeout swallowed there would let the next request wait a full period
+    again on a link already known dead -- and a read abandoned partway through
+    a packet leaves the stream unreadable anyway. `timed_out` lets
+    sftp_session say why the operation failed, whoever caught what.
+    """
+
+    timed_out = False
+
+    def _read_all(self, n):
+        try:
+            return super()._read_all(n)
+        except socket.timeout:
+            self._give_up()
+            raise
+
+    def _write_all(self, out):
+        try:
+            return super()._write_all(out)
+        except socket.timeout:
+            self._give_up()
+            raise
+
+    def _give_up(self):
+        self.timed_out = True
+        try:
+            self.sock.close()
+        except Exception:
+            pass
+
+
+def open_bounded_sftp(client):
+    """Open an SFTP channel on `client` without any unbounded wait.
+
+    The same three steps as paramiko's open_sftp, each with an end: the channel
+    open has a timeout, the subsystem request -- which paramiko waits for on an
+    Event with none -- is cut by closing the channel, and the version handshake
+    reads through BoundedSFTPClient under the channel's timeout.
+    """
+    transport = client.get_transport()
+    if transport is None or not transport.is_active():
+        raise SFTPOperationError("The SSH connection is closed")
+    channel = transport.open_session(timeout=SFTP_IO_TIMEOUT_S)
+    channel.settimeout(SFTP_IO_TIMEOUT_S)
+    stalled = []
+
+    def give_up():
+        stalled.append(True)
+        channel.close()
+
+    guard = Timer(SFTP_IO_TIMEOUT_S, give_up)
+    guard.daemon = True
+    guard.start()
+    try:
+        channel.invoke_subsystem('sftp')
+    except Exception as exc:
+        channel.close()
+        if stalled:
+            raise SFTPOperationError(SERVER_SILENT) from exc
+        raise
+    finally:
+        guard.cancel()
+    try:
+        return BoundedSFTPClient(channel)
+    except Exception as exc:
+        channel.close()
+        if isinstance(exc, socket.timeout):
+            raise SFTPOperationError(SERVER_SILENT) from exc
+        raise
+
+
 # ── Internal helpers: caller MUST hold the per-session Lock ──────────────────
 
 def _resolve_session_sftp_locked(session_id):
@@ -99,7 +193,7 @@ def _resolve_session_sftp_locked(session_id):
         with ssh_manager.sessions_lock:
             session = ssh_manager.sessions.get(session_id)
             if session is None:
-                return None, "Session not found"
+                return None, SESSION_NOT_FOUND
             if not session['connected']:
                 return None, "Session not connected"
             client = session['client']
@@ -125,6 +219,7 @@ def _resolve_session_sftp_locked(session_id):
                 pass
 
         if cached_sftp is not None:
+            was_silent = getattr(cached_sftp, 'timed_out', False)
             try:
                 cached_sftp.stat('.')
                 return cached_sftp, None
@@ -138,9 +233,13 @@ def _resolve_session_sftp_locked(session_id):
                     cached_sftp.close()
                 except Exception:
                     pass
+                if not was_silent and getattr(cached_sftp, 'timed_out', False):
+                    # This check itself waited the full period: the server is
+                    # silent now, and a fresh channel would wait it again.
+                    return None, SERVER_SILENT
 
         # Open a fresh SFTP channel for the current session and publish it.
-        sftp = client.open_sftp()
+        sftp = open_bounded_sftp(client)
         with _sftp_cache_lock:
             _sftp_cache[session_id] = (sftp, current_owner)
 
@@ -206,14 +305,28 @@ def sftp_session(identifier):
         with sftp_session(session_id) as (sftp, source_type):
             files = sftp.listdir_attr(path)
 
-    Raises SFTPOperationError if no connection is available.
+    Raises SFTPOperationError if no connection is available, and with
+    SERVER_SILENT when the server stopped answering during the operation --
+    whatever the body caught along the way.
+
+    The database connection goes back to the pool BEFORE the Lock is waited
+    for: both the wait and the operation can last as long as the server
+    takes.
     """
+    release_db_connection()
     lock = _get_sftp_lock(identifier)
     with lock:
         sftp, error, source_type = get_any_sftp_client(identifier)
         if error:
             raise SFTPOperationError(error)
-        yield sftp, source_type
+        try:
+            yield sftp, source_type
+        except Exception as exc:
+            if getattr(sftp, 'timed_out', False):
+                raise SFTPOperationError(SERVER_SILENT) from exc
+            raise
+        if getattr(sftp, 'timed_out', False):
+            raise SFTPOperationError(SERVER_SILENT)
 
 
 class SFTPOperationError(Exception):
@@ -890,6 +1003,12 @@ def get_any_sftp_client(identifier):
     sftp, error = _resolve_session_sftp_locked(identifier)
     if sftp:
         return sftp, None, 'session'
+    if error != SESSION_NOT_FOUND:
+        # One of our sessions, whose SFTP could not be had: its own reason is
+        # the answer, as exec_fs.get_ssh_client gives it. The pool cannot hold
+        # this id, and "no active connection" would hide a server that stopped
+        # answering.
+        return None, error, None
 
     sftp, error = get_sftp_client_from_pool(identifier)
     if sftp:

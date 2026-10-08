@@ -5,7 +5,7 @@ from . import (socketio, ssh_manager, profile_manager, key_manager,
                sftp_handler, jump_host_manager, post_connect_manager)
 from .decorators import socket_login_required, accepts_raw_payload
 from .auth import register_socket_session, get_user_from_socket, check_socket_rate_limit
-from .models import db, SSHSession, SocketSession
+from .models import db, SSHSession, SocketSession, release_db_connection
 from .user_settings import (VALID_THEMES, save_user_settings, get_user_settings,
                             get_notepad, save_notepad_revision,
                             effective_notepad_mode, stored_notepad_mode)
@@ -227,10 +227,15 @@ def handle_connect():
     })
 
 @socketio.on('disconnect')
-def handle_disconnect():
-    """Handle client disconnection - cleanup socket session."""
+def handle_disconnect(reason=None):
+    """Handle client disconnection - cleanup socket session.
+
+    `reason` is python-socketio's ('client disconnect', 'transport close',
+    'ping timeout', ...). Without the parameter the call raised TypeError and
+    was retried without it, which chained that TypeError into the traceback of
+    any real failure here.
+    """
     socket_sid = request.sid
-    user = get_user_from_socket(socket_sid)
 
     # Every tmux client this socket held goes away with it: each view is
     # detached by tty and its channel closed, so a surviving device gets its
@@ -239,7 +244,9 @@ def handle_disconnect():
     # a session with no views is a normal detached session, and the remote
     # work keeps running. Done before -- and regardless of -- the user lookup:
     # it also RETIRES the sid, which is what stops an attach still in flight
-    # from registering a view for a socket that no longer exists.
+    # from registering a view for a socket that no longer exists. The lookup
+    # needs the database, and on 2026-10-08 the pool was exhausted, so every
+    # disconnect raised there and left its tmux clients attached.
     detached = ssh_manager.close_views_for_socket(
         socket_sid, socketio_instance=socketio)
     if detached:
@@ -247,8 +254,10 @@ def handle_disconnect():
                   sid=socket_sid)
     ssh_manager.forget_input_turns(socket_sid)
 
+    user = get_user_from_socket(socket_sid)
     if user:
-        log_info(f"Client disconnected: {user.username}", user=user.username, sid=socket_sid)
+        log_info(f"Client disconnected: {user.username}", user=user.username,
+                 sid=socket_sid, reason=reason)
 
         SocketSession.query.filter_by(socket_sid=socket_sid).delete()
         db.session.commit()
@@ -822,6 +831,12 @@ def handle_ssh_connect(data, current_user=None):
                 log_error("SSH session disappeared after creation", session_id=session_id)
                 emit_error("Connection failed")
                 return
+            # What the host GAVE, not what was asked: on a host without tmux a
+            # new connection falls back to a plain shell. Recording the request
+            # stored is_persistent=True with no tmux name, and closing such a
+            # session then "kept it as a saved session" -- a chip offering a
+            # reattach to nothing, on every device (2026-10-08).
+            use_tmux = bool(created_session.get('use_tmux'))
             created_tmux_name = created_session.get('tmux_session_name') if use_tmux else None
             replaced_session_id = None
             row_pane_index = None
@@ -2848,6 +2863,7 @@ def handle_session_latency(data, current_user=None):
             return
         if not verify_session_ownership(session_id, current_user.id):
             return
+        release_db_connection()
         latency = ssh_manager.measure_session_latency(session_id)
         emit('session_latency', {
             'session_id': session_id,
@@ -2997,6 +3013,7 @@ def handle_download_folder_binary(data, current_user=None):
                 emit('error', {'error': 'Unauthorized access to session/connection'})
                 return
 
+        release_db_connection()
         _sftp_lock = sftp_handler._get_sftp_lock(session_id)
         _sftp_lock.acquire()
         try:

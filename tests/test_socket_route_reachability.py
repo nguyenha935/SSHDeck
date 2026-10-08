@@ -157,7 +157,10 @@ def test_the_legitimate_sftp_surface_is_untouched():
     assert 'def list_directory(' in handler
     assert 'def get_home_directory(' in handler
     assert 'def rename_item(' in handler
-    assert 'client.open_sftp()' in handler, (
+    # RE-POINTED 2026-10-08: Files opens its channel through open_bounded_sftp
+    # (paramiko's open_sftp() waits without a limit), so the transport is
+    # pinned at the subsystem request that bounded opener makes.
+    assert "channel.invoke_subsystem('sftp')" in handler, (
         'the SFTP transport itself was removed; Files needs it')
 
     # 2) Browser <-> server upload and download.

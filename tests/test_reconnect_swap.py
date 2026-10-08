@@ -111,6 +111,21 @@ def clean_state():
         ssh_manager._reconnect_in_flight.clear()
 
 
+@pytest.fixture(autouse=True)
+def sftp_opens_through_the_fake_client(monkeypatch):
+    """RE-POINTED 2026-10-08 (bounded SFTP waits). CLASSIFICATION: the opening
+    moved, the contract did not. Sessions open SFTP with
+    sftp_handler.open_bounded_sftp(client) now -- paramiko's open_sftp() waits
+    without a limit at every step -- and the fakes here answer open_sftp. What
+    these tests pin is the cache's OWNERSHIP across a reused id, never how a
+    channel is opened, so the opener is routed to each fake client's own
+    open_sftp, exactly the call the cache made before.
+    """
+    from app import sftp_handler
+    monkeypatch.setattr(sftp_handler, 'open_bounded_sftp',
+                        lambda client: client.open_sftp())
+
+
 def _register_session(session_id, client, channel, **overrides):
     import uuid as _uuid
     session = {

@@ -495,7 +495,15 @@ def reconcile_ssh_sessions():
     connected, so `/admin/api/capacity` (registry) and the table disagreed
     right after every deploy. Persistent rows become saved sessions (offered
     for reattach); plain rows just stop claiming to be connected.
-    Returns the number of rows changed, or -1 when nothing was touched.
+
+    A persistent row with NO tmux name is a plain row: until 2026-10-08 the
+    connect handler stored the tmux it was asked for rather than the one the
+    host gave, so a session that fell back to a plain shell was saved as
+    persistent and offered a reattach to nothing. Such rows are corrected
+    here; the user's next socket then clears them as it clears every
+    disconnected plain row.
+    Returns the number of rows marked disconnected, or -1 when nothing was
+    touched.
     """
     if not _GUARD_HELD:
         log_warning(
@@ -505,10 +513,17 @@ def reconcile_ssh_sessions():
     try:
         changed = SSHSession.query.filter_by(connected=True).update(
             {'connected': False}, synchronize_session=False)
+        repaired = SSHSession.query.filter(
+            SSHSession.is_persistent.is_(True),
+            SSHSession.tmux_session_name.is_(None)).update(
+            {'is_persistent': False}, synchronize_session=False)
         db.session.commit()
         if changed:
             log_info("Marked the previous boot's sessions disconnected at startup",
                      changed=changed)
+        if repaired:
+            log_info("Saved sessions without a tmux session are plain sessions",
+                     repaired=repaired)
         return changed
     except Exception as exc:
         db.session.rollback()
