@@ -42,6 +42,8 @@ MAX_VIEWS_PER_SESSION = int(os.environ.get('MAX_VIEWS_PER_SESSION', '8'))
 
 CHUNK_SIZE = 65536
 MAX_UPLOAD_SIZE = 1024 * 1024 * 100
+# Every other HTTP request body is bounded by this (app.create_app).
+MAX_REQUEST_SIZE = int(os.environ.get('MAX_REQUEST_SIZE', str(1024 * 1024)))
 MAX_EDITOR_FILE_SIZE = int(os.environ.get('MAX_EDITOR_FILE_SIZE', str(5 * 1024 * 1024)))
 
 # Admin panel: comma-separated usernames granted admin on startup; the first

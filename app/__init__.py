@@ -110,6 +110,29 @@ def create_app():
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     db.init_app(app)
     init_auth(app)
+
+    # MAX_CONTENT_LENGTH is the only bound on a request body: Werkzeug 3.1.9
+    # stopped capping urlencoded forms at max_form_memory_size
+    # (pallets/werkzeug#3251). MEASURED 2026-10-09 without it: a 64 MB
+    # POST /login, before any login, was read whole (+129 MB RSS) where
+    # 3.1.8 answered 413 unread. The signed-in file upload alone gets its
+    # own cap. The hook is registered BEFORE CSRFProtect's, which reads the
+    # form -- the whole body -- ahead of every view.
+    app.config['MAX_CONTENT_LENGTH'] = config.MAX_REQUEST_SIZE
+
+    @app.before_request
+    def raise_the_upload_limit():
+        if request.endpoint == 'api_upload' and current_user.is_authenticated:
+            request.max_content_length = config.MAX_UPLOAD_SIZE
+
+    @app.errorhandler(413)
+    def request_too_large(error):
+        # The upload page reads JSON; every other route keeps Werkzeug's page.
+        if request.endpoint == 'api_upload':
+            max_mb = config.MAX_UPLOAD_SIZE // (1024 * 1024)
+            return jsonify({'error': f'File too large. Maximum: {max_mb}MB'}), 413
+        return error
+
     csrf.init_app(app)
 
     with app.app_context():
@@ -758,12 +781,6 @@ def create_app():
             if not all([file, session_id, remote_path]):
                 return jsonify({'error': 'Missing required fields'}), 400
 
-            max_mb = config.MAX_UPLOAD_SIZE // (1024 * 1024)
-
-            # Reject oversized uploads from the Content-Length header BEFORE
-            # buffering anything, so a large request cannot exhaust memory.
-            if request.content_length and request.content_length > config.MAX_UPLOAD_SIZE:
-                return jsonify({'error': f'File too large. Maximum: {max_mb}MB'}), 413
 
             from .socket_events import verify_session_ownership
             from . import connection_pool
@@ -772,19 +789,16 @@ def create_app():
                 if not conn_info or conn_info['user_id'] != str(current_user.id):
                     return jsonify({'error': 'Unauthorized'}), 403
 
-            # Read incrementally with a hard cap instead of file.read into one
-            # buffer plus a second full copy. This also guards against a missing
-            # or dishonest Content-Length (e.g. chunked transfer-encoding).
+            # Read incrementally instead of file.read into one buffer plus a
+            # second full copy. The size is bounded before this view runs: the
+            # body cannot pass MAX_UPLOAD_SIZE (raise_the_upload_limit), with
+            # or without an honest Content-Length.
             chunk_size = config.CHUNK_SIZE
             chunks = []
-            total = 0
             while True:
                 chunk = file.read(chunk_size)
                 if not chunk:
                     break
-                total += len(chunk)
-                if total > config.MAX_UPLOAD_SIZE:
-                    return jsonify({'error': f'File too large. Maximum: {max_mb}MB'}), 413
                 chunks.append(chunk)
 
             success, error = sftp_handler.upload_file_chunked(
