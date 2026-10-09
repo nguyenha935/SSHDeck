@@ -517,9 +517,24 @@ TMUX_PROBE_SHELL_SENTINEL = '__SSHDECK_PROBE_BOUNDARY_SHELL__'
 # stays last so the exit status remains tmux's availability signal.
 # NO extra round trip: the discovery rides inside the one probe every connect
 # already makes.
+#
+# SSHDeck's own tmux (see provision_static_tmux) is asked for FIRST, and runs
+# its own server (`-L sshdeck`). MEASURED 2026-10-09: a tmux 3.3a client
+# against a 3.8 server on one socket fails ("server exited unexpectedly"),
+# although both declare protocol 8. So once SSHDeck's copy is on a host it is
+# the one SSHDeck uses there -- a tmux the host gains later would otherwise
+# lose every session the copy runs -- and on its own socket it never meets
+# the server of the user's own `tmux`. A copy that no longer runs (a home
+# remounted noexec) falls through to the one on PATH. The marker carries no
+# digits, so the version read from the banner stays tmux's.
+SSHDECK_TMUX_PATH = '"$HOME/.local/share/sshdeck/bin/tmux"'
+SSHDECK_TMUX = SSHDECK_TMUX_PATH + ' -L sshdeck'
+TMUX_PROBE_SSHDECK_MARK = '__SSHDECK_OWN_TMUX__'
 TMUX_PROBE_COMMAND = (
     f'locale -a 2>/dev/null; echo {TMUX_PROBE_SENTINEL}; '
     f'getent passwd "$(id -u)" 2>/dev/null; echo {TMUX_PROBE_SHELL_SENTINEL}; '
+    f'if [ -x {SSHDECK_TMUX_PATH} ] && {SSHDECK_TMUX_PATH} -V; then '
+    f'echo {TMUX_PROBE_SSHDECK_MARK}; exit 0; fi; '
     f'tmux -V')
 
 # `locale -a` is a few KB on a full glibc host (152 UTF-8 entries here), so the
@@ -551,14 +566,12 @@ TMUX_REATTACH_GONE_ERROR = (
 # probe's bare `tmux -V` searches only the exec channel's PATH, which is often
 # minimal, so a tmux installed for the user (~/.local/bin, Homebrew) read as
 # missing and the session silently became a plain shell -- one that ends with
-# the browser. So those places are asked first, and only when none has a tmux
-# does SSHDeck copy its own static build into the first of them.
+# the browser. So those places are asked next, and only when none has a tmux
+# does SSHDeck install one (install_tmux_package, provision_static_tmux).
 #
 # Every candidate is OUR constant: the host's answer selects one by index, and
 # nothing it prints is ever put into a command.
-SSHDECK_TMUX = '"$HOME/.local/share/sshdeck/bin/tmux"'
 TMUX_CANDIDATES = (
-    SSHDECK_TMUX,
     '"$HOME/.local/bin/tmux"',
     '/usr/local/bin/tmux',
     '/opt/homebrew/bin/tmux',
@@ -571,6 +584,52 @@ TMUX_LOCATE_COMMAND = (
     'if [ -x "$t" ]; then echo "$i"; exec "$t" -V; fi; i=$((i+1)); '
     'done; exit 127')
 _PLATFORM_TEXT_RE = re.compile(r'[^A-Za-z0-9_. -]')
+
+# The distribution's own tmux, when the account may install packages: root,
+# or passwordless sudo (`sudo -n` never prompts). Preferred to SSHDeck's copy
+# because it gets the distribution's fixes, and because the package manager
+# covers architectures SSHDeck ships no build for.
+#
+# The install runs in its own session (setsid), outside this exec channel. A
+# channel can close at any moment -- the wait below ends, the connection
+# drops -- and a package manager killed halfway (dpkg mid-unpack) is damage
+# to the user's host. Detached, it always runs to the end; if that takes
+# longer than TMUX_PACKAGE_WAIT_S, this session takes SSHDeck's copy and the
+# next one finds the distribution's tmux on PATH. Measured on tiny-server,
+# 2026-10-09: the first `apk add` in a fresh container took 2 min 26 s once,
+# and 1.5 s right after.
+#
+# The script is a constant. It prints only the manager's name (one of OURS)
+# and what `tmux -V` then says; every installer's output is discarded. Exit
+# 3: no privilege, 4: the install failed, 5: no package manager this knows,
+# 6: still installing.
+TMUX_PACKAGE_MANAGERS = ('apt', 'dnf', 'yum', 'apk', 'pacman', 'zypper')
+TMUX_PACKAGE_WAIT_S = 60
+TMUX_PACKAGE_SCRIPT = (
+    'if [ "$(id -u)" = 0 ]; then S=; '
+    'elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then S="sudo -n"; '
+    'else exit 3; fi; '
+    'for M in apt-get dnf yum apk pacman zypper; do '
+    'command -v $M >/dev/null 2>&1 && break; M=; done; '
+    '[ -n "$M" ] || exit 5; [ "$M" = apt-get ] && M=apt; '
+    'R=$(mktemp) || exit 4; export S M R; '
+    'command -v setsid >/dev/null 2>&1 && D=setsid || D=nohup; '
+    '$D sh -c \''
+    'q() { "$@" >/dev/null 2>&1; }; '
+    'A="env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=60"; '
+    'case $M in '
+    'apt) q $S $A install -y --no-install-recommends tmux '
+    '|| { q $S $A update && q $S $A install -y --no-install-recommends tmux; } ;; '
+    'dnf) q $S dnf -y install tmux ;; '
+    'yum) q $S yum -y install tmux ;; '
+    'apk) q $S apk add --no-cache tmux ;; '
+    'pacman) q $S pacman -S --noconfirm --needed tmux ;; '
+    'zypper) q $S zypper -n install tmux ;; '
+    'esac; echo $? > "$R"\' </dev/null >/dev/null 2>&1 & '
+    f'i=0; while [ ! -s "$R" ] && [ $i -lt {TMUX_PACKAGE_WAIT_S} ]; do sleep 1; i=$((i+1)); done; '
+    '[ -s "$R" ] || exit 6; '
+    'c=$(cat "$R"); rm -f "$R"; [ "$c" = 0 ] || exit 4; '
+    'echo "$M"; exec tmux -V')
 
 # The build SSHDeck ships (scripts/build_static_tmux.sh), by `uname -m`.
 STATIC_TMUX_VERSION = '3.8'
@@ -585,7 +644,7 @@ def _tmux(command, tmux_bin):
     """`command`, which starts with `tmux`, run by `tmux_bin` when there is one.
 
     tmux_bin is None for a host whose PATH has tmux -- every command then stays
-    exactly as it always was -- or one of TMUX_CANDIDATES.
+    exactly as it always was -- SSHDECK_TMUX, or one of TMUX_CANDIDATES.
     """
     return tmux_bin + command[len('tmux'):] if tmux_bin else command
 
@@ -609,6 +668,35 @@ def locate_tmux(transport):
     return platform, None, None
 
 
+def install_tmux_package(transport):
+    """Install the distribution's tmux: ``(manager, version text)``, or ``(None, None)``.
+
+    Only where the account may install packages (TMUX_PACKAGE_SCRIPT); a host
+    where it may not is left to SSHDeck's static copy, which is the ordinary
+    case for a user account and is not worth a warning.
+    """
+    started = time.monotonic()
+    status, output = _exec_capture(
+        transport, 'sh -c ' + shlex.quote(TMUX_PACKAGE_SCRIPT),
+        timeout=TMUX_PACKAGE_WAIT_S + 15)
+    manager, _, banner = output.decode('utf-8', 'replace').strip().partition('\n')
+    version = re.search(r'(\d+\.\d+[a-z]?)', banner)
+    if status == 0 and manager in TMUX_PACKAGE_MANAGERS and version:
+        log_info("Installed tmux with the host's package manager", manager=manager,
+                 version=version.group(1),
+                 ms=int((time.monotonic() - started) * 1000))
+        return manager, version.group(1)
+    if status in (3, 5):
+        log_debug("No package-manager tmux for this account", status=status)
+    elif status == 6:
+        log_info("Still installing tmux with the host's package manager; "
+                 "this session takes SSHDeck's copy")
+    else:
+        log_warning("Could not install tmux with the host's package manager",
+                    status=status)
+    return None, None
+
+
 def provision_static_tmux(transport, platform):
     """Copy SSHDeck's static tmux into the user's home.
 
@@ -628,8 +716,9 @@ def provision_static_tmux(transport, platform):
               / f'tmux-{STATIC_TMUX_VERSION}-linux-{machine}').read_bytes()
     part = f'"$HOME/.local/share/sshdeck/bin/.tmux-{uuid.uuid4().hex}"'
     script = (f'mkdir -p "$HOME/.local/share/sshdeck/bin" && cat > {part} '
-              f'&& chmod 755 {part} && mv -f {part} {SSHDECK_TMUX} '
-              f'&& {SSHDECK_TMUX} -V && exit 0; rm -f {part} {SSHDECK_TMUX}; exit 1')
+              f'&& chmod 755 {part} && mv -f {part} {SSHDECK_TMUX_PATH} '
+              f'&& {SSHDECK_TMUX_PATH} -V && exit 0; '
+              f'rm -f {part} {SSHDECK_TMUX_PATH}; exit 1')
     started = time.monotonic()
     status, output = _exec_capture(transport, 'sh -c ' + shlex.quote(script),
                                    timeout=TMUX_PROVISION_TIMEOUT_S, data=binary)
@@ -997,7 +1086,9 @@ def open_shell_channel(client, transport, utf8_locale=None,
 def probe_target_capabilities(transport):
     """The ONE exec round trip every session makes now, tmux or not.
 
-    Returns ``(tmux_available, tmux_version, utf8_locale, login_shell)``.
+    Returns ``(tmux_available, tmux_version, utf8_locale, login_shell,
+    tmux_bin)``; tmux_bin is SSHDECK_TMUX when the tmux that answered is
+    SSHDeck's own copy, else None (the one on PATH).
 
     It used to run only inside the `use_tmux` branch, which is why a non-tmux
     session had no resolved locale to ask for. The locale half is what decides
@@ -1011,7 +1102,7 @@ def probe_target_capabilities(transport):
     validation (or has no getent) simply contributes None -- the shipped
     invoke_shell fallback, never worse.
 
-    Any failure degrades to ``(False, None, TMUX_UTF8_FALLBACK_LOCALE, None)``:
+    Any failure degrades to ``(False, None, TMUX_UTF8_FALLBACK_LOCALE, None, None)``:
     a host that answers nothing behaves exactly as it did before host-adaptive
     resolution existed, and never worse.
     """
@@ -1033,7 +1124,7 @@ def probe_target_capabilities(transport):
         exit_status = probe_channel.recv_exit_status()
     except Exception as probe_error:
         log_debug("Target capability probe failed", error=str(probe_error))
-        return False, None, TMUX_UTF8_FALLBACK_LOCALE, None
+        return False, None, TMUX_UTF8_FALLBACK_LOCALE, None, None
     finally:
         if probe_channel is not None:
             try:
@@ -1043,9 +1134,10 @@ def probe_target_capabilities(transport):
 
     locale_listing, passwd_entry, tmux_banner = split_tmux_probe_output(
         probe_output)
+    tmux_bin = SSHDECK_TMUX if TMUX_PROBE_SSHDECK_MARK in tmux_banner else None
     return (exit_status == 0, _parse_tmux_version(tmux_banner),
             resolve_tmux_utf8_locale(locale_listing),
-            parse_login_shell_from_getent(passwd_entry))
+            parse_login_shell_from_getent(passwd_entry), tmux_bin)
 
 
 # Read-only interrogation of ONE existing tmux session's environment. `-t '=name'`
@@ -1314,7 +1406,7 @@ def _build_transport(host, port, username, password=None, key_path=None, key_con
                      proxy_jump_host=None, proxy_jump_port=None, proxy_jump_username=None,
                      proxy_jump_password=None, proxy_jump_key_content=None,
                      use_tmux=False, reconnect_tmux_name=None,
-                     auth_type='password', login_shell=None):
+                     auth_type='password', login_shell=None, on_progress=None):
     """Establish one SSH transport and its terminal channel.
 
     This is the shared "connect" step for BOTH ordinary sessions and
@@ -1323,6 +1415,9 @@ def _build_transport(host, port, username, password=None, key_path=None, key_con
     transport while an old one is still serving the session. On any failure it
     closes what it opened and returns (None, error); it reserves a capacity
     slot for the duration of the connection attempt only.
+
+    `on_progress`, when given, is called with the name of a step the user
+    waits on before it starts: 'installing_tmux'.
     """
     global _pending_connections
 
@@ -1433,7 +1528,7 @@ def _build_transport(host, port, username, password=None, key_path=None, key_con
         # not tmux's: a non-tmux shell needs the same locale asked for on its
         # own channel (open_shell_channel). Running the probe only inside the
         # tmux branch is what left non-tmux Tailscale sessions mangling Telex.
-        tmux_available, tmux_version, utf8_locale, discovered_shell = \
+        tmux_available, tmux_version, utf8_locale, discovered_shell, probed_bin = \
             probe_target_capabilities(transport)
 
         # Discovery contract: a caller-supplied `login_shell` wins
@@ -1456,17 +1551,26 @@ def _build_transport(host, port, username, password=None, key_path=None, key_con
         # NEW session put SSHDeck's there when there is none (OWNER RULING
         # 2026-10-08). A reattach never installs anything: the tmux that ran
         # its session is either found or the reattach fails closed below.
-        tmux_bin = None
+        tmux_bin = probed_bin
         tmux_provisioned = None
+        tmux_installed_with = None
         tmux_unavailable = None
         if use_tmux and not tmux_available:
             platform, tmux_bin, located_version = locate_tmux(transport)
             if tmux_bin is None and not reconnect_tmux_name:
-                tmux_bin, located_version, tmux_unavailable = \
-                    provision_static_tmux(transport, platform)
-                if tmux_bin is not None:
-                    tmux_provisioned = STATIC_TMUX_VERSION
-            if tmux_bin is not None:
+                if on_progress is not None:
+                    on_progress('installing_tmux')
+                # The distribution's tmux where the account may install it,
+                # SSHDeck's own everywhere else (OWNER RULING 2026-10-08).
+                tmux_installed_with, tmux_provisioned = install_tmux_package(transport)
+                if tmux_installed_with is not None:
+                    located_version = _parse_tmux_version(tmux_provisioned)
+                else:
+                    tmux_bin, located_version, tmux_unavailable = \
+                        provision_static_tmux(transport, platform)
+                    if tmux_bin is not None:
+                        tmux_provisioned = STATIC_TMUX_VERSION
+            if tmux_bin is not None or tmux_installed_with is not None:
                 tmux_available, tmux_version = True, located_version
 
         tmux_session_name = None
@@ -1650,6 +1754,7 @@ def _build_transport(host, port, username, password=None, key_path=None, key_con
             # that asked for tmux is a plain shell instead.
             'tmux_bin': tmux_bin if use_tmux else None,
             'tmux_provisioned': tmux_provisioned,
+            'tmux_installed_with': tmux_installed_with,
             'tmux_unavailable': tmux_unavailable,
         }
         client = None
@@ -1695,7 +1800,8 @@ def create_ssh_connection(host, port, username, password=None, key_path=None, ke
                           proxy_jump_password=None, proxy_jump_key_content=None,
                           use_tmux=False, reconnect_tmux_name=None,
                           auth_type='password', startup_commands='',
-                          display_name=None, login_shell=None, session_id=None):
+                          display_name=None, login_shell=None, session_id=None,
+                          on_progress=None):
     """
     Create a new SSH connection and return session ID.
 
@@ -1715,6 +1821,8 @@ def create_ssh_connection(host, port, username, password=None, key_path=None, ke
             saved session reattached after a restart; the caller holds that id's
             reconnect claim (begin_reconnect), and an id still registered here
             is refused rather than overwritten.
+        on_progress: Called with the name of a step the user waits on
+            (see _build_transport).
     """
     # S2 step 6 (R6-A): per-user ceiling BEFORE any transport work or global
     # reservation. Count this user's live registry entries under the lock.
@@ -1737,7 +1845,7 @@ def create_ssh_connection(host, port, username, password=None, key_path=None, ke
         proxy_jump_password=proxy_jump_password,
         proxy_jump_key_content=proxy_jump_key_content,
         use_tmux=use_tmux, reconnect_tmux_name=reconnect_tmux_name,
-        auth_type=auth_type, login_shell=login_shell)
+        auth_type=auth_type, login_shell=login_shell, on_progress=on_progress)
     if error:
         return None, error
 
@@ -1817,6 +1925,7 @@ def create_ssh_connection(host, port, username, password=None, key_path=None, ke
                 # connect-time notice for the page (see _build_transport).
                 'tmux_bin': transport_result.get('tmux_bin'),
                 'tmux_provisioned': transport_result.get('tmux_provisioned'),
+                'tmux_installed_with': transport_result.get('tmux_installed_with'),
                 'tmux_unavailable': transport_result.get('tmux_unavailable'),
                 # The LOGICAL session id is stable for the user's whole
                 # session; only the transport underneath it is replaceable via
@@ -4291,6 +4400,7 @@ def get_session(session_id):
                 'legacy_tmux_locale': session.get('legacy_tmux_locale'),
                 'login_shell': session.get('login_shell'),
                 'tmux_provisioned': session.get('tmux_provisioned'),
+                'tmux_installed_with': session.get('tmux_installed_with'),
                 'tmux_unavailable': session.get('tmux_unavailable'),
             }
     return None

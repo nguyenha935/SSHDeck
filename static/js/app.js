@@ -1141,7 +1141,12 @@
      */
     function noteTmuxOutcome(data) {
         const text = (key, fallback) => (window.i18n ? i18n.t(key) : fallback);
-        if (data.tmux_provisioned) {
+        if (data.tmux_installed_with) {
+            showNotification(text('tmux.installed',
+                'This host had no tmux: SSHDeck installed tmux {version} with {manager}, so this session is kept when you close the page.')
+                .replace('{version}', data.tmux_provisioned)
+                .replace('{manager}', data.tmux_installed_with), 'info');
+        } else if (data.tmux_provisioned) {
             showNotification(text('tmux.provisioned',
                 'This host had no tmux: SSHDeck put tmux {version} in ~/.local/share/sshdeck/bin, so this session is kept when you close the page.')
                 .replace('{version}', data.tmux_provisioned), 'info');
@@ -1154,6 +1159,15 @@
                 .replace('{platform}', data.tmux_unavailable.platform || '?'), 'warning');
         }
     }
+
+    // Installing tmux on a host that has none can take a while (a package
+    // manager may refresh its lists first); the counter says so meanwhile.
+    socket.on('ssh_connect_progress', (data) => {
+        if (!data || data.client_request_id !== currentConnectRequestId) return;
+        if (data.stage === 'installing_tmux') {
+            connectStageText = window.i18n ? i18n.t('connect.installingTmux') : 'Installing tmux...';
+        }
+    });
 
     socket.on('ssh_connected', (data) => {
         // Capture the request-keyed non-secret metadata BEFORE the pending
@@ -1807,6 +1821,8 @@
     const pendingProfileSaveMap = new Map();
     let connectTimer = null;
     let connectSeconds = 0;
+    // What the connect is doing, when the server says (ssh_connect_progress).
+    let connectStageText = null;
 
     function openConnectionModalForPane(paneIndex) {
         window.clearConnectionProfileState();
@@ -4873,10 +4889,11 @@
             const connectBtn = document.getElementById('connectBtn');
             const originalText = connectBtn.textContent;
             connectSeconds = 0;
+            connectStageText = null;
             connectBtn.textContent = 'Connecting... 0s';
             connectTimer = setInterval(() => {
                 connectSeconds++;
-                connectBtn.textContent = `Connecting... ${connectSeconds}s`;
+                connectBtn.textContent = `${connectStageText || 'Connecting...'} ${connectSeconds}s`;
             }, 1000);
 
             /*

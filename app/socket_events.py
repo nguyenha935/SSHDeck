@@ -820,6 +820,10 @@ def handle_ssh_connect(data, current_user=None):
             startup_commands='' if reconnect_tmux_name else startup_commands,
             display_name=display_name,
             session_id=reattach_session_id,
+            # A host without tmux may get one first, which can take a while;
+            # the page shows that instead of a bare connect counter.
+            on_progress=lambda stage: emit('ssh_connect_progress', {
+                'client_request_id': client_request_id, 'stage': stage}),
         )
 
         if password:
@@ -946,10 +950,12 @@ def handle_ssh_connect(data, current_user=None):
                 # so it is still declared here even though the history itself
                 # now arrives with the view.
                 'replay_max_lines': ssh_manager.REPLAY_MAX_LINES,
-                # The version SSHDeck just placed on a host that had no tmux,
-                # or why a session that asked for tmux is a plain shell; the
-                # page says which, once.
+                # The tmux version a host that had none just got -- from its
+                # package manager (tmux_installed_with names it) or SSHDeck's
+                # copy -- or why a session that asked for tmux is a plain
+                # shell; the page says which, once.
                 'tmux_provisioned': created_session.get('tmux_provisioned'),
+                'tmux_installed_with': created_session.get('tmux_installed_with'),
                 'tmux_unavailable': created_session.get('tmux_unavailable'),
             })
             log_ssh_connection(current_user.username, host, port, True, request.remote_addr)

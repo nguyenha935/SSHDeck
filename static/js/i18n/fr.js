@@ -117,6 +117,8 @@ window.__i18n.fr = {
         'tmux.provisioned': 'Cet hôte n\'avait pas tmux : SSHDeck y a placé tmux {version} dans ~/.local/share/sshdeck/bin, la session est donc conservée à la fermeture de la page.',
         'tmux.unsupported': 'Cette session n\'est pas conservée : l\'hôte ({platform}) n\'a pas tmux, et SSHDeck n\'en a pas pour lui.',
         'tmux.installFailed': 'Cette session n\'est pas conservée : l\'hôte ({platform}) n\'a pas tmux, et SSHDeck n\'a pas pu y placer le sien.',
+        'tmux.installed': 'Cet hôte n\'avait pas tmux : SSHDeck a installé tmux {version} avec {manager}, la session est donc conservée à la fermeture de la page.',
+        'connect.installingTmux': 'Installation de tmux...',
 
         'settings.title': 'Paramètres',
         'settings.thisDevice': 'Ces paramètres ne s\'appliquent qu\'à cet appareil.',

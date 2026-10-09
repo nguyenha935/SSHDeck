@@ -105,6 +105,8 @@ window.__i18n.de = {
         'tmux.provisioned': 'Auf diesem Host fehlte tmux: SSHDeck hat tmux {version} in ~/.local/share/sshdeck/bin abgelegt, damit diese Sitzung beim Schließen der Seite erhalten bleibt.',
         'tmux.unsupported': 'Diese Sitzung bleibt nicht erhalten: Der Host ({platform}) hat kein tmux, und SSHDeck hat keines dafür.',
         'tmux.installFailed': 'Diese Sitzung bleibt nicht erhalten: Der Host ({platform}) hat kein tmux, und SSHDeck konnte sein eigenes dort nicht ablegen.',
+        'tmux.installed': 'Auf diesem Host fehlte tmux: SSHDeck hat tmux {version} mit {manager} installiert, damit diese Sitzung beim Schließen der Seite erhalten bleibt.',
+        'connect.installingTmux': 'tmux wird installiert...',
 
         'settings.title': 'Einstellungen',
         'settings.thisDevice': 'Diese Einstellungen gelten nur für dieses Gerät.',

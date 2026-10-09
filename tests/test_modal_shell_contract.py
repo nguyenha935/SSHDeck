@@ -337,7 +337,7 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # up instead of resizing the remote pane.
     # app.js 104 -> 105: the keypad, Notes and its splitter are chrome, not a
     # resize.
-    assert "filename='js/app.js') }}?v=106" in idx
+    assert "filename='js/app.js') }}?v=107" in idx
     # S34: v46 -- the control-mode transport. pty_geometry may now arrive with
     # `render_local`, which this client must NOT adopt as its grid (it wraps the
     # relative %output stream at its own fit instead). A browser on v45 would adopt
@@ -407,7 +407,7 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     assert "filename='js/terminal-manager.js') }}?v=106" in idx
     assert "\"filename='css/style.css'\": '?v=77'," in tp
     assert "\"filename='js/sftp-file-manager.js'\": '?v=21'," in tp
-    assert "\"filename='js/app.js'\": '?v=106'," in tp
+    assert "\"filename='js/app.js'\": '?v=107'," in tp
     # session-manager v51 -> v52 (S35 P5): restore-driven pane eviction stopped
     # (displaceOccupant:false) and the remembered session selection is applied on
     # arrival. v51 is RELEASED without the fix, so the pin must move.
