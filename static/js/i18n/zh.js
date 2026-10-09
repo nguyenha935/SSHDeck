@@ -105,6 +105,8 @@ window.__i18n.zh = {
         'tmux.provisioned': '此主机没有 tmux：SSHDeck 已将 tmux {version} 放入 ~/.local/share/sshdeck/bin，关闭页面后会话仍会保留。',
         'tmux.unsupported': '此会话不会保留：主机（{platform}）没有 tmux，且 SSHDeck 没有适用于它的版本。',
         'tmux.installFailed': '此会话不会保留：主机（{platform}）没有 tmux，且 SSHDeck 无法将自带的 tmux 放到该主机上。',
+        'tmux.installed': '此主机没有 tmux：SSHDeck 已用 {manager} 安装 tmux {version}，关闭页面后会话仍会保留。',
+        'connect.installingTmux': '正在安装 tmux...',
 
         'settings.title': '设置',
         'settings.thisDevice': '这些设置仅适用于本设备。',

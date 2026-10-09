@@ -577,6 +577,8 @@ window.__i18n.en = {
         'tmux.provisioned': 'This host had no tmux: SSHDeck put tmux {version} in ~/.local/share/sshdeck/bin, so this session is kept when you close the page.',
         'tmux.unsupported': 'This session is not kept: the host ({platform}) has no tmux, and SSHDeck has none for it.',
         'tmux.installFailed': 'This session is not kept: the host ({platform}) has no tmux, and SSHDeck could not put its own there.',
+        'tmux.installed': 'This host had no tmux: SSHDeck installed tmux {version} with {manager}, so this session is kept when you close the page.',
+        'connect.installingTmux': 'Installing tmux...',
 
         'settings.title': 'Settings',
         'settings.thisDevice': 'These settings apply to this device only.',

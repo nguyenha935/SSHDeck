@@ -260,7 +260,7 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # v104: the composer's lines past the first push the content up
         # instead of resizing the remote pane.
         # v105: the keypad, Notes and its splitter are chrome, not a resize.
-        "filename='js/app.js'": '?v=106',
+        "filename='js/app.js'": '?v=107',
         # v18: the Files browser hooks (expand, delegated render and menu, the
         # selection kept by name across a relist, one toast per error).
         # v19: the [SFTP]/[FM] console lines are gone.

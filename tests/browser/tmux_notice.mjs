@@ -6,6 +6,9 @@
  *   §2 tmux_unavailable unsupported -> one warning naming the host's system;
  *   §3 tmux_unavailable failed -> one warning saying the copy did not work;
  *   §4 a host that had tmux -> no tmux notice at all;
+ *   §5 installed with the host's package manager -> the notice names it;
+ *   §6 while it installs, the connect counter says so -- for its own
+ *      request only;
  *   §Z no page errors.
  *
  * Run: node tests/browser/tmux_notice.mjs   (from source/)
@@ -73,13 +76,15 @@ const browser = await chromium.launch();
 const STUBS = `
     const noop = () => {};
     window.__socketHandlers = {};
+    window.__emits = [];
     window.socket = {
         connected: false,
         on: (name, cb) => { (window.__socketHandlers[name] ||= []).push(cb); },
-        off: noop, once: noop, emit: noop, io: { on: noop },
+        off: noop, once: noop, io: { on: noop },
+        emit: (name, payload) => window.__emits.push({ name, payload }),
     };
     Object.defineProperty(window, 'io', { get: () => () => window.socket, configurable: false });
-    window.ModalManager = { open: noop, close: noop };
+    window.ModalManager = { open: (m) => m && m.classList.add('show'), close: (m) => m && m.classList.remove('show') };
     window.JumpHostManager = { getById: () => null, updatePasswordVisibility: noop, jumpHosts: [] };
 `;
 
@@ -121,6 +126,32 @@ check('§3 it says the copy did not work', /could not put its own there/.test(no
 
 notices = await connect('tn-4', {});
 check('§4 a host that had tmux says nothing about it', notices.length, 0);
+
+notices = await connect('tn-5', { tmux_provisioned: '3.4', tmux_installed_with: 'apt' });
+check('§5 one notice, information', notices.map(n => n.type), ['info']);
+check('§5 it names the version and the package manager',
+    /tmux 3\.4 with apt/.test(notices[0]?.message), true);
+
+// §6: a real connect from the form, then the server's progress frames.
+await page.evaluate(() => document.getElementById('newConnectionBtn').click());
+await page.waitForTimeout(80);
+await page.fill('#hostInput', 'quiet.example');
+await page.fill('#usernameInput', 'alice');
+await page.selectOption('#authTypeSelect', 'password');
+await page.fill('#passwordInput', 'pw');
+await page.click('#connectBtn');
+const requestId = await page.evaluate(() =>
+    window.__emits.filter(e => e.name === 'ssh_connect').pop()?.payload.client_request_id);
+const progress = (id) => page.evaluate((id) => (window.__socketHandlers.ssh_connect_progress || [])
+    .forEach(handler => handler({ client_request_id: id, stage: 'installing_tmux' })), id);
+const counter = () => page.evaluate(() => document.getElementById('connectBtn').textContent);
+await progress('someone-else');
+await page.waitForTimeout(1100);
+check('§6 another request\'s progress leaves the counter alone',
+    /^Connecting\.\.\. \d+s$/.test(await counter()), true);
+await progress(requestId);
+await page.waitForTimeout(1100);
+check('§6 its own progress names the step', /^Installing tmux\.\.\. \d+s$/.test(await counter()), true);
 
 check('§Z no page errors', errors, []);
 await browser.close();

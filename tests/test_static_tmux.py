@@ -1,8 +1,10 @@
 """A host without tmux gets one; SSHDeck's static build is exactly what it says.
 
 OWNER RULING 2026-10-08: when the target has no tmux, SSHDeck provides it
-without asking. The host that prompted it (a Tailscale account, not root) had
-no tmux, so the session fell back to a plain shell that ends with the browser.
+without asking -- with the host's package manager where the account may
+install packages, with SSHDeck's static build everywhere else. The host that
+prompted it (a Tailscale account, not root) had no tmux, so the session fell
+back to a plain shell that ends with the browser.
 
 The host here is modelled per command -- the capability probe, the search for
 a tmux off PATH, the copy, the tmux commands -- and every connection goes
@@ -63,14 +65,19 @@ def test_the_licences_of_everything_inside_the_binary_ship_with_it():
 
 class Host:
     """What one remote host answers. `tmux_on_path` is the probe's `tmux -V`;
+    `sshdeck_tmux` says SSHDeck's copy is there (the probe asks for it first);
     `found` is which TMUX_CANDIDATES entry exists (None: none of them)."""
 
     def __init__(self, platform='Linux x86_64', tmux_on_path=False, found=None,
-                 install_status=0):
+                 install_status=0, package=(3, b''), sshdeck_tmux=False):
         self.platform = platform
         self.tmux_on_path = tmux_on_path
+        self.sshdeck_tmux = sshdeck_tmux
         self.found = found
         self.install_status = install_status
+        # What TMUX_PACKAGE_SCRIPT answers: (exit status, stdout). The default
+        # is an account that may not install packages (status 3).
+        self.package = package
         self.commands = []
         self.stdin = {}
 
@@ -95,10 +102,14 @@ class Channel:
         self.host.commands.append(command)
         host = self.host
         if command == ssh_manager.TMUX_PROBE_COMMAND:
+            if host.sshdeck_tmux:
+                banner = ssh_manager.TMUX_PROBE_SSHDECK_MARK.encode() + b'\ntmux 3.8\n'
+            else:
+                banner = b'tmux 3.4\n' if host.tmux_on_path else b''
             self.out = (ssh_manager.TMUX_PROBE_SENTINEL.encode() + b'\n'
                         + ssh_manager.TMUX_PROBE_SHELL_SENTINEL.encode() + b'\n'
-                        + (b'tmux 3.4\n' if host.tmux_on_path else b''))
-            self.status = 0 if host.tmux_on_path else 127
+                        + banner)
+            self.status = 0 if host.sshdeck_tmux or host.tmux_on_path else 127
         elif ssh_manager.TMUX_LOCATE_SENTINEL in command:
             self.out = (host.platform.encode() + b'\n'
                         + ssh_manager.TMUX_LOCATE_SENTINEL.encode() + b'\n')
@@ -107,11 +118,15 @@ class Channel:
                 self.status = 0
             else:
                 self.status = 127
+        elif 'DPkg::Lock::Timeout' in command:
+            self.status, self.out = host.package
+            if self.status == 0:
+                host.tmux_on_path = True
         elif 'cat >' in command:
             self.status = host.install_status
             if host.install_status == 0:
                 self.out = b'tmux 3.8\n'
-                host.found = 0
+                host.sshdeck_tmux = True
         elif 'show-environment' in command:
             self.out = b'LC_CTYPE=C.UTF-8\n'
         else:
@@ -229,14 +244,14 @@ def test_a_host_with_tmux_on_path_is_left_exactly_as_it_was(monkeypatch):
 
 
 def test_a_tmux_the_user_installed_off_path_is_found_and_used(monkeypatch):
-    host = Host(found=1)
+    host = Host(found=0)
     session_id, error = connect(monkeypatch, host)
     assert error is None
     session = _registered(session_id)
-    assert session['tmux_bin'] == ssh_manager.TMUX_CANDIDATES[1]
+    assert session['tmux_bin'] == ssh_manager.TMUX_CANDIDATES[0] == '"$HOME/.local/bin/tmux"'
     assert session['tmux_provisioned'] is None and _uploads(host) == []
     create = [c for c in host.commands if 'new-session' in c]
-    assert create[0].startswith(ssh_manager.TMUX_CANDIDATES[1] + ' -u new-session')
+    assert create[0].startswith(ssh_manager.TMUX_CANDIDATES[0] + ' -u new-session')
 
 
 def test_a_linux_host_without_any_tmux_gets_sshdecks(monkeypatch):
@@ -265,7 +280,7 @@ def test_each_copy_lands_under_its_own_name_and_is_renamed_into_place(monkeypatc
         script = upload.replace("'", '')
         [name] = set(re.findall(r'\.tmux-[0-9a-f]{32}', script))
         assert (f'mv -f "$HOME/.local/share/sshdeck/bin/{name}" '
-                f'{ssh_manager.SSHDECK_TMUX}') in script
+                f'{ssh_manager.SSHDECK_TMUX_PATH}') in script
         names.append(name)
     assert names[0] != names[1]
 
@@ -305,7 +320,7 @@ def test_a_reattach_never_installs_anything(monkeypatch):
 
 
 def test_a_reattach_finds_the_tmux_sshdeck_placed_earlier(monkeypatch):
-    host = Host(found=0)
+    host = Host(sshdeck_tmux=True)
     session_id, error = connect(monkeypatch, host,
                                 reconnect_tmux_name='sshdeck_alice_target_22_aaaa')
     assert error is None
@@ -377,14 +392,15 @@ def socket_world(app, monkeypatch):
     db.session.commit()
     order, emitted = [], []
 
-    def fake_create(**_kwargs):
+    def fake_create(**kwargs):
         order.append('connect')
+        kwargs['on_progress']('installing_tmux')
         with ssh_manager.sessions_lock:
             ssh_manager.sessions['notice-id'] = {
                 'user_id': str(user.id), 'connected': True, 'use_tmux': True,
                 'tmux_session_name': 'sshdeck_alice_h_22_aaaa', 'auth_type': 'password',
                 'tmux_bin': ssh_manager.SSHDECK_TMUX, 'tmux_provisioned': '3.8',
-                'tmux_unavailable': None, 'client': None, 'channel': None,
+                'tmux_installed_with': None, 'tmux_unavailable': None, 'client': None, 'channel': None,
                 'views': {}, 'host': 'h', 'port': 22, 'username': 'alice'}
         return 'notice-id', None
 
@@ -404,7 +420,92 @@ def test_the_page_is_told_and_the_database_is_let_go_first(app, socket_world):
     with app.test_request_context('/socket.io', environ_base={'REMOTE_ADDR': '127.0.0.1'}):
         request.sid = 'notice-sock'
         socket_events.handle_ssh_connect({'host': 'h', 'port': 22, 'username': 'alice',
-                                          'password': 'pw', 'use_tmux': True})
+                                          'password': 'pw', 'use_tmux': True,
+                                          'client_request_id': 'notice-req'})
     assert order[:2] == ['release', 'connect']
+    [progress] = [payload for event, payload in emitted if event == 'ssh_connect_progress']
+    assert progress == {'client_request_id': 'notice-req', 'stage': 'installing_tmux'}
     [connected] = [payload for event, payload in emitted if event == 'ssh_connected']
-    assert (connected['tmux_provisioned'], connected['tmux_unavailable']) == ('3.8', None)
+    assert (connected['tmux_provisioned'], connected['tmux_installed_with'],
+            connected['tmux_unavailable']) == ('3.8', None, None)
+
+
+# ---- the host's package manager, where the account may use it --------------
+
+def _package_runs(host):
+    return [cmd for cmd in host.commands if 'DPkg::Lock::Timeout' in cmd]
+
+
+def test_an_account_that_may_install_gets_the_distributions_tmux(monkeypatch):
+    host = Host(package=(0, b'apt\ntmux 3.4\n'))
+    stages = []
+    session_id, error = connect(monkeypatch, host, on_progress=stages.append)
+    assert error is None
+    assert stages == ['installing_tmux']
+    assert len(_package_runs(host)) == 1 and _uploads(host) == []
+    session = ssh_manager.get_session(session_id)
+    assert (session['tmux_installed_with'], session['tmux_provisioned']) == ('apt', '3.4')
+    assert _registered(session_id)['tmux_bin'] is None
+    create = [c for c in host.commands if 'new-session' in c]
+    assert create[0].startswith('tmux -u new-session')
+
+
+@pytest.mark.parametrize('status', [4, 6, None])
+def test_a_package_install_that_fails_or_is_still_running_falls_back_to_sshdecks(
+        monkeypatch, status):
+    """4: it failed. 6: it is still running -- detached, so it finishes and the
+    next session finds it. None: the exec itself failed or ran out."""
+    host = Host(package=(status, b''))
+    session_id, error = connect(monkeypatch, host)
+    assert error is None and len(_uploads(host)) == 1
+    session = ssh_manager.get_session(session_id)
+    assert (session['tmux_installed_with'], session['tmux_provisioned']) == (
+        None, ssh_manager.STATIC_TMUX_VERSION)
+
+
+def test_a_manager_name_that_is_not_ours_is_not_believed(monkeypatch):
+    host = Host(package=(0, b'rm -rf ~\ntmux 3.4\n'))
+    session_id, _error = connect(monkeypatch, host)
+    assert ssh_manager.get_session(session_id)['tmux_installed_with'] is None
+    assert len(_uploads(host)) == 1
+
+
+def test_nothing_is_installed_where_tmux_is_already_on_path_or_for_a_reattach(monkeypatch):
+    stages = []
+    on_path = Host(tmux_on_path=True, package=(0, b'apt\ntmux 3.4\n'))
+    connect(monkeypatch, on_path, on_progress=stages.append)
+    reattach = Host(package=(0, b'apt\ntmux 3.4\n'))
+    connect(monkeypatch, reattach, reconnect_tmux_name='sshdeck_alice_target_22_aaaa',
+            on_progress=stages.append)
+    assert _package_runs(on_path) == [] and _package_runs(reattach) == []
+    assert stages == []
+
+
+def test_the_install_script_never_waits_for_a_password():
+    """sudo only ever as `sudo -n`, which fails instead of prompting."""
+    script = ssh_manager.TMUX_PACKAGE_SCRIPT
+    calls = script.replace('command -v sudo', '')
+    assert calls.count('sudo') == calls.count('sudo -n') >= 1
+    # The names the reply may carry are exactly the ones the script installs with.
+    for manager in ssh_manager.TMUX_PACKAGE_MANAGERS:
+        assert f'{manager}) q $S' in script
+
+
+def test_sshdecks_copy_wins_over_a_tmux_the_host_gains_later(monkeypatch):
+    """MEASURED 2026-10-09: a tmux 3.3a client cannot use a 3.8 server
+    ("server exited unexpectedly"). A host that got SSHDeck's copy and later
+    its own tmux must go on using the copy, or every session it runs is lost."""
+    host = Host(sshdeck_tmux=True, tmux_on_path=True)
+    session_id, error = connect(monkeypatch, host)
+    assert error is None
+    assert _registered(session_id)['tmux_bin'] == ssh_manager.SSHDECK_TMUX
+    assert not any(ssh_manager.TMUX_LOCATE_SENTINEL in c for c in host.commands)
+    create = [c for c in host.commands if 'new-session' in c]
+    assert create[0].startswith(ssh_manager.SSHDECK_TMUX + ' -u new-session')
+
+
+def test_sshdecks_copy_runs_its_own_server():
+    """Its own socket: the user's own `tmux` never meets SSHDeck's server."""
+    assert ssh_manager.SSHDECK_TMUX == ssh_manager.SSHDECK_TMUX_PATH + ' -L sshdeck'
+    command = ssh_manager._tmux('tmux kill-session -t =s', ssh_manager.SSHDECK_TMUX)
+    assert command == '"$HOME/.local/share/sshdeck/bin/tmux" -L sshdeck kill-session -t =s'

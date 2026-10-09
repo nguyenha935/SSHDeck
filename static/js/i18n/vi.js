@@ -571,6 +571,8 @@ window.__i18n.vi = {
         'tmux.provisioned': 'Máy này chưa có tmux: SSHDeck đã đặt tmux {version} vào ~/.local/share/sshdeck/bin, nên phiên được giữ lại khi đóng trang.',
         'tmux.unsupported': 'Phiên này không được giữ lại: máy ({platform}) không có tmux, và SSHDeck không có bản cho hệ này.',
         'tmux.installFailed': 'Phiên này không được giữ lại: máy ({platform}) không có tmux, và SSHDeck không đặt được bản của mình lên đó.',
+        'tmux.installed': 'Máy này chưa có tmux: SSHDeck đã cài tmux {version} bằng {manager}, nên phiên được giữ lại khi đóng trang.',
+        'connect.installingTmux': 'Đang cài tmux...',
 
         'settings.title': 'Cài đặt',
         'settings.thisDevice': 'Các cài đặt này chỉ áp dụng cho thiết bị này.',

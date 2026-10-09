@@ -1,10 +1,23 @@
 # Static tmux
 
-SSHDeck copies one of these binaries onto a Linux host that has no tmux. It
-lands in `~/.local/share/sshdeck/bin/tmux`, so a session on that host is still
-kept after the browser closes. Nothing else on the host is touched. A host that
+SSHDeck copies one of these binaries onto a Linux host that has no tmux and
+where the account may not install the distribution's own. It lands in
+`~/.local/share/sshdeck/bin/tmux`, so a session on that host is still kept
+after the browser closes. Nothing else on the host is touched. A host that
 already has tmux (on `PATH`, in `~/.local/bin`, `/usr/local/bin` or Homebrew)
 uses its own. See `provision_static_tmux` in `app/ssh_manager.py`.
+
+The copy runs its own server (`tmux -L sshdeck`), and once it is on a host
+SSHDeck always uses it there, even if the host gains a tmux later. tmux
+clients and servers of different versions do not reliably talk to each other:
+on 2026-10-09 a tmux 3.3a client against a 3.8 server failed with "server
+exited unexpectedly", although both declare protocol 8. On its own socket the
+copy never meets the server of the user's own `tmux`. To use its sessions by
+hand:
+
+```sh
+~/.local/share/sshdeck/bin/tmux -L sshdeck ls
+```
 
 | File | What it is |
 |---|---|
@@ -33,7 +46,5 @@ rebuilds each architecture on its own runner and fails if a file differs.
 4. Set `STATIC_TMUX_VERSION` in `app/ssh_manager.py`. `tests/test_static_tmux.py`
    checks that it matches the script.
 
-A host never has its copy replaced. One that already has SSHDeck's tmux keeps
-the version it got. A client and a server of different versions still talk to
-each other while their protocol number matches: it is 8 in both 3.4 and 3.8
-(`PROTOCOL_VERSION` in `tmux.h` / `tmux-protocol.h`).
+A host never has its copy replaced: the sessions it runs would be lost. One
+that already has SSHDeck's tmux keeps the version it got.
