@@ -338,3 +338,73 @@ def test_nothing_the_host_prints_reaches_a_command(monkeypatch):
     assert _uploads(host) == []
     assert _registered(session_id)['tmux_bin'] is None
     assert ssh_manager.get_session(session_id)['tmux_unavailable']['platform'] == 'Linux x86_64 rm -rf'
+
+
+def test_a_swapped_transport_brings_its_own_answer(monkeypatch):
+    """A reconnect may land on a host whose tmux is now on PATH; the session
+    must follow the new transport, not keep the old one's tmux."""
+    session_id, _error = connect(monkeypatch, Host())
+    name = _registered(session_id)['tmux_session_name']
+    assert _registered(session_id)['tmux_bin'] == ssh_manager.SSHDECK_TMUX
+    replacement, error = ssh_manager._build_transport(
+        'target.example', 22, 'alice', password='pw', use_tmux=True,
+        reconnect_tmux_name=name)
+    assert error is None
+    monkeypatch.setattr(ssh_manager.paramiko, 'SSHClient',
+                        lambda: Client(Host(tmux_on_path=True)))
+    on_path, error = ssh_manager._build_transport(
+        'target.example', 22, 'alice', password='pw', use_tmux=True,
+        reconnect_tmux_name=name)
+    assert error is None and replacement['tmux_bin'] == ssh_manager.SSHDECK_TMUX
+    ok, error = ssh_manager.swap_session_transport(session_id, on_path)
+    assert ok, error
+    assert _registered(session_id)['tmux_bin'] is None
+
+
+# ---- what the page is told ---------------------------------------------------
+
+@pytest.fixture
+def socket_world(app, monkeypatch):
+    import config
+    import app.socket_events as socket_events
+    from app.auth import register_socket_session, register_user
+    from app.models import db
+
+    monkeypatch.setattr(config, 'TMUX_ENABLED', True)
+    user, error = register_user('tmuxnotice', 'tmux-notice-password-1')
+    assert error is None
+    register_socket_session(user.id, 'notice-sock')
+    db.session.commit()
+    order, emitted = [], []
+
+    def fake_create(**_kwargs):
+        order.append('connect')
+        with ssh_manager.sessions_lock:
+            ssh_manager.sessions['notice-id'] = {
+                'user_id': str(user.id), 'connected': True, 'use_tmux': True,
+                'tmux_session_name': 'sshdeck_alice_h_22_aaaa', 'auth_type': 'password',
+                'tmux_bin': ssh_manager.SSHDECK_TMUX, 'tmux_provisioned': '3.8',
+                'tmux_unavailable': None, 'client': None, 'channel': None,
+                'views': {}, 'host': 'h', 'port': 22, 'username': 'alice'}
+        return 'notice-id', None
+
+    monkeypatch.setattr(ssh_manager, 'create_ssh_connection', fake_create)
+    monkeypatch.setattr(socket_events, 'release_db_connection',
+                        lambda: order.append('release'))
+    monkeypatch.setattr(socket_events, 'emit',
+                        lambda event, payload=None, **kw: emitted.append((event, payload)))
+    yield socket_events, order, emitted
+    with ssh_manager.sessions_lock:
+        ssh_manager.sessions.pop('notice-id', None)
+
+
+def test_the_page_is_told_and_the_database_is_let_go_first(app, socket_world):
+    from flask import request
+    socket_events, order, emitted = socket_world
+    with app.test_request_context('/socket.io', environ_base={'REMOTE_ADDR': '127.0.0.1'}):
+        request.sid = 'notice-sock'
+        socket_events.handle_ssh_connect({'host': 'h', 'port': 22, 'username': 'alice',
+                                          'password': 'pw', 'use_tmux': True})
+    assert order[:2] == ['release', 'connect']
+    [connected] = [payload for event, payload in emitted if event == 'ssh_connected']
+    assert (connected['tmux_provisioned'], connected['tmux_unavailable']) == ('3.8', None)
