@@ -545,6 +545,104 @@ TMUX_REATTACH_UNAVAILABLE_ERROR = (
 TMUX_REATTACH_GONE_ERROR = (
     'Cannot reconnect: the saved tmux session no longer exists on the host')
 
+# ── A tmux for hosts whose PATH has none ─────────────────────────────────────
+#
+# OWNER RULING 2026-10-08: a host without tmux gets one, without asking. The
+# probe's bare `tmux -V` searches only the exec channel's PATH, which is often
+# minimal, so a tmux installed for the user (~/.local/bin, Homebrew) read as
+# missing and the session silently became a plain shell -- one that ends with
+# the browser. So those places are asked first, and only when none has a tmux
+# does SSHDeck copy its own static build into the first of them.
+#
+# Every candidate is OUR constant: the host's answer selects one by index, and
+# nothing it prints is ever put into a command.
+SSHDECK_TMUX = '"$HOME/.local/share/sshdeck/bin/tmux"'
+TMUX_CANDIDATES = (
+    SSHDECK_TMUX,
+    '"$HOME/.local/bin/tmux"',
+    '/usr/local/bin/tmux',
+    '/opt/homebrew/bin/tmux',
+    '/home/linuxbrew/.linuxbrew/bin/tmux',
+)
+TMUX_LOCATE_SENTINEL = '__SSHDECK_TMUX_LOCATE__'
+TMUX_LOCATE_COMMAND = (
+    f'uname -sm 2>/dev/null; echo {TMUX_LOCATE_SENTINEL}; i=0; '
+    f'for t in {" ".join(TMUX_CANDIDATES)}; do '
+    'if [ -x "$t" ]; then echo "$i"; exec "$t" -V; fi; i=$((i+1)); '
+    'done; exit 127')
+_PLATFORM_TEXT_RE = re.compile(r'[^A-Za-z0-9_. -]')
+
+# The build SSHDeck ships (scripts/build_static_tmux.sh), by `uname -m`.
+STATIC_TMUX_VERSION = '3.8'
+STATIC_TMUX_DIR = config.BASE_DIR / 'vendor' / 'tmux'
+STATIC_TMUX_ARCHES = ('x86_64', 'aarch64')
+# 1.7 MB over a slow Tailscale relay, then `tmux -V`. Past this the session
+# opens as a plain shell, as it always did on such a host.
+TMUX_PROVISION_TIMEOUT_S = 60.0
+
+
+def _tmux(command, tmux_bin):
+    """`command`, which starts with `tmux`, run by `tmux_bin` when there is one.
+
+    tmux_bin is None for a host whose PATH has tmux -- every command then stays
+    exactly as it always was -- or one of TMUX_CANDIDATES.
+    """
+    return tmux_bin + command[len('tmux'):] if tmux_bin else command
+
+
+def locate_tmux(transport):
+    """``(platform, tmux_bin, version)`` for a host whose PATH has no tmux.
+
+    platform is `uname -sm` ("Linux x86_64"), '' when unanswered, and is only
+    ever logged or shown; tmux_bin is one of TMUX_CANDIDATES, or None when none
+    of them runs.
+    """
+    status, output = _exec_capture(
+        transport, 'sh -c ' + shlex.quote(TMUX_LOCATE_COMMAND), timeout=10.0)
+    text = output.decode('utf-8', 'replace')
+    platform, found, rest = text.partition(TMUX_LOCATE_SENTINEL)
+    platform = ' '.join(_PLATFORM_TEXT_RE.sub('', platform).split())[:40] if found else ''
+    index, _, banner = rest.strip().partition('\n')
+    version = _parse_tmux_version(banner)
+    if status == 0 and index.isdigit() and int(index) < len(TMUX_CANDIDATES) and version:
+        return platform, TMUX_CANDIDATES[int(index)], version
+    return platform, None, None
+
+
+def provision_static_tmux(transport, platform):
+    """Copy SSHDeck's static tmux into the user's home.
+
+    Returns ``(tmux_bin, version, None)``, or ``(None, None, reason)`` where
+    reason is what the page is told: ``{'code': 'unsupported' | 'failed',
+    'platform': ...}``. Linux on x86_64 or aarch64 only: the build is static
+    against musl, so nothing else on the host matters.
+
+    The copy lands under a unique name and is renamed into place, so two
+    connections provisioning at once cannot leave a torn file; and it must
+    answer `-V` where it lands (a noexec home does not), or it is removed.
+    """
+    system, _, machine = platform.partition(' ')
+    if system != 'Linux' or machine not in STATIC_TMUX_ARCHES:
+        return None, None, {'code': 'unsupported', 'platform': platform}
+    binary = (STATIC_TMUX_DIR
+              / f'tmux-{STATIC_TMUX_VERSION}-linux-{machine}').read_bytes()
+    part = f'"$HOME/.local/share/sshdeck/bin/.tmux-{uuid.uuid4().hex}"'
+    script = (f'mkdir -p "$HOME/.local/share/sshdeck/bin" && cat > {part} '
+              f'&& chmod 755 {part} && mv -f {part} {SSHDECK_TMUX} '
+              f'&& {SSHDECK_TMUX} -V && exit 0; rm -f {part} {SSHDECK_TMUX}; exit 1')
+    started = time.monotonic()
+    status, output = _exec_capture(transport, 'sh -c ' + shlex.quote(script),
+                                   timeout=TMUX_PROVISION_TIMEOUT_S, data=binary)
+    version = _parse_tmux_version(output.decode('utf-8', 'replace')) if status == 0 else None
+    if version is None:
+        log_warning("Could not place SSHDeck's tmux on the host",
+                    platform=platform, status=status)
+        return None, None, {'code': 'failed', 'platform': platform}
+    log_info("Placed SSHDeck's tmux on the host", platform=platform,
+             version=STATIC_TMUX_VERSION, bytes=len(binary),
+             ms=int((time.monotonic() - started) * 1000))
+    return SSHDECK_TMUX, version, None
+
 
 def _parse_tmux_version(banner):
     """(major, minor) from `tmux -V` output, or None when unreadable.
@@ -669,7 +767,8 @@ def resolve_tmux_utf8_locale(locale_listing):
     return TMUX_UTF8_FALLBACK_LOCALE
 
 
-def build_tmux_command(tmux_session_name, tmux_version, utf8_locale=None):
+def build_tmux_command(tmux_session_name, tmux_version, utf8_locale=None,
+                       tmux_bin=None):
     """The tmux command that CREATES one session, run on a short exec channel.
 
 : CREATE ONLY, and detached. This used to build the reattach
@@ -734,8 +833,8 @@ def build_tmux_command(tmux_session_name, tmux_version, utf8_locale=None):
     # would be counted by `window-size smallest` forever (at its 80x24 default,
     # since nothing ever resizes it) and would pin every real device to that
     # size. Each browser socket attaches for itself instead.
-    return (f'{prefix}tmux -u new-session -d{env_args} '
-            f'-s {tmux_session_name}')
+    return prefix + _tmux(f'tmux -u new-session -d{env_args} '
+                          f'-s {tmux_session_name}', tmux_bin)
 
 
 def build_tmux_attach_command(tmux_session_name):
@@ -983,7 +1082,7 @@ def parse_tmux_session_locale(output):
     return None
 
 
-def probe_tmux_session_locale(transport, tmux_session_name):
+def probe_tmux_session_locale(transport, tmux_session_name, tmux_bin=None):
     """Does this EXISTING tmux session carry a UTF-8 LC_CTYPE?
 
     READ-ONLY BY CONSTRUCTION. `show-environment` prints one variable: it does
@@ -1013,8 +1112,8 @@ def probe_tmux_session_locale(transport, tmux_session_name):
     try:
         channel = transport.open_session()
         channel.settimeout(3.0)
-        channel.exec_command(TMUX_SESSION_LOCALE_PROBE.format(
-            target=shlex.quote(f'={tmux_session_name}')))
+        channel.exec_command(_tmux(TMUX_SESSION_LOCALE_PROBE.format(
+            target=shlex.quote(f'={tmux_session_name}')), tmux_bin))
         out = b''
         try:
             while len(out) < 4096:
@@ -1038,7 +1137,7 @@ def probe_tmux_session_locale(transport, tmux_session_name):
 
 
 def probe_tmux_session_locale_with_retry(transport, tmux_session_name,
-                                         attempts=3, delay=0.2):
+                                         attempts=3, delay=0.2, tmux_bin=None):
     """The same read-only probe, for a session that was JUST created.
 
     `new-session` is issued on the interactive channel and the server needs a
@@ -1049,7 +1148,8 @@ def probe_tmux_session_locale_with_retry(transport, tmux_session_name,
     """
     answer = None
     for attempt in range(max(1, attempts)):
-        answer = probe_tmux_session_locale(transport, tmux_session_name)
+        answer = probe_tmux_session_locale(transport, tmux_session_name,
+                                           tmux_bin=tmux_bin)
         if answer is not None:
             return answer
         if attempt + 1 < attempts:
@@ -1057,7 +1157,7 @@ def probe_tmux_session_locale_with_retry(transport, tmux_session_name,
     return answer
 
 
-def tmux_session_exists(transport, tmux_session_name):
+def tmux_session_exists(transport, tmux_session_name, tmux_bin=None):
     """True / False / None: does this EXACT tmux session exist right now?
 
     READ-ONLY BY CONSTRUCTION: ``has-session`` inspects and never mutates.
@@ -1079,9 +1179,9 @@ def tmux_session_exists(transport, tmux_session_name):
     try:
         channel = transport.open_session()
         channel.settimeout(3.0)
-        channel.exec_command(
+        channel.exec_command(_tmux(
             'tmux has-session -t '
-            + shlex.quote(f'={tmux_session_name}') + ' 2>/dev/null')
+            + shlex.quote(f'={tmux_session_name}') + ' 2>/dev/null', tmux_bin))
         return channel.recv_exit_status() == 0
     except Exception as probe_error:
         log_debug("tmux existence check failed",
@@ -1165,6 +1265,43 @@ def _exec_on_transport(transport, command, timeout=10.0):
         return True, None
     except Exception as exc:
         return False, str(exc)
+    finally:
+        if channel is not None:
+            try:
+                channel.close()
+            except Exception:
+                pass
+
+
+def _exec_capture(transport, command, timeout, data=None, max_output=4096):
+    """Run one command on its own exec channel: ``(exit status, stdout)``.
+
+    `data`, when given, is the command's whole stdin. Every wait ends by
+    `timeout`; the status is None when it ran out or the channel failed.
+    """
+    channel = None
+    deadline = time.monotonic() + timeout
+    out = b''
+    try:
+        channel = transport.open_session(timeout=timeout)
+        channel.settimeout(timeout)
+        channel.exec_command(command)
+        if data is not None:
+            channel.sendall(data)
+            channel.shutdown_write()
+        while time.monotonic() < deadline:
+            if channel.recv_ready():
+                out = (out + channel.recv(4096))[:max_output]
+            elif channel.exit_status_ready():
+                while channel.recv_ready():
+                    out = (out + channel.recv(4096))[:max_output]
+                return channel.recv_exit_status(), out
+            else:
+                time.sleep(0.05)
+        return None, out
+    except Exception as exc:
+        log_debug("exec on the transport failed", error=str(exc))
+        return None, out
     finally:
         if channel is not None:
             try:
@@ -1315,6 +1452,23 @@ def _build_transport(host, port, username, password=None, key_path=None, key_con
         if login_shell is None:
             login_shell = discovered_shell
 
+        # No tmux on PATH: look where a user's own tmux usually lives, and for a
+        # NEW session put SSHDeck's there when there is none (OWNER RULING
+        # 2026-10-08). A reattach never installs anything: the tmux that ran
+        # its session is either found or the reattach fails closed below.
+        tmux_bin = None
+        tmux_provisioned = None
+        tmux_unavailable = None
+        if use_tmux and not tmux_available:
+            platform, tmux_bin, located_version = locate_tmux(transport)
+            if tmux_bin is None and not reconnect_tmux_name:
+                tmux_bin, located_version, tmux_unavailable = \
+                    provision_static_tmux(transport, platform)
+                if tmux_bin is not None:
+                    tmux_provisioned = STATIC_TMUX_VERSION
+            if tmux_bin is not None:
+                tmux_available, tmux_version = True, located_version
+
         tmux_session_name = None
         legacy_tmux_locale = None
         if use_tmux:
@@ -1349,7 +1503,7 @@ def _build_transport(host, port, username, password=None, key_path=None, key_con
                         tmux_session=reconnect_tmux_name)
                     return None, TMUX_REATTACH_UNAVAILABLE_ERROR
                 log_warning(f"tmux not found on target host, falling back to regular shell",
-                           host=f"{host}:{port}")
+                           host=f"{host}:{port}", reason=tmux_unavailable)
                 tmux_session_name = None
                 use_tmux = False
                 channel = open_shell_channel(client, transport,
@@ -1368,7 +1522,8 @@ def _build_transport(host, port, username, password=None, key_path=None, key_con
                 # created, swapped or retired at this point.
                 if reconnect_tmux_name:
                     if tmux_session_exists(
-                            transport, reconnect_tmux_name) is not True:
+                            transport, reconnect_tmux_name,
+                            tmux_bin=tmux_bin) is not True:
                         log_warning(
                             "Refusing a tmux reattach: the retained session "
                             "does not exist on the host",
@@ -1390,7 +1545,7 @@ def _build_transport(host, port, username, password=None, key_path=None, key_con
                 # is the one answer that lets Vietnamese fail silently again.
                 if reconnect_tmux_name:
                     has_utf8 = probe_tmux_session_locale(
-                        transport, reconnect_tmux_name)
+                        transport, reconnect_tmux_name, tmux_bin=tmux_bin)
                     # None must SURVIVE the conversion. `has_utf8 is False`
                     # alone would map an unanswered probe to "not legacy", i.e.
                     # report an UNKNOWN pane as verified-good -- the one answer
@@ -1421,7 +1576,8 @@ def _build_transport(host, port, username, password=None, key_path=None, key_con
                     created_ok, created_error = _exec_on_transport(
                         transport,
                         build_tmux_command(tmux_session_name, tmux_version,
-                                           utf8_locale=utf8_locale))
+                                           utf8_locale=utf8_locale,
+                                           tmux_bin=tmux_bin))
                     if not created_ok:
                         log_warning("Could not create the tmux session",
                                     tmux_session=tmux_session_name,
@@ -1449,7 +1605,7 @@ def _build_transport(host, port, username, password=None, key_path=None, key_con
                 # retry; an unanswered probe stays None (unknown), never False.
                 if not reconnect_tmux_name:
                     has_utf8 = probe_tmux_session_locale_with_retry(
-                        transport, tmux_session_name)
+                        transport, tmux_session_name, tmux_bin=tmux_bin)
                     legacy_tmux_locale = (
                         None if has_utf8 is None else (has_utf8 is False))
                     if legacy_tmux_locale is True:
@@ -1488,6 +1644,13 @@ def _build_transport(host, port, username, password=None, key_path=None, key_con
             # The proven login shell this transport launched with (or None):
             # carried so a prepare-and-swap reconnect launches the SAME shape.
             'login_shell': login_shell,
+            # Which tmux runs this session's commands: None for the one on
+            # PATH, else a TMUX_CANDIDATES entry. And what the page is told:
+            # the version SSHDeck just placed on the host, or why a session
+            # that asked for tmux is a plain shell instead.
+            'tmux_bin': tmux_bin if use_tmux else None,
+            'tmux_provisioned': tmux_provisioned,
+            'tmux_unavailable': tmux_unavailable,
         }
         client = None
         bastion_client = None
@@ -1650,6 +1813,11 @@ def create_ssh_connection(host, port, username, password=None, key_path=None, ke
                 # launched with (None when it used the shipped invoke_shell
                 # shape). Carried so a reconnect swaps in the SAME shape.
                 'login_shell': transport_result.get('login_shell'),
+                # Which tmux this session's commands run (see _tmux), and the
+                # connect-time notice for the page (see _build_transport).
+                'tmux_bin': transport_result.get('tmux_bin'),
+                'tmux_provisioned': transport_result.get('tmux_provisioned'),
+                'tmux_unavailable': transport_result.get('tmux_unavailable'),
                 # The LOGICAL session id is stable for the user's whole
                 # session; only the transport underneath it is replaceable via
                 # swap_session_transport.
@@ -1804,6 +1972,7 @@ def swap_session_transport(session_id, transport_result, socketio_instance=None,
             # The replacement transport is equally authoritative on the launch
             # shape it used.
             session['login_shell'] = transport_result.get('login_shell')
+            session['tmux_bin'] = transport_result.get('tmux_bin')
             session['last_activity'] = time.time()
             new_generation = retiring_generation + 1
             session['transport_generation'] = new_generation
@@ -2730,6 +2899,7 @@ def open_session_view(session_id, socket_sid, cols, rows,
             return False, "Too many open views for this session"
         client = session.get('client')
         tmux_session_name = session.get('tmux_session_name')
+        tmux_bin = session.get('tmux_bin')
         generation = session.get('transport_generation', 0)
         target = _session_geometry_target(
             dict(views, **{socket_sid: {'cols': cols, 'rows': rows}}))
@@ -2799,7 +2969,8 @@ def open_session_view(session_id, socket_sid, cols, rows,
                 return False, "SSH transport is not active"
             channel = transport.open_session(timeout=10.0)
             channel.get_pty('xterm-256color', target[0], target[1])
-            channel.exec_command(build_tmux_attach_command(tmux_session_name))
+            channel.exec_command(
+                _tmux(build_tmux_attach_command(tmux_session_name), tmux_bin))
             channel.settimeout(0.1)
         except Exception as exc:
             return False, str(exc)
@@ -3409,6 +3580,7 @@ def _exec_tmux_control(session_id, subcommand, extra_args=None,
             return False, "Session is not a tmux session", ''
         client = session.get('client')
         tmux_session_name = session['tmux_session_name']
+        tmux_bin = session.get('tmux_bin')
 
     if not client:
         return False, "No SSH client for session", ''
@@ -3430,7 +3602,8 @@ def _exec_tmux_control(session_id, subcommand, extra_args=None,
         parts = ['tmux', subcommand] if no_target else ['tmux', subcommand, '-t', target]
         if extra_args:
             parts.extend(str(arg) for arg in extra_args)
-        command = ' '.join(shlex.quote(part) for part in parts)
+        command = _tmux(' '.join(shlex.quote(part) for part in parts),
+                        tmux_bin)
 
         # Bound the channel open too: on a half-open TCP, open_session with no
         # timeout blocks this eventlet SocketIO worker forever — the same bug
@@ -4035,7 +4208,9 @@ def close_session(session_id, kill_tmux=False, expected_session=None):
                 if transport and transport.is_active():
                     kill_channel = transport.open_session(timeout=TMUX_KILL_TIMEOUT)
                     kill_channel.settimeout(TMUX_KILL_TIMEOUT)
-                    command = 'tmux kill-session -t ' + shlex.quote(session['tmux_session_name'])
+                    command = _tmux('tmux kill-session -t '
+                                    + shlex.quote(session['tmux_session_name']),
+                                    session.get('tmux_bin'))
                     timeout_guard = Timer(TMUX_KILL_TIMEOUT, kill_channel.close)
                     timeout_guard.daemon = True
                     timeout_guard.start()
@@ -4115,6 +4290,8 @@ def get_session(session_id):
                 'utf8_locale': session.get('utf8_locale'),
                 'legacy_tmux_locale': session.get('legacy_tmux_locale'),
                 'login_shell': session.get('login_shell'),
+                'tmux_provisioned': session.get('tmux_provisioned'),
+                'tmux_unavailable': session.get('tmux_unavailable'),
             }
     return None
 

@@ -102,6 +102,9 @@ window.__i18n.de = {
         'diag.sendScreen': 'Bildschirmdiagnose senden',
         'diag.saved': 'Bildschirmdiagnose gespeichert: {name}',
         'diag.failed': 'Bildschirmdiagnose nicht gespeichert ({error})',
+        'tmux.provisioned': 'Auf diesem Host fehlte tmux: SSHDeck hat tmux {version} in ~/.local/share/sshdeck/bin abgelegt, damit diese Sitzung beim Schließen der Seite erhalten bleibt.',
+        'tmux.unsupported': 'Diese Sitzung bleibt nicht erhalten: Der Host ({platform}) hat kein tmux, und SSHDeck hat keines dafür.',
+        'tmux.installFailed': 'Diese Sitzung bleibt nicht erhalten: Der Host ({platform}) hat kein tmux, und SSHDeck konnte sein eigenes dort nicht ablegen.',
 
         'settings.title': 'Einstellungen',
         'settings.thisDevice': 'Diese Einstellungen gelten nur für dieses Gerät.',

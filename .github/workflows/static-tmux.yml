@@ -1,0 +1,60 @@
+name: static tmux
+
+# SSHDeck copies vendor/tmux onto users' hosts (provision_static_tmux in
+# app/ssh_manager.py), so what is committed there must be exactly what
+# scripts/build_static_tmux.sh builds from its pinned sources. Each
+# architecture is rebuilt on its own runner and compared byte for byte.
+on:
+  pull_request:
+    paths:
+      - scripts/build_static_tmux.sh
+      - vendor/tmux/**
+      - .github/workflows/static-tmux.yml
+  push:
+    branches: [main]
+    paths:
+      - scripts/build_static_tmux.sh
+      - vendor/tmux/**
+      - .github/workflows/static-tmux.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rebuild:
+    name: static tmux (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Build in the pinned Alpine image
+        run: |
+          docker run --rm -v "$PWD:/w" -w /w \
+            alpine@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8 \
+            sh scripts/build_static_tmux.sh build-out
+          sha256sum build-out/*
+
+      # Kept whatever the comparison says: a new version is vendored from here.
+      - name: Keep what was built
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: static-tmux-${{ matrix.arch }}
+          path: build-out/
+
+      - name: Compare with vendor/tmux
+        run: |
+          for built in build-out/*; do
+            cmp "$built" "vendor/tmux/$(basename "$built")"
+          done
+          (cd vendor/tmux && sha256sum -c SHA256SUMS)
