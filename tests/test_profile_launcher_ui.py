@@ -261,7 +261,8 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # instead of resizing the remote pane.
         # v105: the keypad, Notes and its splitter are chrome, not a resize.
         # v108: the drop overlay leaves with a file drag that was not dropped.
-        "filename='js/app.js'": '?v=108',
+        # v109: Send never focuses the composer.
+        "filename='js/app.js'": '?v=109',
         # v18: the Files browser hooks (expand, delegated render and menu, the
         # selection kept by name across a relist, one toast per error).
         # v19: the [SFTP]/[FM] console lines are gone.
@@ -612,7 +613,8 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # keyboards push the content up, the side panels scale the text down
         # to a 9 px floor -- and the held frame is blurred.
         # v106: the floor is 12 px, never above the reader's own size.
-        "filename='js/terminal-manager.js'": '?v=106',
+        # v107: a tap on the terminal's content opens no keyboard on a phone.
+        "filename='js/terminal-manager.js'": '?v=107',
         # touch-action-row.js owns the six-action global row. It did not exist
         # when this table was written; an unpinned copy of it is the single most
         # damaging stale asset on touch, because the row it builds is the only

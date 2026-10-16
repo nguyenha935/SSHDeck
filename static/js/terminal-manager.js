@@ -1405,40 +1405,29 @@ const TerminalManager = {
         },
     },
 
-
-
-
-
-
-
-
     /*
      * COMPOSER INPUT OWNERSHIP.
      *
      * While the shared composer is visible it is the sole logical keyboard owner,
-     * anywhere in the workspace. A click inside the terminal used to land on
+     * anywhere in the workspace. A tap inside the terminal used to land on
      * xterm's hidden textarea, so the user watched a visible, focused-looking
      * text box while their keystrokes went somewhere else entirely -- and
      * Vietnamese composition lost the editing surface it needs.
      *
-     * Implementation notes that matter:
+     * OWNER RULING 2026-10-16: on a touch shell the keyboard opens only when
+     * the user taps the composer itself. A tap or double tap on the terminal's
+     * CONTENT leaves the keyboard as it was: closed stays closed, and open stays
+     * open with the composer still receiving the typing. Before this a tap on
+     * the content focused the composer and raised the keyboard (measured on
+     * main 05777b9, Chromium and WebKit: the tap went xterm's textarea ->
+     * #mobileInput).
      *
-     *  - `click`, so ONE handler covers a mouse click and a touch tap (a single
-     *    tap ends in a synthetic click). It runs after xterm's own mousedown, so
-     *    a click-drag to select text completes before focus can move.
-     *  - A real text SELECTION is left alone. Refocusing the composer collapses
-     *    the terminal's selection, so a user selecting output to copy keeps it.
-     *  - Only when the composer is visible. When it is hidden (ordinary wide
-     *    desktop) this does nothing at all, so native xterm input stays direct
-     *    and fast -- that is the second half of the same ruling.
-     *  - TOUCH IS INCLUDED. An intentional tap on the
-     *    terminal may focus the visible composer, keyboard and all: the user just
-     *    aimed at the typing surface. The v3 strict-focus rule that forbids
-     *    summoning the keyboard governs CONNECTION-CHIP taps (focusActivePane
-     *    stays a no-op on touch for exactly that reason), not a deliberate tap
-     *    into the terminal.
-     *  - A DOUBLE tap is unaffected: its touchend calls preventDefault, which
-     *    suppresses the synthetic click, so raw xterm focus still wins there.
+     * xterm still focuses its hidden textarea on the tap's synthetic mousedown;
+     * the focusin redirect below answers that. Focus that came FROM the
+     * composer goes back to it (typing continues, keyboard stays). Any other
+     * focus on the textarea is dropped, so nothing editable is left focused
+     * and no keyboard rises. When the composer is not visible this does
+     * nothing, and xterm keeps its textarea -- the desktop path.
      */
     /*
      * S16 defect 1 — does the NOTES surface currently own the keyboard?
@@ -1474,38 +1463,11 @@ const TerminalManager = {
             return;
         }
         container.dataset.composerOwnershipBound = 'true';
-        container.addEventListener('click', () => {
-            // Desurgery: desktop clicks belong to xterm (keystrokes
-            // go straight into the terminal). Only a touch shell redirects a
-            // terminal-area tap to the composer.
-            if (!this.isTouchShell()) {
-                return;
-            }
-            if (typeof SessionManager === 'undefined'
-                || !SessionManager.composerOwnsInput()) {
-                return;
-            }
-            // S16 defect 1: the Notes textarea keeps the keyboard it owns.
-            if (this.notepadOwnsKeyboard()) {
-                return;
-            }
-            const selection = window.getSelection?.();
-            const hasTerminalSelection = !!(selection && !selection.isCollapsed)
-                || !!container.querySelector('.xterm-selection div');
-            if (hasTerminalSelection) {
-                return;
-            }
-            const input = document.getElementById('mobileInput');
-            if (input && document.activeElement !== input) {
-                input.focus();
-            }
-        });
 
         // P1-3 (B): Composer-first touch authority. On a touch shell, xterm's
         // synthetic mousedown or internal helper focus must NEVER steal focus
-        // from #mobileInput (the single authoritative composer). When the
-        // xterm helper textarea receives focus on touch, immediately redirect
-        // it to #mobileInput.
+        // from #mobileInput (the single authoritative composer), and must
+        // never raise a keyboard of its own (OWNER RULING 2026-10-16).
         container.addEventListener('focusin', (e) => {
             if (!this.isTouchShell()) {
                 return;
@@ -1531,11 +1493,19 @@ const TerminalManager = {
                 return;
             }
             const target = e.target;
-            if (target && target.classList && target.classList.contains('xterm-helper-textarea')) {
-                const input = document.getElementById('mobileInput');
-                if (input && document.activeElement !== input) {
-                    input.focus();
-                }
+            if (!target || !target.classList
+                || !target.classList.contains('xterm-helper-textarea')) {
+                return;
+            }
+            // A hidden composer owns nothing: xterm keeps its textarea.
+            const input = document.getElementById('mobileInput');
+            if (!input || input.offsetParent === null) {
+                return;
+            }
+            if (from === input) {
+                input.focus();
+            } else {
+                target.blur();
             }
         }, true);
     },
@@ -1919,7 +1889,7 @@ const TerminalManager = {
          */
         const AXIS_RATIO = 1.2;
         const LONG_PRESS_MS = 500;
-        const DOUBLE_TAP_MS = 300;   // two taps within this window => raw terminal focus
+        const DOUBLE_TAP_MS = 300;   // two taps within this window => a double tap
         const DOUBLE_TAP_PX = 24;    // ...and no further apart than this
 
         // Per-terminal gesture state, kept in closure (no this.interaction).
@@ -2526,18 +2496,16 @@ const TerminalManager = {
             // Plain tap (no move, no select).
             // SINGLE tap: do NOT focus or preventDefault here. The synthetic
             // click that follows this touchend bubbles to the pane ->
-            // setActivePane -> focusActivePane, which routes mobile focus to
-            // #mobileInput (Vietnamese IME) and runs AFTER xterm's mousedown, so
-            // it wins. Focusing here would only flicker then get overridden.
+            // setActivePane -> focusActivePane, a no-op on touch, and xterm's
+            // own focus on the synthetic mousedown is answered by the focusin
+            // redirect: no keyboard (OWNER RULING 2026-10-16).
             // DOUBLE tap (two taps within DOUBLE_TAP_MS *and* within
-            // DOUBLE_TAP_PX of each other): the user wants to type raw keys into
-            // the terminal (vim/claude), AND on iOS a double-tap is the zoom
-            // Gesture. preventDefault on this second touchend blocks the
+            // DOUBLE_TAP_PX of each other): on iOS a double-tap is the zoom
+            // gesture. preventDefault on this second touchend blocks the
             // double-tap-zoom AND suppresses the synthetic click sequence
-            // (verified: no click fires), so nothing else would focus anything --
-            // we focus the terminal directly here. The distance check matters:
-            // time alone turned two quick taps in different places (e.g. two
-            // different spots of the output) into an unwanted raw-focus switch.
+            // (verified: no click fires). The distance check matters: time
+            // alone turned two quick taps in different places (e.g. two
+            // different spots of the output) into a double tap.
             if (!tapMoved) {
                 const now = performance.now();
                 const near = lastTapX !== null
@@ -2548,53 +2516,16 @@ const TerminalManager = {
                     if (event.cancelable) {
                         event.preventDefault();   // block iOS double-tap-zoom
                     }
-                    /*
-                     * The missing notepadOwnsKeyboard guard.
-                     *
-                     * This redirect had NO Notes exception, unlike its two
-                     * siblings in this file (:1381 the container click and
-                     * 1422 the focusin redirect), so a double-tap that landed
-                     * while the Notes sheet owned the keyboard moved focus into
-                     * #mobileInput and the rest of the note was typed into the
-                     * Composer -- the requirement "composer contaminated with
-                     * NOTE text". Measured in probe4: A3 STEALS to mobileInput
-                     * on touch. The enabling condition is style.css:5018, which
-                     * can hide the panel out from under the caret.
-                     *
-                     * Placed here rather than inside the isTouchShell branch
-                     * alone because BOTH branches steal the keyboard from a
-                     * focused note -- the touch branch into the composer, the
-                     * desktop branch into xterm's helper textarea -- and one
-                     * Predicate covers both. preventDefault above has already
-                     * run, so the iOS double-tap-zoom is still blocked and the
-                     * gesture is still consumed; only the focus move is
-                     * declined. No scroll or gesture state is touched, so the
-                     * mobile touch-scroll baseline is unaffected.
-                     */
-                    if (this.notepadOwnsKeyboard()) {
-                        resetGesture();
-                        return;
-                    }
-                    // Composer-first input authority: a double-tap on the terminal
-                    // must route keystrokes back to #mobileInput (the single
-                    // authoritative composer), not to xterm's hidden textarea. On a touch
-                    // shell the composer element is the sole input; the raw-focus
-                    // path is gone because there is no separate raw-typing mode.
-                    if (this.isTouchShell()) {
-                        const mobileInput = document.getElementById('mobileInput');
-                        if (mobileInput) {
-                            mobileInput.focus();
-                            // xterm's synthesized mousedown fires AFTER touchend and
-                            // re-focuses its hidden textarea, which would override the
-                            // composer. Re-assert focus once that sequence finishes so
-                            // the composer is the final owner on a double-tap.
-                            setTimeout(() => mobileInput.focus(), 0);
-                        }
-                    } else {
+                    // On a touch shell a double tap on the content opens no
+                    // keyboard either (OWNER RULING 2026-10-16): the gesture is
+                    // consumed for the zoom it would have been, and focus stays
+                    // where it was. A desktop double tap still focuses xterm --
+                    // unless the Notes sheet owns the keyboard, because focus
+                    // moved out of a note takes the rest of the note with it
+                    // (S16 defect 1, measured in probe4 A3).
+                    if (!this.isTouchShell() && !this.notepadOwnsKeyboard()) {
                         terminal.focus();
                     }
-                    // No raw-terminal-focus dispatch remains: the composer mirror
-                    // stays authoritative in every tap/double-tap path.
                 } else {
                     lastTap = now;
                     lastTapX = tapX;

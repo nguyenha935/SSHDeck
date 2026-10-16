@@ -4694,9 +4694,9 @@ const SessionManager = {
          */
         // v3 strict focus rule: on mobile/touch, only direct
         // intentional interaction with the composer may open the keyboard --
-        // the user tapping/focusing #mobileInput itself, or the visible Send
-        // button refocusing it when it was already active at press time (gated
-        // in app.js). Every other caller funnels through this function: tab
+        // the user tapping/focusing #mobileInput itself (OWNER RULING
+        // 2026-10-16: not Send, not a tap on the terminal's content). Every
+        // other caller funnels through this function: tab
         // click, tab swipe, assignment via setActivePane, new-connect
         // completion, restore/reconnect, pane tap, gesture recovery, search
         // close, exit-scroll. On mobile all of them must update the active

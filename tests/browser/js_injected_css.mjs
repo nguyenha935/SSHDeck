@@ -436,7 +436,8 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v105: no chrome of the app's own resizes the remote pane; the held
         // frame is blurred.
         // v106: the text is never drawn under 12 px on the app's account.
-        ['js/terminal-manager.js', 106],
+        // v107: a tap on the terminal's content opens no keyboard on a phone.
+        ['js/terminal-manager.js', 107],
         // v18: the Files browser hooks (expand, delegated render and menu).
         // v20: the quick-connect captions mark the required fields.
         // v21: opening and closing the Files panel is chrome, not a resize.
@@ -654,7 +655,8 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v106: a host that had no tmux, or still has none, is said once.
         // v107: the connect counter says when tmux is being installed.
         // v108: the drop overlay leaves with a file drag that was not dropped.
-        ['js/app.js', 108],
+        // v109: Send never focuses the composer.
+        ['js/app.js', 109],
         // v9: 0209f10 raise. v10: P1 D2 trigger-anchored More-sheet position
         // (top = trigger.bottom+1, bottom auto, measured maxHeight) — Entry 27 R4.
         // v14: the theme and language pickers moved to Settings.

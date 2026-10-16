@@ -2979,23 +2979,18 @@
             // junk at the next prompt — the bug being fixed here.
             //
             // pointerdown/mousedown also preventDefault, which stops focus from
-            // leaving at all (keyboard stays up for the next command). NOT done on
-            // touchstart: WebKit treats a prevented touchstart as "no click", which
-            // would disable the button outright. So the flag, not preventDefault,
-            // is what actually guarantees the fix on iOS.
-            // v3 strict focus rule: Send is the ONLY code
-            // path that may focus the composer, and only when the composer was
-            // already active at press time -- a continuation of an already-
-            // intentional composer session. Capture on the FIRST press event
-            // only: on touch the passive touchstart does not preventDefault, so
-            // a blur can land before the compat mousedown; re-capturing there
-            // would read the post-blur state and drop the keyboard on exactly
-            // the engines the refocus exists for.
-            let wasComposerActive = false;
+            // leaving at all (a keyboard that is up stays up for the next
+            // command). NOT done on touchstart: WebKit treats a prevented
+            // touchstart as "no click", which would disable the button outright.
+            // So the flag, not preventDefault, is what actually guarantees the
+            // fix on iOS.
+            //
+            // Send never focuses anything (OWNER RULING 2026-10-16: the keyboard
+            // opens only from a tap on the composer). It used to focus the
+            // composer again when it had been active at press time, and on a
+            // phone the composer can still hold focus with the keyboard put
+            // away, so Send raised the keyboard.
             const markSendPressed = (e) => {
-                if (!mobileSendPressed) {
-                    wasComposerActive = document.activeElement === mobileInput;
-                }
                 mobileSendPressed = true;
                 if (e.type !== 'touchstart') e.preventDefault();
             };
@@ -3057,13 +3052,6 @@
 
                 mobileSendBlurredComposition = false;
                 commitMobileInput();
-
-                // F1 strict focus rule: refocus only when the composer
-                // was already active at press time (continuation of an intentional
-                // composer session). Usually a no-op anyway (preventDefault keeps
-                // focus from leaving).
-                if (wasComposerActive && mobileInput) mobileInput.focus();
-                wasComposerActive = false;
             });
         }
 

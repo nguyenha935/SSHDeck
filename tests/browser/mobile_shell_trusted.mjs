@@ -771,11 +771,11 @@ check('D) tap on dimmed backdrop passes through to terminal', await page.evaluat
 // Case #3/#4 (static) — the double-tap-zoom block moved from CSS touch-action
 // into JS. The dynamic tap->focus behavior is covered by mobile_focus_trusted.mjs
 // (real xterm + real focusActivePane); here we assert the shipped source shape so
-// a regression that drops the preventDefault (zoom returns) is caught. P1 §2.2
-//: the double-tap branch must preventDefault (block zoom) AND route
-// the touch path to the COMPOSER (#mobileInput), with raw terminal.focus() only
-// on the desktop else arm. The pre-P1 "focuses terminal directly" expectation is
-// superseded — no raw-focus exception remains on touch.
+// a regression that drops the preventDefault (zoom returns) is caught. The
+// double-tap branch must preventDefault (block zoom) and, on a touch shell,
+// focus NOTHING (OWNER RULING 2026-10-16: the keyboard opens only from a tap on
+// the composer; P1 §2.2 used to route it to #mobileInput). Raw terminal.focus()
+// stays on the desktop arm only.
 const tmSrc = await (await fetch(`${base}/static/js/terminal-manager.js`)).text();
 // Isolate the touchend handler's double-tap branch: from `now - lastTap` to the
 // close of the `if (!moved)` block.
@@ -786,22 +786,23 @@ const tmSrc = await (await fetch(`${base}/static/js/terminal-manager.js`)).text(
 // past the old 1500 and making all four checks below fail on a slice that was
 // simply cut short. Raised to 4000 (the branch is ~3200 chars); every assertion
 // below is byte-identical.
-const dtBranch = (tmSrc.match(/now - lastTap < DOUBLE_TAP_MS[\s\S]{0,4000}?No raw-terminal-focus dispatch remains/) || [''])[0];
+// The branch runs from the double-tap test to its `else` (the single-tap
+// bookkeeping); an empty slice fails every row below.
+const dtBranch = (tmSrc.match(/now - lastTap < DOUBLE_TAP_MS[\s\S]{0,4000}?\} else \{\s*lastTap = now;/) || [''])[0];
 check('#3) double-tap branch calls preventDefault (blocks iOS zoom)',
   /event\.preventDefault\(\)/.test(dtBranch), true);
-check('#4/#3) double-tap branch routes touch to the Composer (#mobileInput)',
-  /if \(this\.isTouchShell\(\)\) \{[\s\S]*?mobileInput\.focus\(\);[\s\S]*?setTimeout\(\(\) => mobileInput\.focus\(\), 0\);[\s\S]*?\} else \{[\s\S]*?terminal\.focus\(\);[\s\S]*?\}/.test(dtBranch), true);
-check('#4/#3b) double-tap branch re-asserts composer focus after xterm mousedown',
-  /setTimeout\(\(\) => mobileInput\.focus\(\), 0\);/.test(dtBranch), true);
-check('#4/#3c) desktop keeps raw terminal.focus() (else arm intact)',
-  /\} else \{[\s\S]*?terminal\.focus\(\);[\s\S]*?\}/.test(dtBranch), true);
+check('#4/#3) double-tap branch focuses nothing on touch (no composer focus)',
+  dtBranch !== '' && !/mobileInput/.test(dtBranch)
+    && (dtBranch.match(/\.focus\(\)/g) || []).length === 1, true);
+check('#4/#3c) desktop keeps raw terminal.focus(), gated on !isTouchShell()',
+  /if \(!this\.isTouchShell\(\)[^{]*\{\s*terminal\.focus\(\);\s*\}/.test(dtBranch), true);
 // S17 R1 (FIX 5): the branch must DECLINE the focus move while the Notes sheet
 // owns the keyboard, like its two siblings at terminal-manager.js:1381/:1422.
 // Without this the rest of a note is typed into the composer -- the Owner's
 // "composer contaminated with NOTE text". The guard sits before both arms, so
 // preventDefault above still blocks iOS zoom and only the focus move is declined.
 check('#3d) double-tap branch declines to steal a focused Notes sheet',
-  /if \(this\.notepadOwnsKeyboard\(\)\) \{[\s\S]{0,120}?return;[\s\S]{0,40}?\}[\s\S]*?if \(this\.isTouchShell\(\)\)/.test(dtBranch), true);
+  /if \(!this\.isTouchShell\(\) && !this\.notepadOwnsKeyboard\(\)\) \{\s*terminal\.focus\(\);/.test(dtBranch), true);
 // The dead _wantRawFocus flag is gone for good: it was never set anywhere, so the
 // reset in focusActivePane could never consume it. Assert it is absent from BOTH
 // production files, otherwise a revert would quietly reintroduce the leak.
@@ -1039,20 +1040,18 @@ check('E2) the reset is NOT bound as a document capture listener (spares xterm)'
   /document\.addEventListener\('scroll',\s*resetShellScroll[^)]*capture/.test(tmSrc), false);
 
 // v3 F1 (dated deviation): the mobile composer may only be focused
-// by direct intentional interaction -- the user tapping #mobileInput, or the
-// visible Send button refocusing it when it was already active at press time.
-// Every other caller funnels through SessionManager.focusActivePane, so the
-// shared focus policy must have NO mobile branch, session-manager.js must
-// never focus the composer anywhere, and app.js's one remaining composer
-// focus (the Send refocus) must be gated on the composer having been active.
+// by direct intentional interaction -- the user tapping #mobileInput (OWNER
+// RULING 2026-10-16 took Send off the list: it used to focus the composer
+// again when it had been active at press time). Every other caller funnels
+// through SessionManager.focusActivePane, so the shared focus policy must have
+// NO mobile branch, and neither session-manager.js nor app.js may focus the
+// composer anywhere.
 check('F1-G1) focusActivePane has no mobile composer branch',
   /isMobile\(\)[\s\S]{0,400}?mobileInput\.focus\(\)/.test(smSrc), false);
 check('F1-G2) session-manager.js never focuses the composer anywhere',
   (smSrc.match(/mobileInput\.focus\(\)/g) || []).length, 0);
-check('F1-G3) app.js has exactly one composer focus site (the Send refocus)',
-  (appSrc.match(/mobileInput\.focus\(\)/g) || []).length, 1);
-check('F1-G4) the Send refocus is gated on the composer having been active',
-  /wasComposerActive[\s\S]{0,120}?mobileInput\.focus\(\)/.test(appSrc), true);
+check('F1-G3) app.js never focuses the composer (Send included)',
+  (appSrc.match(/mobileInput\.focus\(\)/g) || []).length, 0);
 
 // The temporary ?debug=1 diagnostics overlay was removed once the device
 // measurement confirmed the scroll reset (sy=0/0, bT=0, no gap). Read the real
