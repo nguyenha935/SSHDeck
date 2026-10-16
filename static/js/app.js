@@ -4340,25 +4340,58 @@
             return;
         }
 
-        const showOverlay = () => overlay.classList.remove('hidden');
-        const hideOverlay = () => overlay.classList.add('hidden');
+        /*
+         * The overlay must leave with the drag, and a file dragged in from the
+         * desktop gives the page no single event for that. There is no dragend
+         * (the drag did not start here); dragleave fires on whichever element
+         * the pointer last crossed -- never on <html>, which is what this used
+         * to wait for, so a file dragged in and back out kept the overlay up
+         * for good; and a cancelled drag can fire nothing at all (Chromium,
+         * measured). What a drag in progress always does is fire dragover, at
+         * least every 350 +/- 200 ms even with the pointer still (HTML drag
+         * and drop processing model). So:
+         *   - each dragover shows the overlay and re-arms the timer, and
+         *     DROP_IDLE_MS without one means the drag is over;
+         *   - a dragleave ends it after DROP_LEAVE_MS unless a dragover comes
+         *     first -- moving from one element to the next fires dragleave too;
+         *   - pointer movement means no drag is in progress at all.
+         */
+        const DROP_IDLE_MS = 1000;
+        const DROP_LEAVE_MS = 100;
+        let hideTimer = null;
+
+        const hideOverlay = () => {
+            clearTimeout(hideTimer);
+            hideTimer = null;
+            overlay.classList.add('hidden');
+        };
+        const hideAfter = (ms) => {
+            clearTimeout(hideTimer);
+            hideTimer = setTimeout(hideOverlay, ms);
+        };
+        const overlayShown = () => !overlay.classList.contains('hidden');
 
         document.addEventListener('dragover', (e) => {
             if (e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')) {
                 e.preventDefault();
-                showOverlay();
+                overlay.classList.remove('hidden');
+                hideAfter(DROP_IDLE_MS);
             }
         });
 
-        document.addEventListener('dragleave', (e) => {
-            if (e.target === document.documentElement) {
+        document.addEventListener('dragleave', () => {
+            if (overlayShown()) {
+                hideAfter(DROP_LEAVE_MS);
+            }
+        });
+
+        document.addEventListener('pointermove', () => {
+            if (overlayShown()) {
                 hideOverlay();
             }
         });
 
-        document.addEventListener('dragend', () => {
-            hideOverlay();
-        });
+        document.addEventListener('dragend', hideOverlay);
 
         document.addEventListener('drop', (e) => {
             e.preventDefault();

@@ -653,7 +653,8 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v105: the keypad, Notes and its splitter are chrome, not a resize.
         // v106: a host that had no tmux, or still has none, is said once.
         // v107: the connect counter says when tmux is being installed.
-        ['js/app.js', 107],
+        // v108: the drop overlay leaves with a file drag that was not dropped.
+        ['js/app.js', 108],
         // v9: 0209f10 raise. v10: P1 D2 trigger-anchored More-sheet position
         // (top = trigger.bottom+1, bottom auto, measured maxHeight) — Entry 27 R4.
         // v14: the theme and language pickers moved to Settings.
