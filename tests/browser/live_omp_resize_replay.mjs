@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * A WIDTH CHANGE UNDER omp IS NOT SEEN RUNNING FROM THE TOP -- against a running build.
+ * A WIDTH CHANGE UNDER omp IS NOT SEEN RUNNING FROM THE TOP -- against a running server.
  *
  * Owner, 2026-09-24: "cứ chuyển đổi kích thước màn hình là vẫn bị nhảy giật
  * từ trên xuống khu sử dụng phiên OMP ... lúc bị lúc không nhưng tỷ lệ bị
@@ -31,14 +31,10 @@
  *   §4 the height grows back (the keyboard closing): the same;
  *   all: the settled pane is uncovered and shows the prompt.
  *
- * Run (from source/): node tests/browser/live_omp_resize_replay.mjs [--local-js]
- * --local-js serves this tree's terminal-manager.js and app.js to the page in
- * place of the deployed ones: the client of a branch, against the live server,
- * before it is deployed.
+ * Run (from source/): node tests/browser/live_omp_resize_replay.mjs
  */
-import fs from 'node:fs';
 import path from 'node:path';
-import { launch, login, connectSSH, settle } from './harness_live.mjs';
+import { W, launch, login, connectSSH, settle, onTarget, copyToTarget } from './harness_live.mjs';
 
 let pass = 0, fail = 0;
 function check(label, actual, expected) {
@@ -46,24 +42,16 @@ function check(label, actual, expected) {
     if (a === e) { pass++; console.log(`PASS  ${label}`); }
     else { fail++; console.log(`FAIL  ${label}\n        expected ${e}\n        actual   ${a}`); }
 }
-// Run BY THE REMOTE SHELL: paths on the host this gate runs from.
-const FIXTURE = path.resolve(import.meta.dirname, '../fixtures/fake_omp_resize.py');
+// Run BY THE REMOTE SHELL, so the fixture and its log live on the target.
+const FIXTURE = copyToTarget(W, path.resolve(import.meta.dirname, '../fixtures/fake_omp_resize.py'));
 const LOG = `/tmp/fake_omp_resize.${process.pid}.log`;
 const transactions = () => {
     try {
-        return fs.readFileSync(LOG, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
+        return onTarget(W, `cat ${LOG}`).trim().split('\n').filter(Boolean).map(JSON.parse);
     } catch { return []; }
 };
 
 const { browser, page } = await launch({ width: 1440, height: 900 });
-if (process.argv.includes('--local-js')) {
-    for (const file of ['terminal-manager.js', 'app.js']) {
-        await page.route(`**/static/js/${file}*`, route => route.fulfill({
-            contentType: 'text/javascript; charset=utf-8',
-            body: fs.readFileSync(path.resolve(import.meta.dirname, '../../static/js', file)),
-        }));
-    }
-}
 let sid = null;
 try {
     await login(page);
@@ -122,14 +110,13 @@ try {
     if (sid) {
         await page.evaluate(s => window.socket.emit('ssh_input', { session_id: s, data: '\x03' }), sid);
         await page.waitForTimeout(500);
-        // Every session this page holds is the harness user's: leave no tmux garbage.
+        // Every session this page holds is this run's: close them all.
         const all = await page.evaluate(() => Object.keys(SessionManager.sessions || {}));
         for (const s of all) {
             await page.evaluate(x => window.socket.emit('ssh_disconnect', { session_id: x }), s);
             await page.waitForTimeout(700);
         }
     }
-    try { fs.unlinkSync(LOG); } catch {}
     await browser.close();
 }
 console.log(`live_omp_resize_replay: ${pass} pass / ${fail} fail`);

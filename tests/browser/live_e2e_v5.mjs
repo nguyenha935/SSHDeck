@@ -1,73 +1,31 @@
 /*
- * Live end-to-end acceptance against the RUNNING deployment
- * (LIVE_BASE, see tests/live.env.example). No fixtures, no stubs:
- * real login, real SSH sessions through the container's socket bridge to the
- * host's real sshd, real command streaming, and the phone-shell interaction
- * contracts (selection without keyboard, paste/telex without auto-send,
- * keypad shrink).
+ * Live end-to-end acceptance against a RUNNING server: the throwaway world
+ * (live_world.mjs). No fixtures, no stubs: real login, real SSH sessions to a
+ * real sshd, real command streaming, and the phone-shell interaction contracts
+ * (selection without keyboard, paste/telex without auto-send, keypad shrink).
  *
- * Credentials live in the live credentials file (outside the repo, never in git).
  * Each run registers fresh per-surface SSHDeck accounts so persisted session
- * restore cannot pollute the state under test.
+ * restore cannot pollute the state under test. The transport is cut with
+ * `pkill -u <user> sshd` ON THE TARGET, which this run's world owns alone, so
+ * no other run's sessions can be in the way.
  * Run: node tests/browser/live_e2e_v5.mjs
  */
 import { chromium } from 'playwright';
-import { execSync } from 'node:child_process';
-import fs from 'node:fs';
-import { liveCreds, CREDS_FILE } from './live_creds.mjs';
-import { liveConfig } from './live_creds.mjs';
+import { liveWorld, liveConfig, onTarget } from './live_world.mjs';
 
-/*
- * SINGLE-INSTANCE LOCK.
- *
- * This suite proves real transport loss by running `pkill -u <user> sshd` on the
- * host, which kills EVERY session that user owns -- including one belonging to a
- * second concurrent copy of this same suite. Observed exactly that: an
- * interactive run and the machine gate's run overlapped, and each reported the
- * other's healthy session as "socket/session still connected after streaming:
- * connected=false". The failure was real but the cause was the harness, not the
- * product, so the fix belongs here rather than in an assertion.
- *
- * An exclusive O_EXCL lockfile serializes the runs: the second one exits with a
- * clear message instead of silently corrupting both results.
- */
-const LOCK = '/tmp/live_e2e_v5.lock';
-try {
-    fs.writeFileSync(LOCK, `${process.pid}\n`, { flag: 'wx' });
-} catch (err) {
-    if (err.code === 'EEXIST') {
-        const holder = (() => {
-            try { return fs.readFileSync(LOCK, 'utf8').trim(); } catch { return '?'; }
-        })();
-        console.error(`live_e2e_v5 is already running (pid ${holder}); refusing to `
-            + 'start a second copy because this suite kills the test user\'s sshd '
-            + `processes. Remove ${LOCK} if that pid is gone.`);
-        process.exit(2);
-    }
-    throw err;
-}
-const releaseLock = () => { try { fs.unlinkSync(LOCK); } catch { /* already gone */ } };
-process.on('exit', releaseLock);
-for (const sig of ['SIGINT', 'SIGTERM']) {
-    process.on(sig, () => { releaseLock(); process.exit(1); });
-}
-
-// The official deployment URL. Keep it the default so an unparameterised run
-// (the machine gate) exercises the same origin the owner tests, and so the
-// clipboard-backed paste contract runs in a secure context.
-const BASE = liveConfig().LIVE_BASE;
-const NOTES = 'the live credentials file';
-const creds = liveCreds();
-const SSH_HOST = creds.ssh_target || creds.tailnet_host;
-const SSH_USER = creds.host_ssh_user;
-const SSH_PASS = creds.host_ssh_password;
+// The world serves http://127.0.0.1, a secure context, so the clipboard-backed
+// paste contract runs.
+const W = await liveWorld();
+const C = liveConfig(W);
+const BASE = C.LIVE_BASE;
+const SSH_HOST = C.SSH_HOST;
+const SSH_PORT = C.SSH_PORT;
+const SSH_USER = C.SSH_USER;
+const SSH_PASS = C.SSH_PASS;
 const RUN = Date.now().toString(36);
-const SSHDECK_USER_D = `${creds.sshdeck_user}d${RUN}`;
-const SSHDECK_USER_P = `${creds.sshdeck_user}p${RUN}`;
-const SSHDECK_PASS = creds.sshdeck_password;
-if (!SSH_HOST || !SSH_USER || !SSH_PASS || !SSHDECK_PASS) {
-    throw new Error(`incomplete credentials in ${CREDS_FILE}`);
-}
+const SSHDECK_USER_D = `${C.LIVE_USER}d${RUN}`;
+const SSHDECK_USER_P = `${C.LIVE_USER}p${RUN}`;
+const SSHDECK_PASS = C.LIVE_PASS;
 
 const CMD = 'for i in 1 2 3 4 5; do echo LINE-$i; sleep 0.2; done';
 const results = [];
@@ -127,7 +85,7 @@ async function openContext(vp, touch) {
  * `ssh_disconnect` is the product's own teardown -- the same event the UI's close
  * control sends -- so releasing through it exercises a real path rather than
  * reaching around the server. It only ever names sessions THIS run created, on
- * accounts THIS run registered, so it cannot touch the Owner's sessions.
+ * accounts THIS run registered.
  *
  * Asserts nothing: a release is housekeeping, and a gate must not go red because
  * its own cleanup raced. Anything it fails to release simply leaks as before.
@@ -228,6 +186,11 @@ async function bufferContains(page, id, text) {
     return (lines || []).filter(l => l.includes(text)).length;
 }
 
+async function bufferLinesEqual(page, id, text) {
+    const lines = await bufferLines(page, id);
+    return (lines || []).filter(l => l.trim() === text).length;
+}
+
 /*
  * NOTE on predicate shape: waitForFunction resolves as soon as the predicate
  * returns anything truthy, and an `async` predicate returns a Promise -- which
@@ -316,7 +279,7 @@ const stableFiveCheck = (page, id, timeout = 15000) => new Promise(resolve => {
             .length === 0, 'no restored sessions for a fresh account');
 
     const before = await connectReal(d.page, {
-        host: SSH_HOST, port: 22, user: SSH_USER, pass: SSH_PASS,
+        host: SSH_HOST, port: SSH_PORT, user: SSH_USER, pass: SSH_PASS,
     });
     const sid = await waitForNewSession(d.page, before);
     await d.page.waitForFunction(id =>
@@ -369,7 +332,7 @@ const stableFiveCheck = (page, id, timeout = 15000) => new Promise(resolve => {
         // robustness defect observed and reported). What a real user does
         // then is open a NEW connection; the assertion stays exact there.
         const b2 = await connectReal(d.page, {
-            host: SSH_HOST, port: 22, user: SSH_USER, pass: SSH_PASS,
+            host: SSH_HOST, port: SSH_PORT, user: SSH_USER, pass: SSH_PASS,
         });
         checkedSession = await waitForNewSession(d.page, b2);
         await d.page.waitForFunction(id =>
@@ -411,16 +374,16 @@ const stableFiveCheck = (page, id, timeout = 15000) => new Promise(resolve => {
     // Session A: real connected SSH session, then genuinely disconnect it by
     // killing the test user's sshd processes on the host (real transport EOF).
     const bA = await connectReal(p.page, {
-        host: SSH_HOST, port: 22, user: SSH_USER, pass: SSH_PASS,
+        host: SSH_HOST, port: SSH_PORT, user: SSH_USER, pass: SSH_PASS,
     });
     const deadId = await waitForNewSession(p.page, bA);
     await p.page.waitForFunction(id =>
         TerminalManager.terminalReady[id] === true, deadId, { timeout: 20000 });
-    execSync(`pkill -u ${SSH_USER} sshd || true`);
-    await p.page.waitForFunction(id =>
+    onTarget(W, `pkill -u ${SSH_USER} sshd || true`, { root: true });
+    const dropped = await p.page.waitForFunction(id =>
         SessionManager.getSession(id)?.connected === false, deadId,
-    { timeout: 20000 });
-    check('phone: real transport drop marks the session disconnected', true);
+    { timeout: 20000 }).then(() => true, () => false);
+    check('phone: real transport drop marks the session disconnected', dropped);
 
     // 1) Disconnected chip: selectable by a trusted tap, no keyboard opens.
     await p.page.locator(`#tab-${deadId}`).tap();
@@ -443,7 +406,7 @@ const stableFiveCheck = (page, id, timeout = 15000) => new Promise(resolve => {
 
     // Session B: live session for the input contracts.
     const bB = await connectReal(p.page, {
-        host: SSH_HOST, port: 22, user: SSH_USER, pass: SSH_PASS,
+        host: SSH_HOST, port: SSH_PORT, user: SSH_USER, pass: SSH_PASS,
     });
     const liveId = await waitForNewSession(p.page, bB);
     await p.page.waitForFunction(id =>
@@ -452,15 +415,19 @@ const stableFiveCheck = (page, id, timeout = 15000) => new Promise(resolve => {
     await p.page.waitForFunction(id =>
         SessionManager.getActiveSession() === id, liveId, { timeout: 5000 });
 
-    // 2) Paste into the composer: never auto-submitted.
+    // 2) Text put into the composer is never run on its own. The composer is a
+    //    projection of the session's input line, so the text DOES appear on
+    //    the prompt line at once (measured 2026-10-16: "deck@…:~$ echo
+    //    PASTE-NO-SEND"); what must not appear is its output. These rows used
+    //    to require the text to be absent, which predates the projection.
     await p.page.evaluate(() => {
         const input = document.getElementById('mobileInput');
         input.value = 'echo PASTE-NO-SEND';
         input.dispatchEvent(new Event('input', { bubbles: true }));
     });
     await p.page.waitForTimeout(900);
-    check('phone: composer text is not auto-sent',
-        (await bufferContains(p.page, liveId, 'PASTE-NO-SEND')) === 0, '');
+    check('phone: composer text is not run before Send',
+        (await bufferLinesEqual(p.page, liveId, 'PASTE-NO-SEND')) === 0, '');
 
     // 3) Telex composition: the browser sets the DOM value to the composed
     //    text during composition and replaces it on commit. Nothing may be
@@ -490,8 +457,8 @@ const stableFiveCheck = (page, id, timeout = 15000) => new Promise(resolve => {
     await p.page.waitForTimeout(900);
     check('phone: telex "tieng" commits to "tiếng" in the composer',
         afterTelex === 'tiếng', `after=${afterTelex}`);
-    check('phone: committed telex text is not auto-sent',
-        (await bufferContains(p.page, liveId, 'tiếng')) === 0, '');
+    check('phone: committed telex text is not run before Send',
+        (await bufferContains(p.page, liveId, 'tiếng: command not found')) === 0, '');
 
     // 4) Keypad: terminal shrinks, keypad never overlays it.
     const paneBefore = await p.page.evaluate(() => Math.round(
@@ -628,8 +595,8 @@ const stableFiveCheck = (page, id, timeout = 15000) => new Promise(resolve => {
     /*
      * 9) Real multi-line paste (OS clipboard + Ctrl+V, so the beforeinput is
      *    genuinely trusted and carries inputType=insertFromPaste). Nothing may
-     *    reach the wire until Send; then the bracketed-paste commit runs both
-     *    lines and both outputs stream back.
+     *    run until Send; then the bracketed-paste commit runs both lines and
+     *    both outputs stream back.
      */
     const PASTE_TEXT = "printf 'PASTEOUT-%s\\n' ONE\nprintf 'PASTEOUT-%s\\n' TWO";
     await p.page.locator('#mobileInput').tap();
@@ -640,7 +607,7 @@ const stableFiveCheck = (page, id, timeout = 15000) => new Promise(resolve => {
      * used otherwise. Both routes produce a TRUSTED beforeinput carrying
      * inputType=insertFromPaste, which is the property this contract turns on;
      * neither is a synthetic dispatch (those are covered separately above by
-     * "composer text is not auto-sent").
+     * "composer text is not run before Send").
      */
     const secure = await p.page.evaluate(() =>
         !!(window.isSecureContext && navigator.clipboard?.writeText));
@@ -662,9 +629,8 @@ const stableFiveCheck = (page, id, timeout = 15000) => new Promise(resolve => {
     check('phone: multi-line paste lands in the composer',
         /PASTEOUT-%s/.test(pastedBox) && pastedBox.includes('\n'),
         `box=${JSON.stringify(pastedBox)}`);
-    check('phone: multi-line paste sends nothing before Send',
-        (await bufferContains(p.page, liveId, 'PASTEOUT-%s')) === 0
-            && (await bufferContains(p.page, liveId, 'PASTEOUT-ONE')) === 0
+    check('phone: multi-line paste runs nothing before Send',
+        (await bufferContains(p.page, liveId, 'PASTEOUT-ONE')) === 0
             && (await bufferContains(p.page, liveId, 'PASTEOUT-TWO')) === 0, '');
     await p.page.locator('#mobileSendBtn').tap();
     let pasteRan = false;

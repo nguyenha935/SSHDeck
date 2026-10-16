@@ -1,5 +1,5 @@
 /*
- * LIVE File Transfer end-to-end against the RUNNING deployment.
+ * LIVE File Transfer end-to-end against a RUNNING server.
  *
  * Real login, two real SSH sessions, a real server-to-server copy of a real file
  * through the real SSH EXEC-CHANNEL transport, verified by hash on the
@@ -14,8 +14,8 @@
  * turn this gate red.
  *
  * SCOPE LIMITATION, stated up front because it bounds what this proves.
- * The environment has exactly ONE reachable configured SSH target (the host's
- * own sshd, via the live credentials file). A server-to-server transfer needs two
+ * The throwaway world has exactly ONE SSH target (live_world.mjs). A
+ * server-to-server transfer needs two
  * DISTINCT sessions, which this harness creates -- two independent SSH sessions,
  * two independent exec channel sets, two independent session ids -- but both land
  * on the same machine. So this exercises the whole protocol and the whole exec
@@ -27,30 +27,26 @@
  * sessions to one host are a legitimate transfer and are not refused. That is a
  * real property of the contract, not a workaround.
  *
- * SAFETY: the only file written is a uniquely named artifact under /tmp, created
- * by this harness, and it is the only thing removed at the end. No secret is
- * printed; credentials are read from a file outside the repo.
+ * The only file written is a uniquely named artifact under /tmp, created by
+ * this harness, and it is the only thing removed at the end. The harness makes
+ * and checks it on the target directly (docker exec), as the account the
+ * sessions log in as; only the transfer itself goes through the product.
  *
  * Run: node tests/browser/live_transfer_e2e.mjs
  */
 import { chromium } from 'playwright';
-import fs from 'node:fs';
-import { liveCreds, CREDS_FILE } from './live_creds.mjs';
-import { liveConfig } from './live_creds.mjs';
+import { liveWorld, liveConfig, onTarget } from './live_world.mjs';
 
-const BASE = liveConfig().LIVE_BASE;
-const NOTES = 'the live credentials file';
-
-const creds = liveCreds();
-const SSH_HOST = creds.ssh_target || creds.tailnet_host;
-const SSH_USER = creds.host_ssh_user;
-const SSH_PASS = creds.host_ssh_password;
-const SSHDECK_PASS = creds.sshdeck_password;
+const W = await liveWorld();
+const C = liveConfig(W);
+const BASE = C.LIVE_BASE;
+const SSH_HOST = C.SSH_HOST;
+const SSH_PORT = C.SSH_PORT;
+const SSH_USER = C.SSH_USER;
+const SSH_PASS = C.SSH_PASS;
+const SSHDECK_PASS = C.LIVE_PASS;
 const RUN = Date.now().toString(36);
-const SSHDECK_USER = `${creds.sshdeck_user}t${RUN}`;
-if (!SSH_HOST || !SSH_USER || !SSH_PASS || !SSHDECK_PASS) {
-    throw new Error(`incomplete credentials in ${CREDS_FILE}`);
-}
+const SSHDECK_USER = `${C.LIVE_USER}t${RUN}`;
 
 /* The single artifact this run creates, named so it cannot collide with
  * anything and can be identified unambiguously for cleanup. */
@@ -82,52 +78,12 @@ page.on('pageerror', e => pageErrors.push(String(e)));
 page.on('requestfailed', r => failedRequests.push(r.url()));
 page.on('response', r => { if (r.status() >= 400) httpErrors.push(`${r.status()} ${r.url()}`); });
 
-let cleanupSession = null;
-
-async function shellExec(sessionId, command, expect = null) {
-    /* Runs a command in a real terminal and returns the buffer text. Used for
-     * fixture setup and hash verification -- i.e. for OBSERVING the filesystem,
-     * never for performing the transfer itself.
-     *
-     * S25 R4 -- WAIT FOR THE MARKER, NOT FOR A FIXED 1200ms.
-     *
-     * A flat sleep is a bet on how fast the remote answers, and it lost in the
-     * 101-gate sweep: the cleanup row reported red with the tmux status line as
-     * its only evidence (`eck_s0:bash* "tiny-server" 20:53`), i.e. the buffer
-     * had simply not been painted with the command's own output yet. The same
-     * gate scored 34/34 run alone on an idle box. That makes the red a harness
-     * timing artefact, and a gate must measure the product, not the load on the
-     * box.
-     *
-     * The ASSERTION IS UNCHANGED: callers still regex the same marker out of the
-     * same buffer text. Only the wait becomes a bounded poll for that marker,
-     * with the original 1200ms as the floor so a caller passing no marker
-     * behaves exactly as before. If the marker never arrives, the buffer is
-     * returned anyway and the caller's own assertion fails -- the row can still
-     * go red for a real reason.
-     */
-    await page.evaluate(({ sid, cmd }) => {
-        window.socket.emit('ssh_input', { session_id: sid, data: `${cmd}\n` });
-    }, { sid: sessionId, cmd: command });
-    const readBuffer = () => page.evaluate(sid => {
-        const buf = window.TerminalManager?.terminals?.[sid]?.buffer?.active;
-        if (!buf) return '';
-        const out = [];
-        for (let i = 0; i < buf.length; i += 1) {
-            out.push(buf.getLine(i)?.translateToString(true) || '');
-        }
-        return out.join('\n');
-    }, sessionId);
-    await page.waitForTimeout(1200);
-    let text = await readBuffer();
-    if (expect) {
-        for (let i = 0; i < 24 && !expect.test(text); i += 1) {
-            await page.waitForTimeout(500);
-            text = await readBuffer();
-        }
-    }
-    return text;
-}
+/* The target's filesystem, read and written directly. A terminal is no window
+ * onto it: a session that is not on screen has no tmux client of its own, so
+ * its pane never shows a command's output (measured 2026-10-16 -- session A,
+ * behind B, still showed its last screen while the command ran by send-keys).
+ */
+const onDisk = (command) => onTarget(W, command);
 
 async function connect(host, port, user, pass) {
     const before = await page.evaluate(() => Object.keys(SessionManager.sessions));
@@ -161,30 +117,27 @@ try {
     check('live: a fresh account reaches the app shell', true);
 
     // ── two DISTINCT real SSH sessions ───────────────────────────────────────
-    const sessionA = await connect(SSH_HOST, 22, SSH_USER, SSH_PASS);
-    const sessionB = await connect(SSH_HOST, 22, SSH_USER, SSH_PASS);
-    cleanupSession = sessionA;
+    const sessionA = await connect(SSH_HOST, SSH_PORT, SSH_USER, SSH_PASS);
+    const sessionB = await connect(SSH_HOST, SSH_PORT, SSH_USER, SSH_PASS);
     check('live: two real SSH sessions exist', !!sessionA && !!sessionB,
         `A=${sessionA} B=${sessionB}`);
     check('live: the two sessions are distinct', sessionA !== sessionB,
         `A=${sessionA} B=${sessionB}`);
 
     // ── create the one artifact, and record its hash ─────────────────────────
-    const setup = await shellExec(sessionA,
+    const setup = onDisk(
         `mkdir -p ${SRC_DIR} ${DST_DIR} && `
         + `head -c 200000 /dev/urandom | base64 > ${SRC_PATH} && `
         + `echo SRCSUM:$(sha256sum ${SRC_PATH} | cut -d' ' -f1) && `
-        + `echo SRCSIZE:$(stat -c%s ${SRC_PATH})`,
-        /SRCSIZE:\d+/);
+        + `echo SRCSIZE:$(stat -c%s ${SRC_PATH})`);
     const srcSum = (setup.match(/SRCSUM:([0-9a-f]{64})/) || [])[1];
     const srcSize = (setup.match(/SRCSIZE:(\d+)/) || [])[1];
     check('live: the source artifact was created and hashed',
         !!srcSum && Number(srcSize) > 100000, `size=${srcSize}`);
 
     // Destination must not exist yet, so a pass cannot come from a stale file.
-    const preState = await shellExec(sessionA,
-        `test -e ${DST_PATH} && echo DST:EXISTS || echo DST:ABSENT`,
-        /DST:(EXISTS|ABSENT)/);
+    const preState = onDisk(
+        `test -e ${DST_PATH} && echo DST:EXISTS || echo DST:ABSENT`);
     check('live: the destination does not exist before the transfer',
         /DST:ABSENT/.test(preState), preState.slice(-200));
 
@@ -313,11 +266,10 @@ try {
     eq('live: the row shows 100%', transfer.rowProgress, 100);
 
     // ── VERIFY THE BYTES ON THE DESTINATION ─────────────────────────────────
-    const verify = await shellExec(sessionA,
+    const verify = onDisk(
         `echo DSTSUM:$(sha256sum ${DST_PATH} 2>/dev/null | cut -d' ' -f1) && `
         + `echo DSTSIZE:$(stat -c%s ${DST_PATH} 2>/dev/null) && `
-        + `echo TMPLEFT:$(ls ${DST_DIR} | grep -c sshdeck-transfer || true)`,
-        /TMPLEFT:\d+/);
+        + `echo TMPLEFT:$(ls ${DST_DIR} | grep -c sshdeck-transfer || true)`);
     const dstSum = (verify.match(/DSTSUM:([0-9a-f]{64})/) || [])[1];
     const dstSize = (verify.match(/DSTSIZE:(\d+)/) || [])[1];
     const tmpLeft = (verify.match(/TMPLEFT:(\d+)/) || [])[1];
@@ -369,17 +321,14 @@ try {
         String(error).slice(0, 300));
 } finally {
     // ── clean up ONLY this run's artifacts ──────────────────────────────────
-    if (cleanupSession) {
-        try {
-            const cleaned = await shellExec(cleanupSession,
-                `rm -rf ${SRC_DIR} ${DST_DIR} && `
-                + `test -e ${SRC_DIR} -o -e ${DST_DIR} && echo CLEAN:NO || echo CLEAN:YES`,
-                /CLEAN:(YES|NO)/);
-            check('live: only this run\'s temp artifacts were removed',
-                /CLEAN:YES/.test(cleaned), cleaned.slice(-160));
-        } catch (error) {
-            check('live: cleanup ran', false, String(error).slice(0, 160));
-        }
+    try {
+        const cleaned = onDisk(
+            `rm -rf ${SRC_DIR} ${DST_DIR} && `
+            + `{ test -e ${SRC_DIR} -o -e ${DST_DIR} && echo CLEAN:NO || echo CLEAN:YES; }`);
+        check('live: only this run\'s temp artifacts were removed',
+            /CLEAN:YES/.test(cleaned), cleaned.slice(-160));
+    } catch (error) {
+        check('live: cleanup ran', false, String(error).slice(0, 160));
     }
     await browser.close();
 }

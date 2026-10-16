@@ -242,20 +242,31 @@ Documentation improvements are always welcome:
 ## Running the live gates
 
 Most gates drive a stubbed page and need nothing but `npm install`. A few --
-the ones named `live_*`, `two_device_live` and `typing_order_live` -- drive a
-REAL running SSHDeck against a REAL SSH target, so they need to be told where
-those are:
+the ones named `live_*`, `two_device_live`, `typing_order_live` and
+`s35_p91_*` -- drive a REAL SSHDeck server against a REAL SSH target. They
+are never pointed at an existing deployment, account or host: each run builds
+its own throwaway world and removes it afterwards
+(`tests/browser/live_world.mjs`):
+
+- an OpenSSH container built from `tests/live/` (Debian, tmux, a `deck` user
+  with a password made for the run), on a free port of 127.0.0.1;
+- an SSHDeck server from your checkout -- gunicorn + eventlet, one worker, as
+  production runs it -- on another free port, with its own data directory and
+  secret key in a temp directory, and two accounts created for the run.
+
+You need Docker and the Python requirements (in `.venv` if there is one):
 
 ```bash
-cp tests/live.env.example tests/live.env    # then fill it in
 node scripts/run_gates.mjs --live           # every gate, live ones included
-node tests/browser/live_e2e_v5.mjs          # or one of them
+node scripts/run_gates.mjs --live live_e2e  # only the gates matching a name
+node tests/browser/live_e2e_v5.mjs          # one gate, with a world of its own
 ```
 
-`tests/live.env` is ignored by git. The same names work as environment
-variables, and `LIVE_CREDS_FILE` points at the file when you keep it outside
-the checkout. Use a throwaway SSHDeck account and a host you own: these gates
-open and close sessions, type into shells and move files.
+`run_gates.mjs --live` starts one world for the whole run; a gate run on its
+own starts and removes its own. Ctrl-C tears the world down too, and anything
+a killed run left behind is swept by the next one. Nothing is read from a file
+or from your environment -- `tests/live.env`, which older checkouts used, is
+retired and stops the run if it is still there.
 
 ## What's Needed
 
@@ -266,8 +277,8 @@ Areas where contributions are especially welcome:
 - [ ] Performance optimizations
 - [ ] Additional themes
 - [ ] Documentation
-- [ ] More live-gate coverage (the live suite needs a real host, so it runs
-      on a maintainer's machine rather than in CI)
+- [ ] More live-gate coverage (the live suite needs Docker, so it runs on a
+      contributor's machine rather than in CI)
 
 ## Code of Conduct
 

@@ -36,3 +36,4 @@ finally {
     console.log(`typing_order_live: ${pass} pass / ${fail} fail`);
     await browser.close();
 }
+process.exit(fail ? 1 : 0);

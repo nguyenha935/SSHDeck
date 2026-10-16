@@ -23,15 +23,17 @@
  *     cannot be seen on Chromium. `launch()` takes the engine, and WebKit is
  *     the engine Safari runs.
  *
- * Configuration comes from tests/live.env (see tests/live.env.example); the
- * values are never printed.
+ * Everything it connects to -- the SSHDeck server, the account, the SSH
+ * target -- is a throwaway world built for the run (live_world.mjs), never a
+ * real deployment or host.
  */
 import { chromium, webkit } from 'playwright';
-import { liveConfig, CREDS_FILE } from './live_creds.mjs';
+import { liveWorld, liveConfig, onTarget, copyToTarget } from './live_world.mjs';
 
-export const C = liveConfig();
+export const W = await liveWorld();
+export const C = liveConfig(W);
 export const BASE = C.LIVE_BASE;
-export const CONFIG_FILE = CREDS_FILE;
+export { onTarget, copyToTarget };
 
 const ENGINES = { chromium, webkit };
 
@@ -117,8 +119,8 @@ export async function assertMeasurable(page) {
  *      the connect has not finished.
  */
 export async function connectSSH(page, opts = {}) {
-    const host = opts.host || C.SSH_HOST || '127.0.0.1';
-    const port = String(opts.port || C.SSH_PORT || 22);
+    const host = opts.host || C.SSH_HOST;
+    const port = String(opts.port || C.SSH_PORT);
     const user = opts.user || C.SSH_USER;
     const pass = opts.pass || C.SSH_PASS;
 
@@ -146,19 +148,8 @@ export async function connectSSH(page, opts = {}) {
     await page.fill('#portInput', port);
     await page.fill('#usernameInput', user);
 
-    /*
-     * THE AUTHENTICATION METHOD IS CHOSEN EXPLICITLY, from SSH_AUTH_TYPE.
-     * Letting the form's own default stand is a trap in some deployments.
-     *
-     * Measured in one of them: the target answered with a Tailscale SSH
-     * banner rather than OpenSSH, because the container shares a Tailscale
-     * gateway's network namespace, so every tailnet address reaches
-     * Tailscale's own SSH server -- which does no password authentication.
-     * The consequence was silent: the ssh_connect handler logged nothing and
-     * emitted nothing, not even ssh_error, because it was still inside the
-     * handshake, while the socket itself was healthy. Choosing the method
-     * explicitly is what keeps a gate from waiting on that.
-     */
+    // The authentication method is chosen explicitly rather than left to the
+    // form's default, and the form is checked to have taken it.
     const authType = opts.authType || C.SSH_AUTH_TYPE;
     await page.selectOption('#authTypeSelect', authType);
     if (authType === 'password') {
@@ -257,22 +248,13 @@ export async function settle(page, sid, timeout = 30000) {
 }
 
 /*
- * ATTACH TO A LIVE SESSION, named explicitly.
- *
- * Why it exists: opening a new connection is not always reliable in a given
- * deployment -- inside a container that shares another container's network
- * namespace, 127.0.0.1 is not the host a reader means by it. And for geometry,
- * caret or IME measurements a NEW session is not needed anyway: a real, live
- * one is. The app restores one by itself. What was missing was certainty about
- * WHICH session was being measured, so this returns the id together with its
- * host and user and throws when nothing is connected.
+ * ATTACH TO A SESSION THAT ALREADY EXISTS, named explicitly: a second device
+ * joining one another device opened. It returns the id together with its host
+ * and user and throws when nothing is connected, so a gate always knows WHICH
+ * session it measures.
  */
 export async function attachExisting(page,
-        { host = C.SSH_HOST || null, user = null } = {}) {
-    // Mac dinh theo cred file: moi truong nay co ca offer CHET (tmux da bi kill)
-    // lan offer song, va loc "offer dau tien" se bam vao cai chet roi cho 60s
-    // pointless. Measured: an offer can point at a tmux session that no
-    // con ton tai, server dung dan tu choi reattach.
+        { host = C.SSH_HOST, user = null } = {}) {
     // auto-restore settles: the session count holds for 2.5s
     await page.waitForFunction(() => {
         const n = Object.keys(SessionManager.sessions || {}).length;

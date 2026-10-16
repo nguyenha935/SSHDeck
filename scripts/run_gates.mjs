@@ -9,10 +9,11 @@
  * fragments). Four workers is the machine's core count and holds well inside
  * memory -- a headless Chromium is ~200-300 MB and the host has 15 GB.
  *
- * The LIVE gates are excluded by default: they open real SSH sessions against
- * the owner's own hosts, trip the login rate limit when run together, and can
- * leave tmux sessions behind. Pass --live to include them (they then run one at
- * a time, after the rest).
+ * The LIVE gates are excluded by default: they drive a real SSHDeck server
+ * against a real SSH target, which this script builds for the run and removes
+ * afterwards (tests/browser/live_world.mjs) -- a throwaway server, account and
+ * container, never a real one. That needs docker and takes minutes, so pass
+ * --live to include them; they then run one at a time, after the rest.
  *
  * Usage:
  *   node scripts/run_gates.mjs                 every headless gate, 4 workers
@@ -24,6 +25,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { ENV_KEY, startWorld, worldData } from '../tests/browser/live_world.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const DIR = path.join(ROOT, 'tests/browser');
@@ -39,19 +41,14 @@ const filters = args.filter((a, i) => !a.startsWith('-')
     && !(jIndex !== -1 && i === jIndex + 1));
 
 // A gate is a .mjs file that RUNS. The shared modules the gates import are not
-// gates: harness_live.mjs, s35_live_login.mjs, live_creds.mjs export helpers,
-// and a file named *_head/helpers is a fragment.
-const SHARED = /^(harness_live|s35_live_login|live_creds)\.mjs$/;
+// gates: harness_live.mjs, s35_live_login.mjs and live_world.mjs export helpers.
+const SHARED = /^(harness_live|s35_live_login|live_world)\.mjs$/;
 /*
- * A gate is LIVE when it opens a real SSH session, or needs one to already be
- * open. Those are excluded by default and run one at a time with --live: they
- * share one account (which rate-limits at about five logins a minute), they
- * touch the owner's own hosts, and some of them can only reattach a session
- * that a person left behind. `two_device_live` is the clearest case -- it
- * refuses outright with "khong co session connected va cung khong co offer"
- * when nothing is attached, which is an environment fact, not a red build.
+ * A gate is LIVE when it opens a real SSH session. Those run one at a time
+ * with --live, all against the one throwaway world this script starts: they
+ * share its account and its SSH target.
  */
-const LIVE = /^(live_|s35_p91_|w5_partG_|two_device_live|typing_order_live)/;
+const LIVE = /^(live_|s35_p91_|two_device_live|typing_order_live)/;
 /*
  * The `probe*` files are one-off investigation scripts kept for provenance,
  * not gates: they take arguments, they exit 0 whatever they find, and several
@@ -93,11 +90,16 @@ const started = Date.now();
 const results = [];
 let next = 0;
 
+// A headless gate never sees a world; a live gate sees only the one started here.
+const headlessEnv = { ...process.env };
+delete headlessEnv[ENV_KEY];
+let liveEnv = null;
+
 function runOne(file) {
     return new Promise(resolve => {
         const t0 = Date.now();
         const child = spawn('node', [path.join('tests/browser', file)], {
-            cwd: ROOT, env: process.env,
+            cwd: ROOT, env: LIVE.test(file) ? liveEnv : headlessEnv,
         });
         let out = '';
         child.stdout.on('data', d => { out += d; });
@@ -124,7 +126,7 @@ async function worker(serial = false) {
     }
 }
 
-// The live gates share one account and one host: never two at a time.
+// The live gates share one world: never two at a time.
 const liveStart = queue.length - (wantLive ? live.length : 0);
 const headlessQueue = queue.slice(0, liveStart);
 const liveQueue = queue.slice(liveStart);
@@ -132,9 +134,18 @@ next = 0;
 const saved = queue.splice(liveStart, liveQueue.length);
 await Promise.all(Array.from({ length: Math.min(workers, headlessQueue.length) }, () => worker()));
 if (saved.length) {
-    console.log(`--- ${saved.length} gate live, lần lượt`);
-    queue.push(...saved);
-    await worker(true);
+    console.log(`--- ${saved.length} gate live, lần lượt, trên một môi trường dùng một lần`);
+    try {
+        const world = await startWorld();
+        liveEnv = { ...headlessEnv, [ENV_KEY]: JSON.stringify(worldData(world)) };
+        queue.push(...saved);
+        await worker(true);
+    } catch (e) {
+        console.log(`FAIL  không dựng được môi trường cho gate live: ${String(e.message || e).split('\n')[0]}`);
+        for (const file of saved) {
+            results.push({ file, code: 1, seconds: 0, summary: 'no world', fails: [], out: '' });
+        }
+    }
 }
 
 /*
@@ -150,9 +161,10 @@ if (saved.length) {
  */
 let failed = results.filter(r => r.code !== 0);
 const flaky = [];
-if (failed.length) {
-    console.log(`\n--- ${failed.length} gate đỏ, chạy lại từng cái một`);
-    const suspects = failed.map(r => r.file);
+// A live gate that never had a world has nothing to be re-run against.
+const suspects = failed.filter(r => r.summary !== 'no world').map(r => r.file);
+if (suspects.length) {
+    console.log(`\n--- ${suspects.length} gate đỏ, chạy lại từng cái một`);
     for (const file of suspects) {
         const again = await runOne(file);
         const i = results.findIndex(r => r.file === file);

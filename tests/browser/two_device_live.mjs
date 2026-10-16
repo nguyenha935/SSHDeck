@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * TWO DEVICES ON ONE tmux SESSION, against the deployed build.
+ * TWO DEVICES ON ONE tmux SESSION, against a running server.
  *
  * tmux draws ONE window at ONE size (measured 2026-09-13: grouped sessions,
  * `window-size` in every mode and `aggressive-resize` all leave two clients of
@@ -12,16 +12,20 @@
  *   §2 a phone joins: the desktop's engine takes the shared window, and the
  *      painted grid FILLS the pane (no cut frame, no black band below);
  *   §3 the desktop is not blank while shrunk;
- *   §4 the phone with its keyboard up (short pane, alternate-screen hold is
- *      not exercised here) still shows the whole grid inside its pane;
+ *   §4 the phone opens its keyboard: the content is pushed up, nothing is
+ *      resized (OWNER RULING 2026-10-08) -- the grid keeps its rows and its
+ *      text, and the cursor row stays in view;
  *   §5 the phone leaves: the desktop returns to its fit and base font within
  *      a few seconds and is NOT blank (the "empty frame" report);
  *   §6 an idle desktop reports no resize churn (the "window jitter" report).
  *
- * Run (on the deploy host, from source/):
- *     node tests/browser/two_device_live.mjs
+ * The desktop opens the session and the phone joins it, both logged in as
+ * the throwaway world's account (live_world.mjs), so no other client can be
+ * attached to the window.
+ *
+ * Run (from source/): node tests/browser/two_device_live.mjs
  */
-import { launch, login, attachExisting, settle, C } from './harness_live.mjs';
+import { launch, login, connectSSH, attachExisting, settle } from './harness_live.mjs';
 
 let pass = 0, fail = 0;
 function check(label, actual, expected) {
@@ -62,28 +66,17 @@ const READ = (page, sid) => page.evaluate((s) => {
 
 const desktop = await launch({ engine: 'chromium', width: 1440, height: 900 });
 await login(desktop.page);
-const { sid, info } = await attachExisting(desktop.page, { host: C.SSH_HOST || null });
+const sid = await connectSSH(desktop.page);
+const info = await desktop.page.evaluate(s => ({
+    host: SessionManager.sessions[s].host, user: SessionManager.sessions[s].username,
+}), sid);
 await settle(desktop.page, sid);
 await desktop.page.waitForTimeout(1500);
 
 // §1
 const alone = await READ(desktop.page, sid);
 num('§1 desktop alone', alone);
-/*
- * "Alone" is a precondition this harness cannot enforce: the owner's own
- * browser may be attached to the same tmux session, and then the window is
- * that device's minimum, not this desktop's fit (seen 2026-09-13: window 126
- * cols against a 165-col fit). The fill rows are meaningful only when the
- * window really is this pane's fit; otherwise they are reported and skipped.
- */
-const constrained = (m) => m.window
-    && (m.window.cols < m.reported[0] || m.window.rows < m.reported[1]);
-if (constrained(alone)) {
-    console.log(`      [harness] another client holds this window at ${alone.window.cols}x${alone.window.rows}`
-        + ` (this pane fits ${alone.reported[0]}x${alone.reported[1]}); §1 fill skipped`);
-} else {
-    checkTrue('§1 the engine is the pane\'s own fit (fills the pane)', alone.fillW > 0.9 && alone.fillH > 0.9);
-}
+checkTrue('§1 the engine is the pane\'s own fit (fills the pane)', alone.fillW > 0.9 && alone.fillH > 0.9);
 check('§1 base font', alone.font, alone.base ?? alone.font);
 checkTrue('§1 painted', alone.painted > 0);
 
@@ -106,8 +99,13 @@ checkTrue('§2 the shrunk desktop grid FILLS its pane on one axis (no cut frame,
     shrunk.fillW > 0.9 || shrunk.fillH > 0.9);
 checkTrue('§2 and is centred horizontally',
     Math.abs(shrunk.screen.left * 2 + shrunk.screen.w - shrunk.wrapper.w) < 40);
-checkTrue('§2 zoomed only if the window is below the fit on BOTH axes',
-    (shrunk.rows < alone.rows && shrunk.cols < alone.cols) ? shrunk.font > alone.font : shrunk.font === alone.font);
+// The font follows the tighter axis and only ever goes UP for a window
+// smaller than the fit (presentWindowGrid); the other axis is margin. Here the
+// rows equal the fit, so the font moves by the slack inside one cell (measured
+// 2026-10-16: 14 -> 14.21). This row used to say "base font unless smaller on
+// both axes", which predates filling the tighter axis.
+checkTrue('§2 a window smaller than the fit is never drawn below the base font',
+    shrunk.font >= alone.font);
 checkTrue('§2 the desktop still REPORTS its true fit (the minimum can grow back)',
     !!shrunk.reported && shrunk.reported[0] >= alone.cols - 1);
 
@@ -131,38 +129,66 @@ const visible = (page, id) => page.evaluate((s) => {
     }
     return out;
 }, id);
-const dView = await visible(desktop.page, sid);
-const pView = await visible(phone.page, psid);
+// Both clients are drawn by the same tmux, each over its own channel, so they
+// settle on the same lines a moment apart: compare until they agree, for at
+// most 5 s.
+let dView = [];
+let pView = [];
+for (let i = 0; i < 10; i++) {
+    dView = await visible(desktop.page, sid);
+    pView = await visible(phone.page, psid);
+    if (JSON.stringify(dView.filter(l => l).slice(0, 5))
+        === JSON.stringify(pView.filter(l => l).slice(0, 5))) break;
+    await desktop.page.waitForTimeout(500);
+}
 num('§3b desktop visible head', dView.filter(l => l).slice(0, 3));
 check('§3b no tmux filler inside the desktop\'s visible columns',
     dView.filter(l => /·{4}/.test(l)).length, 0);
 check('§3b the desktop shows the same lines as the phone',
     dView.filter(l => l).slice(0, 5), pView.filter(l => l).slice(0, 5));
 
-// §4 the phone with the keyboard up: the app pins the shell to --app-height
+// §4 the phone opens its keyboard, the way the app measures one: the visual
+// viewport shrinks under a focused composer (as chrome_hold.mjs does). Setting
+// --app-height by hand, as this used to, skipped that path and read as a
+// window resize.
 await phone.page.evaluate(() => {
-    document.documentElement.style.setProperty('--app-height', '420px');
-    document.body.classList.add('keyboard-open');
-    window.dispatchEvent(new Event('resize'));
+    const vvH = Object.getOwnPropertyDescriptor(VisualViewport.prototype, 'height');
+    window.__vvH = null;
+    Object.defineProperty(VisualViewport.prototype, 'height', { configurable: true,
+        get() { return window.__vvH ?? vvH.get.call(this); } });
+    window.__resizes = 0;
+    const emit = window.socket.emit.bind(window.socket);
+    window.socket.emit = (ev, ...a) => {
+        if (ev === 'ssh_resize') window.__resizes++;
+        return emit(ev, ...a);
+    };
+    document.getElementById('mobileInput').focus();
+    window.__vvH = 469;
+    window.visualViewport.dispatchEvent(new Event('resize'));
 });
 await phone.page.waitForTimeout(2500);
 const kb = await READ(phone.page, psid);
-num('§4 phone keyboard up', kb);
-if (kb.bufferType === 'alternate') {
-    // 2026-09-14: the held grid keeps its rows and the TEXT shrinks, so the
-    // whole grid stays inside the shortened pane (nothing anchored, no slack).
-    checkTrue('§4 a held grid keeps its rows under the keyboard', kb.rows === pview.rows);
-    checkTrue('§4 and shrinks its text to stay whole inside the shortened pane',
-        kb.font < pview.font && kb.screen.top >= 0 && kb.screen.top + kb.screen.h <= kb.wrapper.h + 1);
-} else {
-    checkTrue('§4 the whole grid sits inside the shortened pane',
-        kb.screen.top >= -1 && kb.screen.top + kb.screen.h <= kb.wrapper.h + 1);
-}
-checkTrue('§4 and fills it on one axis', kb.fillW > 0.9 || kb.fillH > 0.9);
+const kbState = await phone.page.evaluate((s) => {
+    const t = TerminalManager.terminals[(TerminalManager.sessionTerminals[s] || [])[0]];
+    const row = t.element.querySelectorAll('.xterm-rows > div')[t.buffer.active.cursorY];
+    const area = document.querySelector('.terminal-area').getBoundingClientRect();
+    const r = row ? row.getBoundingClientRect() : null;
+    return {
+        resizes: window.__resizes,
+        keyboardOpen: document.body.classList.contains('keyboard-open'),
+        cursorInView: !!r && r.top >= area.top - 1 && r.bottom <= area.bottom + 1,
+    };
+}, psid);
+num('§4 phone keyboard up', { ...kb, ...kbState });
+checkTrue('§4 GUARD: the app took it for a keyboard', kbState.keyboardOpen);
+check('§4 the keyboard proposes no resize', kbState.resizes, 0);
+check('§4 the grid keeps its rows and its text under the keyboard',
+    [kb.cols, kb.rows, kb.font], [pview.cols, pview.rows, pview.font]);
+checkTrue('§4 and the cursor row stays in view', kbState.cursorInView);
 await phone.page.evaluate(() => {
-    document.documentElement.style.removeProperty('--app-height');
-    document.body.classList.remove('keyboard-open');
-    window.dispatchEvent(new Event('resize'));
+    window.__vvH = null;
+    window.visualViewport.dispatchEvent(new Event('resize'));
+    document.getElementById('mobileInput').blur();
 });
 await phone.page.waitForTimeout(1500);
 
@@ -195,13 +221,11 @@ num('§5 desktop after the phone left', back);
 check('§5 the engine is back at the fit', [back.cols, back.rows], [alone.cols, alone.rows]);
 check('§5 base font again', back.font, alone.font);
 checkTrue('§5 the desktop is NOT blank after the phone left', back.painted > 0);
-if (constrained(back)) {
-    console.log(`      [harness] another client holds this window at ${back.window.cols}x${back.window.rows}; §5 fill skipped`);
-} else {
-    checkTrue('§5 and fills its pane again', back.fillW > 0.9 && back.fillH > 0.9);
-}
+checkTrue('§5 and fills its pane again', back.fillW > 0.9 && back.fillH > 0.9);
 
 check('§Z no page errors (desktop)', desktop.pageErrors, []);
+await desktop.page.evaluate(s => window.socket.emit('ssh_disconnect', { session_id: s }), sid);
+await desktop.page.waitForTimeout(1500);
 await desktop.browser.close();
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
