@@ -339,7 +339,9 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # resize.
     # app.js 107 -> 108: the drop overlay leaves with a file drag that was not
     # dropped; a cached v107 keeps it up for good.
-    assert "filename='js/app.js') }}?v=108" in idx
+    # app.js 108 -> 109: Send never focuses the composer; a cached v108 raises
+    # the keyboard again from a Send.
+    assert "filename='js/app.js') }}?v=109" in idx
     # S34: v46 -- the control-mode transport. pty_geometry may now arrive with
     # `render_local`, which this client must NOT adopt as its grid (it wraps the
     # relative %output stream at its own fit instead). A browser on v45 would adopt
@@ -406,10 +408,12 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # v105 -> v106: the text is never drawn under 12 px (or the reader's own
     # size) on the app's account; a panel that would take it lower resizes the
     # pane instead. A browser on v105 shrinks it to 9 px.
-    assert "filename='js/terminal-manager.js') }}?v=106" in idx
+    # v106 -> v107: a tap on the terminal's content opens no keyboard on a
+    # phone. A browser on v106 still focuses the composer from it.
+    assert "filename='js/terminal-manager.js') }}?v=107" in idx
     assert "\"filename='css/style.css'\": '?v=77'," in tp
     assert "\"filename='js/sftp-file-manager.js'\": '?v=21'," in tp
-    assert "\"filename='js/app.js'\": '?v=108'," in tp
+    assert "\"filename='js/app.js'\": '?v=109'," in tp
     # session-manager v51 -> v52 (S35 P5): restore-driven pane eviction stopped
     # (displaceOccupant:false) and the remembered session selection is applied on
     # arrival. v51 is RELEASED without the fix, so the pin must move.
@@ -425,7 +429,7 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # Desurgery v59 -> v60: the pty_source_changed handler now re-fits (a moved
     # source changes what a wider pane renders under the S36 minimum).
     assert "\"filename='js/session-manager.js'\": '?v=72'," in tp
-    assert "\"filename='js/terminal-manager.js'\": '?v=106'," in tp
+    assert "\"filename='js/terminal-manager.js'\": '?v=107'," in tp
     assert "style.css') }}?v=77\" in template" in tp
 
 

@@ -88,38 +88,44 @@ async function tap(){
 }
 const blur = () => page.evaluate(()=>document.activeElement&&document.activeElement.blur());
 
-// Case 1 — FIRST tap after load. P1 Composer-authoritative contract
-// (plan §2.2): on a touch shell the composer is the sole input
-// surface, so a terminal tap routes focus to #mobileInput (via
-// setupComposerInputOwnership's click handler), never to xterm's hidden
-// textarea. (The F1 expectation of xterm-textarea is superseded.)
+// Case 1 — FIRST tap after load. OWNER RULING 2026-10-16: on a touch shell
+// the keyboard opens only from a tap on the composer itself, so a tap on the
+// terminal's content leaves nothing editable focused -- neither the composer
+// (as P1 §2.2 used to require) nor xterm's hidden textarea, which xterm still
+// focuses on the synthetic mousedown and the redirect drops.
 // Still guards lastTap=-Infinity.
 await blur();
 await tap(); await page.waitForTimeout(450);
-check('1) first single tap -> composer (P1: composer authoritative)', await activeId(), '#mobileInput');
+check('1) first single tap -> nothing editable (no keyboard)', await activeId(), 'BODY');
 
-// Case 2 — double tap AT THE SAME SPOT. P1 §2.2: no raw-focus exception
-// remains on touch; the double-tap branch preventDefaults (zoom) and focuses
-// #mobileInput, re-asserting after xterm's synthetic mousedown.
+// Case 2 — double tap AT THE SAME SPOT: preventDefault blocks the zoom, and
+// it focuses nothing either.
 await tap(); await page.waitForTimeout(90); await tap(); await page.waitForTimeout(450);
-check('2) double tap (same spot) -> composer (P1: no raw focus)', await activeId(), '#mobileInput');
+check('2) double tap (same spot) -> nothing editable (no keyboard)', await activeId(), 'BODY');
 // _wantRawFocus is gone: the double-tap branch calls terminal.focus() directly,
 // so there is no flag to consume. Assert the dead property is truly absent
 // rather than re-checking a value it no longer has.
 check('2b) _wantRawFocus removed from TerminalManager',
   await page.evaluate(()=>Object.prototype.hasOwnProperty.call(TerminalManager,'_wantRawFocus')), false);
 
-// Case 3 — a single tap after the double. P1 Composer-authoritative: every
-// touch-shell tap path ends on #mobileInput; the composer is the sole owner.
+// Case 3 — a single tap after the double: still nothing editable.
 await tap(); await page.waitForTimeout(450);
-check('3) single after double -> composer (P1: composer authoritative)', await activeId(), '#mobileInput');
+check('3) single after double -> nothing editable (no keyboard)', await activeId(), 'BODY');
+
+// Case 3a — the keyboard is UP (the composer has focus) and the user taps the
+// content: the composer keeps it, so typing carries on where it was. This is
+// the report the P1 redirect was written for -- a tap took the typing away
+// from the visible box -- and it must stay fixed.
+await page.evaluate(()=>document.getElementById('mobileInput').focus());
+await tap(); await page.waitForTimeout(450);
+check('3a) composer focused, tap content -> composer keeps it', await activeId(), '#mobileInput');
 
 // Case 3b — two taps that are TEMPORALLY close but SPATIALLY far (> DOUBLE_TAP_PX)
 // must NOT be read as a double-tap (the distance-check regression this was added
-// for still holds). Under the P1 contract both paths (single and double) end on
-// the composer, so the DISTINCTION must be proven by the double-tap branch's
-// observable side channel, not by focus: the near pair fires the branch's
-// preventDefault (suppressing the synthetic click), the far pair must not.
+// for still holds). Both paths (single and double) end with nothing focused, so
+// the DISTINCTION must be proven by the double-tap branch's observable side
+// channel, not by focus: the near pair fires the branch's preventDefault
+// (suppressing the synthetic click), the far pair must not.
 // We spy preventDefault by wrapping touchend dispatch capture on the wrapper.
 await blur();
 async function tapAt(x, y){
@@ -141,8 +147,8 @@ await page.waitForTimeout(450);
 const farPairPD = await page.evaluate(() => window.__pdEvents);
 check('3b) far-apart pair is not read as a double-tap (no branch preventDefault)',
   farPairPD.includes(true), false);
-check('3b) both close-in-time far-apart taps end on the composer (P1)',
-  await activeId(), '#mobileInput');
+check('3b) both close-in-time far-apart taps end with nothing editable',
+  await activeId(), 'BODY');
 
 // Case 4 — tab-switch funnels into focusActivePane. Dated amendment
 // (F1-Strict-Focus): on mobile focusActivePane is a strict-focus NO-OP — it must
@@ -307,12 +313,18 @@ check('9d) pinch leaves no .touch-selecting',
   await page.evaluate(()=>document.querySelector('.terminal-wrapper').classList.contains('touch-selecting')), false);
 
 // Case 10 — after a pinch sequence, ordinary gestures still work (state was
-// reset, not left poisoned). P1 Composer-authoritative: a single tap after
-// pinch ends on #mobileInput; the point is that the gesture state recovered
-// and the composer is still reachable through the ordinary path.
+// reset, not left poisoned). A tap focuses nothing now (OWNER RULING
+// 2026-10-16), so recovery is read from the tap itself: its synthetic click
+// reaches the pane, which a gesture state left poisoned would swallow.
 await blur();
+await page.evaluate(() => {
+  window.__paneClicks = 0;
+  document.querySelector('.terminal-pane').addEventListener('click', () => { window.__paneClicks += 1; });
+});
 await tap(); await page.waitForTimeout(450);
-check('10) single tap after pinch -> composer (P1: state recovered)', await activeId(), '#mobileInput');
+check('10) single tap after pinch is a tap again (its click reaches the pane)',
+  await page.evaluate(() => window.__paneClicks), 1);
+check('10b) and it focuses nothing editable', await activeId(), 'BODY');
 // ...and a long-press still selects.
 await page.evaluate(()=>{ window.__probe.clearSelection(); });
 await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:cx,y:cy}]});

@@ -177,24 +177,30 @@ const bufferText = (page, id = 's1') => page.evaluate(sid => {
     check('mode A: composer reports input ownership', owns);
 
     /*
-     * THE OWNER'S CASE, exactly as reported: tap the TERMINAL, then type
-     * immediately. No second composer tap is allowed -- the whole complaint was
-     * that a terminal tap silently moved the keyboard away from the visible
-     * composer, so requiring the user to tap the box again would be testing the
-     * workaround instead of the fix.
-     *
-     * An intentional terminal tap MAY focus the visible composer, keyboard
-     * included. The no-keyboard rule governs
-     * connection-chip taps, which is why focusActivePane stays a no-op on touch;
-     * defect 5's own checks below still assert a chip tap opens no keyboard.
+     * OWNER RULING 2026-10-16: on a touch shell the keyboard opens only from a
+     * tap on the composer itself. A tap on the terminal's content with the
+     * keyboard down raises nothing: no editable element takes focus.
      */
     await page.locator('#terminal-s1 .xterm-screen').tap();
     await page.waitForTimeout(250);
+    const afterClosedTap = await page.evaluate(() => document.activeElement?.tagName);
+    check('mode A: tapping the terminal with the keyboard down focuses nothing',
+        afterClosedTap === 'BODY', `activeElement=${afterClosedTap}`);
+
+    /*
+     * THE EARLIER OWNER CASE: with the keyboard UP, a tap on the TERMINAL must
+     * not take the typing away from the visible composer -- the complaint was
+     * that a terminal tap silently moved the keyboard to xterm's hidden
+     * textarea. Tap the box once, then the terminal, then type immediately.
+     */
+    await page.locator('#mobileInput').tap();
+    await page.locator('#terminal-s1 .xterm-screen').tap();
+    await page.waitForTimeout(250);
     const afterTerminalTap = await page.evaluate(() => document.activeElement?.id);
-    check('mode A: tapping the terminal gives input to the composer',
+    check('mode A: with the keyboard up, tapping the terminal keeps input in the composer',
         afterTerminalTap === 'mobileInput', `activeElement=${afterTerminalTap}`);
 
-    // Type immediately, with no intervening tap on the composer.
+    // Type immediately, with no further tap on the composer.
     await page.keyboard.type('echo OWNED', { delay: 12 });
     await page.waitForTimeout(200);
     const afterType = await page.evaluate(() => ({
