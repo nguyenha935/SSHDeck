@@ -1,6 +1,6 @@
 /*
- * Defect 1 + Defect 7 evidence: real screenshots of the DEPLOYED app at the two
- * viewports the owner named, plus the measured numbers behind them.
+ * Defect 1 + Defect 7 evidence: real screenshots of a running server at the
+ * two viewports the owner named, plus the measured numbers behind them.
  *
  * For each viewport it prints: viewport width, the shell (.deck-window) width,
  * and the four gutters (left / top / right / bottom) measured from the live
@@ -8,18 +8,17 @@
  * than an impression. Page errors and failed requests are counted for the same
  * run, because a screenshot of a broken page is not evidence of a fixed one.
  *
- * Credentials come from the live credentials file (never in git). A fresh account
- * is registered per run so restored sessions cannot change the layout.
+ * The server is the throwaway world (live_world.mjs). A fresh account is
+ * registered per viewport so restored sessions cannot change the layout.
  * Run: node tests/browser/live_shell_metrics.mjs
  */
 import { chromium } from 'playwright';
 import fs from 'node:fs';
-import { liveCreds, CREDS_FILE } from './live_creds.mjs';
-import { liveConfig } from './live_creds.mjs';
+import { liveWorld, liveConfig } from './live_world.mjs';
 
-const BASE = liveConfig().LIVE_BASE;
+const C = liveConfig(await liveWorld());
+const BASE = C.LIVE_BASE;
 const OUT = process.env.LIVE_SHOT_DIR || '/tmp/live-shots';
-const creds = liveCreds();
 const RUN = Date.now().toString(36);
 fs.mkdirSync(OUT, { recursive: true });
 
@@ -45,11 +44,11 @@ for (const vp of [
         if (r.status() >= 400) httpErrors.push(`${r.status()} ${r.url()}`);
     });
 
-    const user = `${creds.sshdeck_user}m${vp.name.slice(0, 3)}${RUN}`;
+    const user = `${C.LIVE_USER}m${vp.name.slice(0, 3)}${RUN}`;
     await page.goto(`${BASE}/register`, { waitUntil: 'load' });
     await page.locator('#username').fill(user);
-    await page.locator('#password').fill(creds.sshdeck_password);
-    await page.locator('#confirm_password').fill(creds.sshdeck_password);
+    await page.locator('#password').fill(C.LIVE_PASS);
+    await page.locator('#confirm_password').fill(C.LIVE_PASS);
     await page.locator('#submitBtn').click();
     await page.waitForFunction(() => typeof SessionManager !== 'undefined'
         && typeof TerminalManager !== 'undefined', null, { timeout: 15000 });
@@ -95,7 +94,7 @@ for (const vp of [
 
 await browser.close();
 
-console.log('\nLIVE SHELL METRICS (deployed app)');
+console.log('\nLIVE SHELL METRICS');
 for (const r of rows) {
     console.log(`${r.name}: viewport=${r.viewportWidth}x${r.viewportHeight} `
         + `shellWidth=${r.shellWidth} gutters L/T/R/B=`

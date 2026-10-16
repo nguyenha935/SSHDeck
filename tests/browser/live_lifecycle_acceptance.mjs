@@ -1,15 +1,15 @@
 /*
- * GAP 2B — Reset vs Reconnect through the REAL deployed UI and the REAL backend.
+ * GAP 2B — Reset vs Reconnect through the REAL UI and the REAL backend.
  *
  * lifecycle_entry_matrix.mjs proves the FRONTEND contract with a stubbed socket
  * (which dialog arms which emit). /tmp/telexprobe/lifecycle_backend.py proves
  * what ssh_manager does when those emits arrive. Neither drives the two ends
  * together, which is what this suite does: a real browser, a real login against
- * the deployment, a real tmux session, Reconnect and Reset taken through their
+ * a running server, a real tmux session, Reconnect and Reset taken through their
  * real entry points — and after each, the HOST's own tmux state read out of band
  * rather than inferred from the page.
  *
- * The target is the password account from the live credentials file, so:
+ * The target is the throwaway world's password account (live_world.mjs), so:
  *   * Reconnect on a password session is routed by the SERVER to the credential
  *     form ('password_required') — designed behaviour, because the server holds
  *     no replayable secret. The reconnect INTENT must survive that routing: the
@@ -17,37 +17,31 @@
  *     must come back with its scrollback.
  *   * Reset must emit ssh_disconnect + ssh_connect{use_tmux:false,
  *     reconnect_tmux_name:null}, kill the old tmux ON THE HOST, and produce a
- *     session with no tmux identity.
+ *     session with no tmux identity -- whose resize must reach its one PTY and
+ *     leave the server answering (2026-10-16: resizing a session without tmux
+ *     locked the whole server until a restart).
  *
  * CLEANUP DISCIPLINE
  * Everything this run creates is recorded in LEDGER as an EXACT id or name at
  * the moment it is created. Cleanup runs in a top-level `finally`, so it happens
  * on a failed assertion and on a thrown exception alike, and it may only act on
  * those exact values — never a regex, prefix, wildcard, or "all sessions".
- * Anything it cannot remove is REPORTED for supervision instead of guessed at.
- * The SSHDeck account is never deleted here: the app's only delete path is
- * admin-authenticated, so the account identity is written to a ledger file and
- * removal is a separate, explicitly-approved step.
+ * The cleanup is itself asserted: the product's Close must leave no tmux
+ * session of this run behind.
  */
 import { chromium } from 'playwright';
-import { execFileSync } from 'node:child_process';
-import fs from 'node:fs';
-import { liveCreds, CREDS_FILE } from './live_creds.mjs';
-import { liveConfig } from './live_creds.mjs';
+import { liveWorld, liveConfig, onTarget } from './live_world.mjs';
 
-const BASE = liveConfig().LIVE_BASE;
-const NOTES = 'the live credentials file';
-const LEDGER_FILE = '/tmp/live-lifecycle-ledger.json';
-const creds = liveCreds();
-const SSH_HOST = creds.ssh_target || creds.tailnet_host;
-const SSH_USER = creds.host_ssh_user;
-const SSH_PASS = creds.host_ssh_password;
-const SSHDECK_PASS = creds.sshdeck_password;
+const W = await liveWorld();
+const C = liveConfig(W);
+const BASE = C.LIVE_BASE;
+const SSH_HOST = C.SSH_HOST;
+const SSH_PORT = C.SSH_PORT;
+const SSH_USER = C.SSH_USER;
+const SSH_PASS = C.SSH_PASS;
+const SSHDECK_PASS = C.LIVE_PASS;
 const RUN = Date.now().toString(36);
-const SSHDECK_USER = `${creds.sshdeck_user}lc${RUN}`;
-if (!SSH_HOST || !SSH_USER || !SSH_PASS || !SSHDECK_PASS) {
-    throw new Error(`incomplete credentials in ${CREDS_FILE}`);
-}
+const SSHDECK_USER = `${C.LIVE_USER}lc${RUN}`;
 const MARK = `LC${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 
 /*
@@ -82,21 +76,13 @@ const check = (label, got, want) => {
 };
 
 /*
- * Host-side tmux truth for the TARGET user, read out of band.
- *
- * The suite's SSH target is this same machine, so the sessions the product
- * creates are visible here. `su -s /bin/sh <user> -c 'tmux ... ls'` is read-only:
- * it lists, never attaches, kills, renames or resizes. The socket path is given
- * explicitly because tmux resolves $TMUX_TMPDIR per-uid and `su` does not carry
- * it.
+ * Host-side tmux truth for the TARGET user, read out of band on the target
+ * itself. `tmux ls` is read-only: it lists, never attaches, kills, renames or
+ * resizes.
  */
-const uid = execFileSync('id', ['-u', SSH_USER]).toString().trim();
-const SOCKET = `/tmp/tmux-${uid}/default`;
 const hostTmux = () => {
     try {
-        const out = execFileSync('su', ['-s', '/bin/sh', SSH_USER, '-c',
-            `tmux -S ${SOCKET} ls -F '#{session_name} #{session_created}'`],
-        { stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+        const out = onTarget(W, "tmux ls -F '#{session_name} #{session_created}'");
         const map = {};
         for (const line of out.split('\n')) {
             const p = line.trim().split(/\s+/);
@@ -123,9 +109,7 @@ const killExactTmux = (name, preRun) => {
         return false;
     }
     try {
-        execFileSync('su', ['-s', '/bin/sh', SSH_USER, '-c',
-            `tmux -S ${SOCKET} kill-session -t '=${name}'`],
-        { stdio: ['ignore', 'pipe', 'pipe'] });
+        onTarget(W, `tmux kill-session -t '=${name}'`);
         console.log(`  killed exact tmux session: ${name}`);
         return true;
     } catch (err) {
@@ -245,7 +229,7 @@ try {
         await page.locator('#newConnectionBtn').click();
         await page.locator('#connectionModal').waitFor({ state: 'visible' });
         await page.locator('#hostInput').fill(SSH_HOST);
-        await page.locator('#portInput').fill('22');
+        await page.locator('#portInput').fill(SSH_PORT);
         await page.locator('#usernameInput').fill(SSH_USER);
         await page.locator('#authTypeSelect').selectOption('password');
         await page.locator('#passwordInput').fill(SSH_PASS);
@@ -489,6 +473,13 @@ try {
         Object.prototype.hasOwnProperty.call(tmuxAfterRs, tmuxName1), false);
     check('§2 the fresh session did NOT adopt the old transcript',
         await paneHas(sid3, `${MARK}-BEFORE`), false);
+    await page.evaluate((id) => window.socket.emit('ssh_resize',
+        { session_id: id, cols: 101, rows: 31 }), sid3);
+    await page.waitForTimeout(500);
+    await page.evaluate((id) => window.socket.emit('ssh_input',
+        { session_id: id, data: 'stty size\n' }), sid3);
+    check('§2 resizing the session without tmux reaches its PTY, and the server '
+        + 'keeps answering', await waitPaneHas(sid3, '31 101', 10000), true);
     console.log();
     // ── §3 stacked confirmations cannot execute a stale action ──────────────
     console.log('--- §3 stacked confirmations: exactly one armed action ---');
@@ -623,25 +614,9 @@ try {
     check('cleanup: no pre-existing tmux session was removed',
         removedPreexisting, []);
     if (leakedNames.length) {
-        console.log('  SUPERVISION NEEDED — unledgered leftovers, not touched:');
+        console.log('  left behind on the target:');
         for (const n of leakedNames) console.log(`    ${n}`);
     }
-
-    // 4. The SSHDeck account: identity written out, deletion NOT attempted.
-    //    The app's only delete path is admin-authenticated; this suite holds no
-    //    admin credential, so removal is a separate approved step.
-    try {
-        fs.writeFileSync(LEDGER_FILE, `${JSON.stringify({
-            run: RUN, base: BASE, account: LEDGER.account,
-            sessionIds: LEDGER.sessionIds, tmuxNames: LEDGER.tmuxNames,
-            tmuxLeftover: leakedNames, at: new Date().toISOString(),
-        }, null, 2)}\n`, { mode: 0o600 });
-        console.log(`  ledger written: ${LEDGER_FILE} (mode 600)`);
-    } catch (err) {
-        console.log(`  ledger write failed: ${String(err.message || err)}`);
-    }
-    console.log(`  account ${SSHDECK_USER}: NOT deleted here `
-        + '(admin-only delete path; see the ledger file)');
 
     if (ctx) await ctx.close().catch(() => {});
     if (browser) await browser.close().catch(() => {});

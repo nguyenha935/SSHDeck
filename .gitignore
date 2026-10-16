@@ -100,7 +100,7 @@ tests/browser/defect1_*probe*
 tests/browser/defect2_*probe*
 tests/browser/*_mutation_proof.sh
 
-# What a live run needs: a base URL, an account, a host to connect to. The
-# gates themselves are published; these values are not. See
-# tests/live.env.example.
+# Retired: live gates build their own throwaway world (tests/browser/
+# live_world.mjs) and refuse to run while this file exists. Kept ignored so a
+# leftover copy can never be committed.
 tests/live.env

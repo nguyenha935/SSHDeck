@@ -1,20 +1,12 @@
 /*
- * S35 P90 -- THE LIVE LOGIN HARNESS the owner asked for.
- *
- * Every existing "live" suite registers a NEW account through /register and then
- * waits for a readiness predicate; on the deployed build that wait times out and
- * the suite dies before it measures anything. Classifying that as harmless was
- * wrong: it is the reason there is no live evidence for any of the six defects.
- *
- * This module logs in to an EXISTING account instead. Credentials come from the
- * environment (never printed), so no registration loop and no secrets in output.
- *
- *     LIVE_USER=... LIVE_PASS=... node <suite>.mjs
+ * S35 P90 -- log in to the account the throwaway world made (live_world.mjs),
+ * rather than registering one per suite.
  */
 import { chromium } from 'playwright';
-import { liveConfig } from './live_creds.mjs';
+import { liveWorld, liveConfig } from './live_world.mjs';
 
-export const BASE = liveConfig().LIVE_BASE;
+export const C = liveConfig(await liveWorld());
+export const BASE = C.LIVE_BASE;
 
 export async function launch({ width, height, touch }) {
     const browser = await chromium.launch();
@@ -31,11 +23,8 @@ export async function launch({ width, height, touch }) {
 /* Log in and land on the terminal shell. Returns nothing; throws on failure so a
  * suite can never silently measure a login page. */
 export async function login(page) {
-    const user = process.env.LIVE_USER;
-    const pass = process.env.LIVE_PASS;
-    if (!user || !pass) {
-        throw new Error('LIVE_USER / LIVE_PASS must be set in the environment');
-    }
+    const user = C.LIVE_USER;
+    const pass = C.LIVE_PASS;
     await page.goto(`${BASE}/login`, { waitUntil: 'load', timeout: 45000 });
     await page.fill('#username', user);
     await page.fill('#password', pass);

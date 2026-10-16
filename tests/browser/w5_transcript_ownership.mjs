@@ -2,7 +2,7 @@
 /*
  * Part G item-6 follow-up — transcript-key OWNERSHIP.
  *
- * The forensics probe (w5_partG_item6_forensics.mjs) proved one real
+ * A live forensics probe (since retired) proved one real
  * application leak behind the "+1 transcript key per reload cycle" signal:
  * destroyTerminal deletes transcripts[sessionId], and then a LATE ssh_output
  * frame for that dead session re-creates the key, because writeOutputNow
@@ -32,7 +32,7 @@
  * SessionManager restore path) served over HTTP; only socket.io transport is
  * stubbed, preserving its ordered multi-handler semantics.
  *
- * Run: node tests/browser/w5_partG_transcript_ownership.mjs   (from source/)
+ * Run: node tests/browser/w5_transcript_ownership.mjs   (from source/)
  * Exit 0 = all passed, 1 = a failure.
  */
 import { chromium } from 'playwright';

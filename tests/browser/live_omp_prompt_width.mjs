@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * FULL-WIDTH EMOJI ROWS READ THE SAME IN THE ENGINE AS ON THE HOST -- against the deployed build.
+ * FULL-WIDTH EMOJI ROWS READ THE SAME IN THE ENGINE AS ON THE HOST -- against a running server.
  *
  * Reported with a screenshot: after the reconnect, the omp session's
  * prompt row was painted over every transcript row above it, fifty times; the
@@ -28,11 +28,10 @@
  *      which is the state the owner's screen broke in (a reconnect resized
  *      the pane 63 -> 61 -> 63 rows while omp was answering).
  *
- * Run (on the deploy host, from source/): node tests/browser/live_omp_prompt_width.mjs
+ * Run (from source/): node tests/browser/live_omp_prompt_width.mjs
  */
-import { execSync } from 'node:child_process';
 import path from 'node:path';
-import { launch, login, connectSSH, settle } from './harness_live.mjs';
+import { W, launch, login, connectSSH, settle, onTarget, copyToTarget } from './harness_live.mjs';
 
 let pass = 0, fail = 0;
 function check(label, actual, expected) {
@@ -40,10 +39,8 @@ function check(label, actual, expected) {
     if (a === e) { pass++; console.log(`PASS  ${label}`); }
     else { fail++; console.log(`FAIL  ${label}\n        expected ${e}\n        actual   ${a}`); }
 }
-// The fixture is run BY THE REMOTE SHELL, so this is a path on the host
-// this gate is run from -- resolved from the gate's own location rather
-// than hard-coded to one deployment directory.
-const FIXTURE = path.resolve(import.meta.dirname, '../fixtures/fake_omp_prompt.py');
+// The fixture is run BY THE REMOTE SHELL, so it is copied onto the target.
+const FIXTURE = copyToTarget(W, path.resolve(import.meta.dirname, '../fixtures/fake_omp_prompt.py'));
 const { browser, page } = await launch({ width: 1440, height: 900 });
 let sid = null;
 try {
@@ -87,7 +84,7 @@ try {
             for (let y = 0; y < t.rows; y++) lines.push((b.getLine(y)?.translateToString(true) || '').trimEnd());
             return { cols: t.cols, rows: t.rows, lines };
         }, sid);
-        const host = execSync(`tmux capture-pane -p -t "=${tmux}:"`).toString().split('\n').map(l => l.trimEnd());
+        const host = onTarget(W, `tmux capture-pane -p -t "=${tmux}:"`).split('\n').map(l => l.trimEnd());
         const hostRows = host.filter(own).map(mask);
         const engineRows = engine.lines.filter(own).map(mask);
         const mismatches = hostRows.map((h, i) => [h, engineRows[i]])
@@ -117,7 +114,7 @@ try {
     if (sid) {
         await page.evaluate(s => window.socket.emit('ssh_input', { session_id: s, data: '\x03' }), sid);
         await page.waitForTimeout(600);
-        // Every session this page holds is the harness user's: leave no tmux garbage.
+        // Every session this page holds is this run's: close them all.
         const all = await page.evaluate(() => Object.keys(SessionManager.sessions || {}));
         for (const s of all) {
             await page.evaluate(x => window.socket.emit('ssh_disconnect', { session_id: x }), s);

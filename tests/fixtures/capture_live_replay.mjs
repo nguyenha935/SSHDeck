@@ -9,11 +9,11 @@
  * had been red on a missing file; it is a repo fixture now and this is how it
  * is made again.
  *
- * Run it where the live gates run: it needs `tests/live.env` (see
- * `tests/live.env.example`) and the host named there must be reachable.
+ * It runs against a throwaway world (tests/browser/live_world.mjs), which needs
+ * docker:
  *     node tests/fixtures/capture_live_replay.mjs
  */
-import { launch, login, connectSSH, focusTerminal } from '../browser/harness_live.mjs';
+import { W, launch, login, connectSSH, focusTerminal, onTarget } from '../browser/harness_live.mjs';
 import fs from 'node:fs';
 const OUT = new URL('live_replay_chunk.txt', import.meta.url).pathname;
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -21,7 +21,6 @@ const { browser, page } = await launch({ width: 1440, height: 900 });
 let sid = null, name = null;
 try {
     await login(page);
-    // The target is SSH_HOST from tests/live.env; nothing is pinned here.
     sid = await connectSSH(page);
     name = await page.evaluate((s) => SessionManager.sessions[s].tmuxSessionName, sid);
     await page.evaluate((s) => window.socket.emit('ssh_input', { session_id: s,
@@ -57,6 +56,6 @@ try {
 } catch (e) { console.log('ERR ' + String(e).slice(0, 300)); }
 finally {
     try { if (sid) { await focusTerminal(page, sid); await page.evaluate((s) => window.socket.emit('ssh_disconnect', { session_id: s }), sid); await sleep(3000); } } catch {}
-    if (name) { const { execSync } = await import('node:child_process'); try { execSync(`tmux kill-session -t '=${name}' 2>/dev/null || true`); } catch {} }
+    if (name) { try { onTarget(W, `tmux kill-session -t '=${name}' 2>/dev/null || true`); } catch {} }
     await browser.close();
 }

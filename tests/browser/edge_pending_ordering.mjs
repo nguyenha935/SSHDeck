@@ -92,7 +92,7 @@
  * What moves here is only the MUTANT half of the discrimination, from a coin
  * flip to a proof.
  *
- * Run: node tests/browser/live_edge_pending_ordering.mjs   (from source/)
+ * Run: node tests/browser/edge_pending_ordering.mjs   (from source/)
  * Exit 0 = all passed, 1 = a failure.
  */
 import { chromium } from 'playwright';
@@ -429,5 +429,5 @@ async function journey(mutate) {
 
 await browser.close();
 server.close();
-console.log(`\nlive_edge_pending_ordering: ${pass} passed, ${fail} failed`);
+console.log(`\nedge_pending_ordering: ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

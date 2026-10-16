@@ -2697,7 +2697,7 @@ const TerminalManager = {
      * Never sent were recorded in the user-facing transcript the user
      * downloads. Measured: a 10-byte replay produced an 18-byte transcript
      * beginning "\x1b[?1049l", and every transcript-size assertion in
-     * tests/browser/w5_partG_transcript_ownership.mjs was off by exactly 8.
+     * tests/browser/w5_transcript_ownership.mjs was off by exactly 8.
      *
      * The transcript is a record of what the SESSION said. A client-side screen
      * declaration is not part of that record, so it must not be appended -- and
