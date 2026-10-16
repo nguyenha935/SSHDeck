@@ -318,7 +318,8 @@ READER_RETIRE_SUPERSEDED = 'superseded'
 READER_RETIRE_GONE = 'already-gone'
 
 
-def claim_reader_death(session_id, transport_generation, channel):
+def claim_reader_death(session_id, transport_generation, channel,
+                       transport=None):
     """ATOMICALLY decide whether this reader may declare the session dead.
 
     Returns ``(state, parts)``:
@@ -352,6 +353,12 @@ def claim_reader_death(session_id, transport_generation, channel):
     read a byte from. Exact identity is required for a current-death claim, so an
     unbound reader is told it has nothing to claim and retires in silence.
 
+    A tmux session has no session-level channel at all -- its bytes belong to
+    each view -- so its death is claimed with the `transport` instead: the one
+    a view's channel ran on, or the one an attach found dead. It must be the
+    transport the session's client holds NOW; after a swap it is not, and the
+    claim is refused like any other superseded one.
+
     THE CLAIM IS AN AUTHORITY MUTATION, so it captures the session's authority
     claim (expected_session, authority_lock) and re-validates by OBJECT IDENTITY
     after acquiring the lock. That is what serializes it against an in-flight
@@ -372,13 +379,14 @@ def claim_reader_death(session_id, transport_generation, channel):
             # EXACT object whose lock we hold, not a replacement reusing the id.
             if session is not expected_session:
                 return READER_RETIRE_SUPERSEDED, None
-            if channel is None:
-                # Unbound: no proof of identity, so no authority to declare
-                # death.
-                return READER_RETIRE_SUPERSEDED, None
             if session.get('transport_generation', 0) != transport_generation:
                 return READER_RETIRE_SUPERSEDED, None
-            if session.get('channel') is not channel:
+            if channel is not None:
+                if session.get('channel') is not channel:
+                    return READER_RETIRE_SUPERSEDED, None
+            elif transport is None or not _holds_transport(session, transport):
+                # Unbound: no proof of identity, so no authority to declare
+                # death.
                 return READER_RETIRE_SUPERSEDED, None
             sessions.pop(session_id, None)
             session['connected'] = False
@@ -386,6 +394,16 @@ def claim_reader_death(session_id, transport_generation, channel):
                 session.get('client'), session.get('channel'),
                 session.get('bastion_client'),
                 session.get('_sftp_owner_token'))
+
+
+def _holds_transport(session, transport):
+    """Is `transport` the one this session's client holds? CALLER HOLDS
+    sessions_lock; get_transport is a plain attribute read, no I/O."""
+    client = session.get('client')
+    try:
+        return client is not None and client.get_transport() is transport
+    except Exception:
+        return False
 
 
 def _close_retired_parts(session_id, parts):
@@ -3029,6 +3047,17 @@ def open_session_view(session_id, socket_sid, cols, rows,
     if client is None or not tmux_session_name:
         return False, "Session has no tmux transport"
 
+    # A session nobody is watching has no view to see its transport go; the
+    # next attach is how it finds out, and that is the session's death too.
+    try:
+        transport = client.get_transport()
+    except Exception:
+        transport = None
+    if transport is not None and not transport.is_active():
+        report_transport_death(session_id, generation, transport,
+                               socketio_instance, app)
+        return False, "SSH transport is not active"
+
     """Shrink the clients that are already attached BEFORE this one arrives.
 
     MEASURED (tmux 3.7c, /tmp/orderprobe.py,). A 165x47 client is
@@ -3383,41 +3412,69 @@ def _retire_view(session_id, socket_sid, channel, transport_generation,
                       session_id=session_id, error=str(exc))
         return
 
-    # The transport is gone: the SESSION is dead. Report it once, through the
-    # same ownership claim the non-tmux reader uses, so two views dying together
-    # cannot report it twice.
-    state, parts = claim_reader_death(session_id, transport_generation, None)
-    if state != READER_RETIRE_CURRENT:
-        return
+    # The transport is gone: the SESSION is dead.
     try:
-        with app.app_context():
-            from .models import SSHSession, db
-            room = None
+        transport = channel.get_transport()
+    except Exception:
+        transport = None
+    report_transport_death(session_id, transport_generation, transport,
+                           socketio_instance, app)
+
+
+def report_transport_death(session_id, transport_generation, transport,
+                           socketio_instance, app):
+    """A tmux session's transport is gone: report the SESSION's death, once.
+
+    Through the same ownership claim the non-tmux reader uses, with the
+    transport as the proof of identity, so two views dying together -- or a
+    view and an attach that found the transport dead -- cannot report it
+    twice. The row is marked disconnected, not deleted: the session is offered
+    again, and a Reconnect attaches its tmux. Returns True when this call made
+    the report.
+
+    Before this, the claim was made with no proof at all and always refused,
+    so a tmux session whose host dropped the connection stayed `connected`
+    with nothing reading it (measured 2026-10-16: the target's sshd killed,
+    the TCP connection closed, and nothing reported for 20 s and more).
+    """
+    with sessions_lock:
+        session = sessions.get(session_id)
+        user_id = session.get('user_id') if session else None
+    state, parts = claim_reader_death(session_id, transport_generation, None,
+                                      transport=transport)
+    if state != READER_RETIRE_CURRENT:
+        return False
+    try:
+        if app is not None:
+            with app.app_context():
+                from .models import SSHSession, db
+                try:
+                    db_session = SSHSession.query.filter_by(
+                        session_id=session_id).first()
+                    if db_session:
+                        db_session.connected = False
+                        db.session.commit()
+                except Exception as db_error:
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+                    log_error("Error updating DB on session death",
+                              session_id=session_id, error=str(db_error))
+        log_info("SSH transport closed; the session is disconnected",
+                 session_id=session_id)
+        if user_id is not None and socketio_instance is not None:
             try:
-                db_session = SSHSession.query.filter_by(
-                    session_id=session_id).first()
-                if db_session:
-                    db_session.connected = False
-                    db.session.commit()
-                    room = f'user_{db_session.user_id}'
-            except Exception as db_error:
-                try:
-                    db.session.rollback()
-                except Exception:
-                    pass
-                log_error("Error updating DB on session death",
-                          session_id=session_id, error=str(db_error))
-            if room:
-                try:
-                    socketio_instance.emit('ssh_disconnected',
-                                           {'session_id': session_id,
-                                            'reason': 'Connection closed'},
-                                           room=room)
-                except Exception as emit_error:
-                    log_error("Error emitting session death",
-                              session_id=session_id, error=str(emit_error))
+                socketio_instance.emit('ssh_disconnected',
+                                       {'session_id': session_id,
+                                        'reason': 'Connection closed'},
+                                       room=f'user_{user_id}')
+            except Exception as emit_error:
+                log_error("Error emitting session death",
+                          session_id=session_id, error=str(emit_error))
     finally:
         _close_retired_parts(session_id, parts)
+    return True
 
 
 # --- Input order ---------------------------------------------------------------

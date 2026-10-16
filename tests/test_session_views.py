@@ -64,7 +64,11 @@ class FakeViewChannel:
         self.timeout = None
         self.socketio = None
         self.frames_before_resize = []
+        self.transport = None
         self._reads = list(reads or [])
+
+    def get_transport(self):
+        return self.transport
 
     def get_pty(self, term, width, height):
         self.pty = (term, width, height)
@@ -107,6 +111,7 @@ class FakeTransport:
         self.open_timeouts.append(timeout)
         channel = FakeViewChannel()
         channel.socketio = self.socketio
+        channel.transport = self
         self.channels.append(channel)
         return channel
 
@@ -922,53 +927,117 @@ def test_a_views_own_death_closes_that_view_and_tells_that_socket(
 
 def test_a_dead_transport_is_the_sessions_death_reported_once(
         monkeypatch, no_tmux_commands):
+    """Two views die with their transport: the SESSION's death, reported once.
+
+    Through the real claim. This used to stand a fake in for it, and the real
+    one refused every tmux session -- it was asked with no proof of identity --
+    so the death was never reported and the session stayed `connected` with
+    nothing reading it (2026-10-16, the target's sshd killed).
+    """
     transport = install_session()
     socketio = FakeSocketIO()
     channels = [FakeViewChannel(reads=[b'']), FakeViewChannel(reads=[b''])]
     with ssh_manager.sessions_lock:
         for sid, channel in zip(('sid-A', 'sid-B'), channels):
+            channel.transport = transport
             ssh_manager.sessions['sess-views']['views'][sid] = {
                 'channel': channel, 'cols': 80, 'rows': 24, 'thread': None,
                 'transport_generation': 3, 'opened_at': time.time(),
             }
     transport.active = False
-    claims = []
-
-    def fake_claim(session_id, transport_generation, channel):
-        # The real one pops the registry entry inside the lock so exactly one
-        # reader may declare the death; the second gets SUPERSEDED/GONE.
-        claims.append((session_id, transport_generation))
-        if len(claims) == 1:
-            return ssh_manager.READER_RETIRE_CURRENT, (None, None, None)
-        return ssh_manager.READER_RETIRE_GONE, None
-
-    monkeypatch.setattr(ssh_manager, 'claim_reader_death', fake_claim)
+    closed = []
     monkeypatch.setattr(ssh_manager, '_close_retired_parts',
-                        lambda *_a, **_k: None)
-
-    # The death path takes an app context to mark the DB row; a context manager
-    # that does nothing is enough here, because the DB row is the session
-    # lifecycle's own contract and has its own tests.
-    class FakeApp:
-        def app_context(self):
-            class Ctx:
-                def __enter__(self_inner):
-                    return None
-
-                def __exit__(self_inner, *_exc):
-                    return False
-            return Ctx()
+                        lambda session_id, _parts: closed.append(session_id))
 
     for sid, channel in zip(('sid-A', 'sid-B'), channels):
         ssh_manager.read_view_output('sess-views', sid, channel, 3, socketio,
-                                     FakeApp())
+                                     None)
 
+    deaths = [(p, k) for e, p, k in socketio.emits if e == 'ssh_disconnected']
+    assert deaths == [({'session_id': 'sess-views',
+                        'reason': 'Connection closed'}, {'room': 'user_1'})]
     # A dead transport is the session's death, not a view's, so no view_closed
     # invites a re-attach onto a transport that is gone.
     assert not any(e == 'view_closed' for e, _p, _k in socketio.emits)
-    # And both readers went through the ONE ownership claim, so the death can
-    # be reported once however many devices were watching.
-    assert len(claims) == 2
+    with ssh_manager.sessions_lock:
+        assert 'sess-views' not in ssh_manager.sessions
+    assert closed == ['sess-views']
+
+
+def test_only_the_transport_the_session_holds_may_claim_its_death():
+    transport = install_session()
+
+    for proof in (None, FakeTransport(active=False)):
+        state, parts = ssh_manager.claim_reader_death('sess-views', 3, None,
+                                                      transport=proof)
+        assert (state, parts) == (ssh_manager.READER_RETIRE_SUPERSEDED, None)
+    # The right transport from an older generation is a swapped-out one.
+    state, _ = ssh_manager.claim_reader_death('sess-views', 2, None,
+                                              transport=transport)
+    assert state == ssh_manager.READER_RETIRE_SUPERSEDED
+    with ssh_manager.sessions_lock:
+        assert ssh_manager.sessions['sess-views']['connected'] is True
+
+    state, parts = ssh_manager.claim_reader_death('sess-views', 3, None,
+                                                  transport=transport)
+    assert state == ssh_manager.READER_RETIRE_CURRENT
+    assert parts[0] is not None
+    with ssh_manager.sessions_lock:
+        assert 'sess-views' not in ssh_manager.sessions
+
+
+def test_an_attach_that_finds_the_transport_dead_reports_the_death(
+        monkeypatch):
+    """A session nobody is watching has no view to see its transport go: the
+    next attach finds out, and that is the session's death too."""
+    install_session(transport=FakeTransport(active=False))
+    socketio = FakeSocketIO()
+    monkeypatch.setattr(ssh_manager, '_close_retired_parts',
+                        lambda *_a, **_k: None)
+
+    ok, error = ssh_manager.open_session_view('sess-views', 'phone', 80, 24,
+                                              socketio, None)
+
+    assert (ok, error) == (False, "SSH transport is not active")
+    assert [p['session_id'] for e, p, _k in socketio.emits
+            if e == 'ssh_disconnected'] == ['sess-views']
+    with ssh_manager.sessions_lock:
+        assert 'sess-views' not in ssh_manager.sessions
+
+
+def test_a_transport_death_keeps_the_row_as_a_saved_session(app, monkeypatch):
+    """The row is marked disconnected, not deleted, so the session is offered
+    again and a Reconnect attaches its tmux."""
+    from app.auth import register_user
+    from app.models import SSHSession, db
+
+    user, error = register_user('deathrow', 'death-row-password-123')
+    assert error is None, error
+    db.session.add(SSHSession(session_id='sess-views', user_id=user.id,
+                              host='views.example', port=22,
+                              username='deploy', connected=True,
+                              is_persistent=True,
+                              tmux_session_name='sshdeck_views'))
+    db.session.commit()
+    transport = install_session()
+    with ssh_manager.sessions_lock:
+        ssh_manager.sessions['sess-views']['user_id'] = user.id
+    socketio = FakeSocketIO()
+    monkeypatch.setattr(ssh_manager, '_close_retired_parts',
+                        lambda *_a, **_k: None)
+
+    assert ssh_manager.report_transport_death('sess-views', 3, transport,
+                                              socketio, app) is True
+    # Reported once: a second view dying with it finds nothing to claim.
+    assert ssh_manager.report_transport_death('sess-views', 3, transport,
+                                              socketio, app) is False
+
+    db.session.expire_all()
+    row = SSHSession.query.filter_by(session_id='sess-views').one()
+    assert (row.connected, row.is_persistent, row.tmux_session_name) == (
+        False, True, 'sshdeck_views')
+    assert [k for e, _p, k in socketio.emits if e == 'ssh_disconnected'] == [
+        {'room': f'user_{user.id}'}]
 
 
 def test_input_prefers_this_sockets_own_view(quiet_threads, no_tmux_commands):
