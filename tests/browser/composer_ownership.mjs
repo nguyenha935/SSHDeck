@@ -177,9 +177,10 @@ const bufferText = (page, id = 's1') => page.evaluate(sid => {
     check('mode A: composer reports input ownership', owns);
 
     /*
-     * OWNER RULING 2026-10-16: on a touch shell the keyboard opens only from a
-     * tap on the composer itself. A tap on the terminal's content with the
-     * keyboard down raises nothing: no editable element takes focus.
+     * OWNER RULING 2026-10-16: on a touch shell a tap on the terminal opens the
+     * keyboard only on its input line, the cursor's row or one either side
+     * (touch_keyboard_focus.mjs §7). A tap on the content away from it, with
+     * the keyboard down, raises nothing: no editable element takes focus.
      */
     await page.locator('#terminal-s1 .xterm-screen').tap();
     await page.waitForTimeout(250);

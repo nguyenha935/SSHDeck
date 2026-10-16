@@ -89,10 +89,10 @@ async function tap(){
 const blur = () => page.evaluate(()=>document.activeElement&&document.activeElement.blur());
 
 // Case 1 — FIRST tap after load. OWNER RULING 2026-10-16: on a touch shell
-// the keyboard opens only from a tap on the composer itself, so a tap on the
-// terminal's content leaves nothing editable focused -- neither the composer
-// (as P1 §2.2 used to require) nor xterm's hidden textarea, which xterm still
-// focuses on the synthetic mousedown and the redirect drops.
+// a tap on the terminal's content away from its input line (the cursor's row,
+// one either side; the cursor is on row 0 here, the tap mid-screen) leaves
+// nothing editable focused -- neither the composer (as P1 §2.2 used to
+// require) nor xterm's hidden textarea, whose focus is refused.
 // Still guards lastTap=-Infinity.
 await blur();
 await tap(); await page.waitForTimeout(450);

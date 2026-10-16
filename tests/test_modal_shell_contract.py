@@ -410,7 +410,10 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # pane instead. A browser on v105 shrinks it to 9 px.
     # v106 -> v107: a tap on the terminal's content opens no keyboard on a
     # phone. A browser on v106 still focuses the composer from it.
-    assert "filename='js/terminal-manager.js') }}?v=107" in idx
+    # v107 -> v108: xterm never takes focus on a phone, and a tap on the
+    # terminal's input line opens the keyboard. A browser on v107 flashes the
+    # screen on every tap.
+    assert "filename='js/terminal-manager.js') }}?v=108" in idx
     assert "\"filename='css/style.css'\": '?v=77'," in tp
     assert "\"filename='js/sftp-file-manager.js'\": '?v=21'," in tp
     assert "\"filename='js/app.js'\": '?v=109'," in tp
@@ -429,7 +432,7 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # Desurgery v59 -> v60: the pty_source_changed handler now re-fits (a moved
     # source changes what a wider pane renders under the S36 minimum).
     assert "\"filename='js/session-manager.js'\": '?v=72'," in tp
-    assert "\"filename='js/terminal-manager.js'\": '?v=107'," in tp
+    assert "\"filename='js/terminal-manager.js'\": '?v=108'," in tp
     assert "style.css') }}?v=77\" in template" in tp
 
 

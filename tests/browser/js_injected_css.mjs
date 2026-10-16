@@ -437,7 +437,8 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // frame is blurred.
         // v106: the text is never drawn under 12 px on the app's account.
         // v107: a tap on the terminal's content opens no keyboard on a phone.
-        ['js/terminal-manager.js', 107],
+        // v108: the terminal's input line opens it; xterm never takes focus.
+        ['js/terminal-manager.js', 108],
         // v18: the Files browser hooks (expand, delegated render and menu).
         // v20: the quick-connect captions mark the required fields.
         // v21: opening and closing the Files panel is chrome, not a resize.

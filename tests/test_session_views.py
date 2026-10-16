@@ -39,6 +39,14 @@ import pytest
 from app import ssh_manager
 
 
+def _cancel_redraws():
+    with ssh_manager._redraw_lock:
+        timers = list(ssh_manager._redraw_timers.values())
+        ssh_manager._redraw_timers.clear()
+    for timer in timers:
+        timer.cancel()
+
+
 @pytest.fixture(autouse=True)
 def _clean_sessions():
     with ssh_manager.sessions_lock:
@@ -46,10 +54,17 @@ def _clean_sessions():
     # The retired-socket ring is module state too: a sid retired by one test
     # must not refuse an attach under the same name in the next.
     ssh_manager._retired_sockets.clear()
+    # So are the coalesced redraws: a Timer keyed by session id that, left
+    # pending, fires a quarter second later on whatever transport a LATER test
+    # installed under the same id. Measured: one stayed pending through twelve
+    # tests, and CI once counted its exec channel as a third view on the
+    # transport test_a_transport_swap_reopens_the_views_it_had swapped in.
+    _cancel_redraws()
     yield
     with ssh_manager.sessions_lock:
         ssh_manager.sessions.clear()
     ssh_manager._retired_sockets.clear()
+    _cancel_redraws()
 
 
 class FakeViewChannel:

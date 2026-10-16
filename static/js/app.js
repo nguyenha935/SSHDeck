@@ -2985,8 +2985,8 @@
             // So the flag, not preventDefault, is what actually guarantees the
             // fix on iOS.
             //
-            // Send never focuses anything (OWNER RULING 2026-10-16: the keyboard
-            // opens only from a tap on the composer). It used to focus the
+            // Send never focuses anything (OWNER RULING 2026-10-16: Send opens
+            // no keyboard). It used to focus the
             // composer again when it had been active at press time, and on a
             // phone the composer can still hold focus with the keyboard put
             // away, so Send raised the keyboard.
@@ -3857,7 +3857,7 @@
          * took another recompute to notice, and style.css:5018 hides
          * `.notepad-panel` in exactly that state -- `display:none` on the
          * focused textarea drops the caret, and the composer-first redirectors
-         * Then take the rest of the note into #mobileInput (the user's
+         * of the time took the rest of the note into #mobileInput (the user's
          * "note text leaks INTO the composer"). Every rule that reads
          * `notepad-focused` also requires `keyboard-open`, so setting it while
          * the keyboard is closed changes nothing visually and removes the
