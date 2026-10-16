@@ -516,6 +516,42 @@ def test_a_resize_moves_the_shared_minimum(quiet_threads, no_tmux_commands):
         False, "No view for this socket")
 
 
+def test_resizing_a_plain_shell_leaves_the_registry_lock_free(monkeypatch):
+    """A session without tmux has one PTY, and its resize must not take the
+    registry lock twice.
+
+    resize_terminal takes sessions_lock itself. resize_session_view called it
+    from inside its own `with sessions_lock:` block, and the lock is not
+    re-entrant, so the caller waited on itself while holding the lock every
+    connect, input and disconnect needs -- the whole server stopped until a
+    restart (2026-10-16, a stack dump of the stuck worker). The call runs in a
+    thread with a deadline, on a lock of its own, so a regression fails this
+    test instead of hanging the suite.
+    """
+    import threading
+
+    lock = threading.Lock()
+    monkeypatch.setattr(ssh_manager, 'sessions_lock', lock)
+    install_session(use_tmux=False)
+    channel = FakeViewChannel()
+    with lock:
+        ssh_manager.sessions['sess-views']['channel'] = channel
+
+    result = []
+    worker = threading.Thread(
+        target=lambda: result.append(ssh_manager.resize_session_view(
+            'sess-views', 'sid-A', 100, 30)),
+        daemon=True)
+    worker.start()
+    worker.join(timeout=2)
+
+    assert not worker.is_alive(), 'resize_session_view never returned'
+    assert result == [(True, None)]
+    assert channel.sizes == [(100, 30)]
+    assert lock.acquire(timeout=1), 'the registry lock was left held'
+    lock.release()
+
+
 def test_a_resize_above_the_minimum_changes_nothing_on_the_wire(
         quiet_threads, no_tmux_commands):
     socketio = FakeSocketIO()

@@ -3241,13 +3241,22 @@ def resize_session_view(session_id, socket_sid, cols, rows,
         session = sessions.get(session_id)
         if session is None:
             return False, "Session not found"
-        if not session.get('use_tmux'):
-            return resize_terminal(session_id, rows, cols)
-        view = (session.get('views') or {}).get(socket_sid)
-        if view is None:
-            return False, "No view for this socket"
-        view['cols'] = cols
-        view['rows'] = rows
+        use_tmux = bool(session.get('use_tmux'))
+        if use_tmux:
+            view = (session.get('views') or {}).get(socket_sid)
+            if view is None:
+                return False, "No view for this socket"
+            view['cols'] = cols
+            view['rows'] = rows
+
+    if not use_tmux:
+        # OUTSIDE the block: resize_terminal takes sessions_lock itself, and
+        # the lock is not re-entrant. Called from inside, the greenlet waited
+        # on itself while holding the registry lock, and every connect, input
+        # and disconnect of every user stopped behind it until a restart
+        # (measured 2026-10-16: a stack dump of the stuck worker had every
+        # greenlet waiting on sessions_lock and none holding it).
+        return resize_terminal(session_id, rows, cols)
 
     _apply_session_geometry(session_id, socketio_instance)
     return True, None
