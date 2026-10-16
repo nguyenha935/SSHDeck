@@ -773,9 +773,9 @@ check('D) tap on dimmed backdrop passes through to terminal', await page.evaluat
 // (real xterm + real focusActivePane); here we assert the shipped source shape so
 // a regression that drops the preventDefault (zoom returns) is caught. The
 // double-tap branch must preventDefault (block zoom) and, on a touch shell,
-// focus NOTHING (OWNER RULING 2026-10-16: the keyboard opens only from a tap on
-// the composer; P1 §2.2 used to route it to #mobileInput). Raw terminal.focus()
-// stays on the desktop arm only.
+// focus NOTHING (OWNER RULING 2026-10-16: a double tap opens no keyboard; P1
+// §2.2 used to route it to #mobileInput). Raw terminal.focus() stays on the
+// desktop arm only.
 const tmSrc = await (await fetch(`${base}/static/js/terminal-manager.js`)).text();
 // Isolate the touchend handler's double-tap branch: from `now - lastTap` to the
 // close of the `if (!moved)` block.

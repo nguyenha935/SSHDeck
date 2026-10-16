@@ -614,7 +614,8 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # to a 9 px floor -- and the held frame is blurred.
         # v106: the floor is 12 px, never above the reader's own size.
         # v107: a tap on the terminal's content opens no keyboard on a phone.
-        "filename='js/terminal-manager.js'": '?v=107',
+        # v108: the terminal's input line opens it; xterm never takes focus.
+        "filename='js/terminal-manager.js'": '?v=108',
         # touch-action-row.js owns the six-action global row. It did not exist
         # when this table was written; an unpinned copy of it is the single most
         # damaging stale asset on touch, because the row it builds is the only

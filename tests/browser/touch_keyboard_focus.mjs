@@ -1,10 +1,19 @@
 #!/usr/bin/env node
 /*
- * ON A PHONE THE KEYBOARD OPENS ONLY FROM THE COMPOSER (OWNER RULING 2026-10-16).
+ * ON A PHONE THE KEYBOARD OPENS FROM THE COMPOSER AND FROM THE TERMINAL'S OWN
+ * INPUT LINE, NOWHERE ELSE (OWNER RULING 2026-10-16).
  *
  *   "click vào nút gửi hoặc click thẳng vào terminal là sẽ lên bàn phím ...
  *    Nút gửi không cần mở bàn phím. Click thẳng vào terminal phải click vào ô
  *    nhập text của terminal mới lên bàn phím."
+ *
+ * "Ô nhập text của terminal" is the terminal's input line: the row the cursor
+ * is on, or one either side (Cậu chose it, 2026-10-16). The first attempt
+ * (v109/v107) read it as the composer and let xterm focus its textarea, then
+ * dropped that focus a moment later. On the owner's iPhone that moment flashed
+ * the screen as if resized, every tap after the keyboard had been up once
+ * raised it again (iOS keeps the composer focused with its keyboard away), and
+ * the input line no longer opened anything.
  *
  * Measured on main 05777b9 (Chromium and WebKit, 390x844 touch): a tap or a
  * double tap on the terminal's content went xterm's textarea -> #mobileInput,
@@ -29,6 +38,15 @@
  *      lands in it (the earlier owner report, still fixed)
  *   §5 a tap on the composer is what opens it
  *   §6 the function keypad open: Send focuses nothing
+ *   §7 a tap on the cursor's row, or one either side, opens it; two rows
+ *      away does not
+ *   §8 the composer still focused with its keyboard away (iOS): a tap on the
+ *      input line blurs and focuses it again; with the keyboard up, nothing
+ *   §9 the composer focused: a tap on the content calls no focus()
+ *   §10 xterm's textarea never takes focus, not even for a moment
+ *   §11 a note being typed keeps its focus through a tap on the input line
+ *   §12 a desktop click on the terminal still focuses xterm, also with the
+ *      Broadcast composer on screen
  *   §Z no page errors
  *
  * Run: node tests/browser/touch_keyboard_focus.mjs   (from source/)
@@ -170,6 +188,13 @@ const SPY = `
         if (this.id === 'mobileInput') window.__composerFocusCalls += 1;
         return focus.apply(this, args);
     };
+    // Every focus that lands, the transient ones included (§10).
+    window.__focusins = [];
+    document.addEventListener('focusin', (e) => {
+        const t = e.target;
+        window.__focusins.push(t.id ? '#' + t.id
+            : String(t.className).includes('xterm-helper-textarea') ? 'xterm-textarea' : t.tagName);
+    }, true);
 `;
 const errors = [];
 const state = (page) => page.evaluate(() => {
@@ -183,6 +208,18 @@ const state = (page) => page.evaluate(() => {
 });
 const sends = (page) => page.evaluate(() => window.__emits
     .filter(e => e.evt === 'ssh_input' && /\r/.test(e.payload?.data || '')).length);
+// The client point of a viewport row of the active terminal, mid-width.
+const rowPoint = (page, row) => page.evaluate((r) => {
+    const t = TerminalManager.terminals.s1;
+    const box = t.element.querySelector('.xterm-screen').getBoundingClientRect();
+    const cell = box.height / t.rows;
+    return { x: Math.round(box.left + box.width / 2), y: Math.round(box.top + (r + 0.5) * cell) };
+}, row);
+// Scrollback first, as in any real session: the cursor's buffer row is then
+// baseY + cursorY, not its viewport row.
+const cursorTo = (page, row) => page.evaluate((r) => new Promise(resolve =>
+    TerminalManager.terminals.s1.write(`${'line\r\n'.repeat(200)}\x1b[${r + 1};1H`,
+        () => resolve(TerminalManager.terminals.s1.buffer.active.baseY))), row);
 const putAway = (page) => page.evaluate(() => {
     document.activeElement?.blur();
     window.__composerFocusCalls = 0;
@@ -272,8 +309,93 @@ for (const type of [chromium, webkit]) {
     check(`§6 [${name}] keypad open: Send focuses nothing`,
         await state(page), { focused: 'BODY', calls: 0 });
 
+    // Taps further apart than DOUBLE_TAP_MS (300), so none reads as a double.
+    await page.evaluate(() => {
+        window.__composerBlurs = 0;
+        document.getElementById('mobileInput').addEventListener('blur', () => {
+            window.__composerBlurs += 1;
+        });
+    });
+    const CURSOR = 9;
+    check(`§7 [${name}] the terminal has scrollback above the cursor`,
+        (await cursorTo(page, CURSOR)) > 0, true);
+    for (const [delta, opens] of [[0, true], [1, true], [-1, true], [2, false], [-2, false]]) {
+        await putAway(page);
+        const at = await rowPoint(page, CURSOR + delta);
+        await page.touchscreen.tap(at.x, at.y);
+        await page.waitForTimeout(450);
+        check(`§7 [${name}] a tap ${delta === 0 ? 'on the cursor\'s row' : `${delta > 0 ? '+' : ''}${delta} row(s) from it`} ${opens ? 'opens' : 'does not open'} the keyboard`,
+            await state(page), opens ? { focused: '#mobileInput', calls: 1 } : { focused: 'BODY', calls: 0 });
+    }
+
+    const line = await rowPoint(page, CURSOR);
+    await composer.tap();
+    await page.evaluate(() => {
+        document.body.classList.remove('keyboard-open');
+        window.__composerFocusCalls = 0;
+        window.__composerBlurs = 0;
+    });
+    await page.touchscreen.tap(line.x, line.y);
+    await page.waitForTimeout(450);
+    check(`§8 [${name}] composer focused, keyboard away: the input line blurs and focuses it again`,
+        { ...(await state(page)), blurs: await page.evaluate(() => window.__composerBlurs) },
+        { focused: '#mobileInput', calls: 1, blurs: 1 });
+    await page.evaluate(() => {
+        document.body.classList.add('keyboard-open');
+        window.__composerBlurs = 0;
+    });
+    await page.touchscreen.tap(line.x, line.y);
+    await page.waitForTimeout(450);
+    check(`§8 [${name}] keyboard up: the input line leaves it alone`,
+        { ...(await state(page)), blurs: await page.evaluate(() => window.__composerBlurs) },
+        { focused: '#mobileInput', calls: 0, blurs: 0 });
+    await page.evaluate(() => document.body.classList.remove('keyboard-open'));
+
+    const far = await rowPoint(page, CURSOR + 6);
+    await composer.tap();
+    await page.evaluate(() => { window.__composerFocusCalls = 0; });
+    await page.touchscreen.tap(far.x, far.y);
+    await page.waitForTimeout(300);
+    check(`§9 [${name}] composer focused: a tap on the content calls no focus()`,
+        await state(page), { focused: '#mobileInput', calls: 0 });
+
+    await page.evaluate(() => TerminalManager.terminals.s1.focus());
+    check(`§10 [${name}] xterm's textarea never took focus, through every tap here or terminal.focus()`,
+        await page.evaluate(() => window.__focusins.filter(f => f === 'xterm-textarea').length), 0);
+
+    await page.evaluate(() => {
+        document.getElementById('notepadPanel').classList.add('mobile-open');
+        document.getElementById('sessionNotepad').focus();
+        window.__composerFocusCalls = 0;
+    });
+    const noteLine = await rowPoint(page, CURSOR);
+    check(`§11 [${name}] the input line is uncovered with the Notes sheet open`,
+        await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('#terminal-s1'), noteLine), true);
+    await page.touchscreen.tap(noteLine.x, noteLine.y);
+    await page.waitForTimeout(450);
+    check(`§11 [${name}] a note being typed keeps its focus through a tap on the input line`,
+        await state(page), { focused: '#sessionNotepad', calls: 0 });
+
     errors.push(...pageErrors.map(e => `${name}: ${e}`));
     await ctx.close();
+
+    const desk = await shell({ width: 1280, height: 800, touch: false });
+    await desk.page.locator('#terminal-s1 .xterm-screen').click();
+    await desk.page.waitForTimeout(200);
+    check(`§12 [${name}] a desktop click on the terminal still focuses xterm`,
+        (await state(desk.page)).focused, 'xterm-textarea');
+    await desk.page.evaluate(() => {
+        document.activeElement?.blur();
+        document.body.classList.add('broadcast-composer');
+    });
+    check(`§12 [${name}] the Broadcast composer is on screen on a desktop`,
+        await desk.page.evaluate(() => document.getElementById('mobileInput').offsetParent !== null), true);
+    await desk.page.locator('#terminal-s1 .xterm-screen').click();
+    await desk.page.waitForTimeout(200);
+    check(`§12 [${name}] with it, a desktop click on the terminal still focuses xterm`,
+        (await state(desk.page)).focused, 'xterm-textarea');
+    errors.push(...desk.pageErrors.map(e => `${name} desktop: ${e}`));
+    await desk.ctx.close();
     await browser.close();
 }
 

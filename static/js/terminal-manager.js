@@ -1414,30 +1414,34 @@ const TerminalManager = {
      * text box while their keystrokes went somewhere else entirely -- and
      * Vietnamese composition lost the editing surface it needs.
      *
-     * OWNER RULING 2026-10-16: on a touch shell the keyboard opens only when
-     * the user taps the composer itself. A tap or double tap on the terminal's
-     * CONTENT leaves the keyboard as it was: closed stays closed, and open stays
-     * open with the composer still receiving the typing. Before this a tap on
-     * the content focused the composer and raised the keyboard (measured on
-     * main 05777b9, Chromium and WebKit: the tap went xterm's textarea ->
-     * #mobileInput).
+     * OWNER RULING 2026-10-16: on a touch shell a tap on the terminal opens the
+     * keyboard only on the terminal's own input line -- the row the cursor is
+     * on, or one either side (openKeyboardFromInputLine). A tap anywhere else in
+     * the content changes nothing: a closed keyboard stays closed, an open one
+     * stays open with the composer still receiving the typing.
      *
-     * xterm still focuses its hidden textarea on the tap's synthetic mousedown;
-     * the focusin redirect below answers that. Focus that came FROM the
-     * composer goes back to it (typing continues, keyboard stays). Any other
-     * focus on the textarea is dropped, so nothing editable is left focused
-     * and no keyboard rises. When the composer is not visible this does
-     * nothing, and xterm keeps its textarea -- the desktop path.
+     * So xterm never takes focus there. It moves focus in one place,
+     * textarea.focus(), from its own mousedown and from terminal.focus(); that
+     * call is refused on the instance. The mousedown handler sits on the
+     * .xterm element, which fills the pane, and always prevents the default,
+     * so the tap does not move focus either.
+     *
+     * The first attempt let the focus happen and dropped it in a focusin
+     * handler a moment later. On the owner's iPhone the screen still flashed
+     * as if resized on every tap (read as iOS starting its keyboard for that
+     * moment; not measured on a device), and "the focus came from the
+     * composer" stood for "the keyboard is up", which iOS breaks by keeping
+     * the composer focused after the keyboard is put away: once it had been
+     * up, every later tap raised it again.
      */
     /*
      * S16 defect 1 — does the NOTES surface currently own the keyboard?
      *
-     * The composer-first redirectors below are unconditional by design: while
-     * the composer is visible it is the sole logical keyboard owner. The Notes
-     * sheet is the one OTHER text surface the shell puts in front of the user,
-     * and it is a genuine exception: a user typing a note has aimed at that
-     * textarea, so a redirector that moves focus to #mobileInput mid-note takes
-     * The rest of the note into the composer -- the user's "note text leaks
+     * While the composer is visible it is the sole logical keyboard owner. The
+     * Notes sheet is the one OTHER text surface the shell puts in front of the
+     * user, and it is a genuine exception: a user typing a note has aimed at
+     * that textarea, so anything that moves focus to #mobileInput mid-note takes
+     * the rest of the note into the composer -- the user's "note text leaks
      * INTO the composer input box" (measured:
      * tests/browser/s16_d1_notepad_focus_leak.mjs §F1/§F2/§F4).
      *
@@ -1458,56 +1462,66 @@ const TerminalManager = {
         return !!(panel && panel.contains(active));
     },
 
-    setupComposerInputOwnership(container) {
-        if (!container || container.dataset.composerOwnershipBound === 'true') {
+    setupComposerInputOwnership(terminal) {
+        const textarea = terminal && terminal.textarea;
+        if (!textarea || textarea.dataset.composerOwnershipBound === 'true') {
             return;
         }
-        container.dataset.composerOwnershipBound = 'true';
+        textarea.dataset.composerOwnershipBound = 'true';
+        const focus = textarea.focus;
+        textarea.focus = (...args) => {
+            if (this.composerOwnsTouchInput()) {
+                return undefined;
+            }
+            return focus.apply(textarea, args);
+        };
+    },
 
-        // P1-3 (B): Composer-first touch authority. On a touch shell, xterm's
-        // synthetic mousedown or internal helper focus must NEVER steal focus
-        // from #mobileInput (the single authoritative composer), and must
-        // never raise a keyboard of its own (OWNER RULING 2026-10-16).
-        container.addEventListener('focusin', (e) => {
-            if (!this.isTouchShell()) {
-                return;
+    // A touch shell with the composer on screen: the composer is the only
+    // input, and nothing in a terminal takes focus.
+    composerOwnsTouchInput() {
+        if (!this.isTouchShell()) {
+            return false;
+        }
+        const input = document.getElementById('mobileInput');
+        return !!input && input.offsetParent !== null;
+    },
+
+    /*
+     * OWNER RULING 2026-10-16: a tap on the terminal's own input line opens
+     * the keyboard -- the row the cursor is on, or INPUT_LINE_REACH rows either
+     * side (the border of a program's input box, omp's or claude's). It is
+     * where the program keeps its cursor that decides, so a program that
+     * parks a hidden cursor away from its box is reached through the composer.
+     *
+     * Called from touchend, a user gesture, so iOS raises its keyboard for
+     * the focus. iOS keeps the composer focused after its keyboard is put
+     * away, and focus() on the focused element raises nothing; unless the
+     * keyboard is up, the composer is blurred first.
+     */
+    INPUT_LINE_REACH: 1,
+
+    openKeyboardFromInputLine(terminal, clientX, clientY) {
+        if (!this.composerOwnsTouchInput() || this.notepadOwnsKeyboard()) {
+            return false;
+        }
+        const cell = this.clientToCell(terminal, clientX, clientY);
+        if (!cell) {
+            return false;
+        }
+        const buffer = terminal.buffer.active;
+        if (Math.abs(cell.row - (buffer.baseY + buffer.cursorY)) > this.INPUT_LINE_REACH) {
+            return false;
+        }
+        const input = document.getElementById('mobileInput');
+        if (document.activeElement === input) {
+            if (document.body.classList.contains('keyboard-open')) {
+                return false;
             }
-            /*
-             * S16 defect 1: the Notes textarea keeps the keyboard it owns.
-             *
-             * Both directions have to be read here. When the helper has already
-             * taken focus, `document.activeElement` IS the helper, so the
-             * question "was Notes typing a moment ago?" is answered by
-             * `relatedTarget` -- the element focus is moving AWAY from, which
-             * focusin carries. When the panel is hidden out from under the
-             * caret (style.css:5018) focus collapses to <body> and
-             * relatedTarget is the notepad; when a synthetic focusin arrives
-             * with the caret still in the note, activeElement is the notepad.
-             * Either signal means: do not redirect.
-             */
-            const from = e.relatedTarget;
-            const panel = document.getElementById('notepadPanel');
-            const cameFromNotes = !!(from && (from.id === 'sessionNotepad'
-                || (panel && panel.contains(from))));
-            if (cameFromNotes || this.notepadOwnsKeyboard()) {
-                return;
-            }
-            const target = e.target;
-            if (!target || !target.classList
-                || !target.classList.contains('xterm-helper-textarea')) {
-                return;
-            }
-            // A hidden composer owns nothing: xterm keeps its textarea.
-            const input = document.getElementById('mobileInput');
-            if (!input || input.offsetParent === null) {
-                return;
-            }
-            if (from === input) {
-                input.focus();
-            } else {
-                target.blur();
-            }
-        }, true);
+            input.blur();
+        }
+        input.focus();
+        return true;
     },
 
     /*
@@ -1681,7 +1695,7 @@ const TerminalManager = {
         // setupTouchGestures for the full rationale.
         this.setupTouchGestures(key, container);
 
-        this.setupComposerInputOwnership(container);
+        this.setupComposerInputOwnership(terminal);
 
         // Safari + a Vietnamese IME: deliver the composed text ourselves when
         // the engine's own composition path delivers nothing. See
@@ -2494,11 +2508,11 @@ const TerminalManager = {
             }
 
             // Plain tap (no move, no select).
-            // SINGLE tap: do NOT focus or preventDefault here. The synthetic
-            // click that follows this touchend bubbles to the pane ->
+            // SINGLE tap: no preventDefault here. On the terminal's input
+            // line it opens the keyboard (openKeyboardFromInputLine); anywhere
+            // else nothing takes focus -- the synthetic click reaches
             // setActivePane -> focusActivePane, a no-op on touch, and xterm's
-            // own focus on the synthetic mousedown is answered by the focusin
-            // redirect: no keyboard (OWNER RULING 2026-10-16).
+            // own focus is refused (OWNER RULING 2026-10-16).
             // DOUBLE tap (two taps within DOUBLE_TAP_MS *and* within
             // DOUBLE_TAP_PX of each other): on iOS a double-tap is the zoom
             // gesture. preventDefault on this second touchend blocks the
@@ -2530,6 +2544,7 @@ const TerminalManager = {
                     lastTap = now;
                     lastTapX = tapX;
                     lastTapY = tapY;
+                    this.openKeyboardFromInputLine(terminal, tapX, tapY);
                 }
             }
             resetGesture();
@@ -6961,8 +6976,8 @@ if (window.visualViewport) {
      * The two classes are one contract: style.css:5018 hides `.notepad-panel`
      * whenever `keyboard-open` is present WITHOUT `notepad-focused`, and
      * `display:none` on a focused textarea DROPS the caret -- after which the
-     * composer-first redirectors hand the keyboard, and the rest of the user's
-     * note, to #mobileInput (measured:
+     * composer-first redirectors of the time handed the keyboard, and the rest
+     * of the user's note, to #mobileInput (measured:
      * tests/browser/s16_d1_notepad_focus_leak.mjs).
      *
      * Before this, the companion class was computed ONLY inside the
