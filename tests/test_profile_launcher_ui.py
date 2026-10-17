@@ -83,7 +83,8 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # v42: the Settings dialog, and the keyboard log and screen-diagnostic
         # button styled from the theme instead of inline.
         # v44: the Settings dialog's rules are gone with the dialog.
-        "filename='css/deck.css'": '?v=44',
+        # v45: the terminal link menu.
+        "filename='css/deck.css'": '?v=45',
         # New: the --tw-* bridge moved out of deck.css so every page
         # can read the ten themes, not just the shell.
         "filename='css/deck-tokens.css'": '?v=1',
@@ -615,7 +616,8 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # v106: the floor is 12 px, never above the reader's own size.
         # v107: a tap on the terminal's content opens no keyboard on a phone.
         # v108: the terminal's input line opens it; xterm never takes focus.
-        "filename='js/terminal-manager.js'": '?v=108',
+        # v109: a click or a tap on a link opens Open / Copy.
+        "filename='js/terminal-manager.js'": '?v=109',
         # touch-action-row.js owns the six-action global row. It did not exist
         # when this table was written; an unpinned copy of it is the single most
         # damaging stale asset on touch, because the row it builds is the only
