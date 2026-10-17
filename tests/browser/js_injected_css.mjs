@@ -211,7 +211,8 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // button take their look from the theme.
         // v43: the Settings rows' own flex, bleed and touch sizes are gone;
         // style.css v75 gives every dialog the same.
-        ['css/deck.css', 44],
+        // v45: the terminal link menu.
+        ['css/deck.css', 45],
         ['css/deck-tokens.css', 1],
         // v9: the panel head gains the Files browser's Expand control.
         ['css/sftp-file-manager.css', 9],
@@ -438,7 +439,8 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v106: the text is never drawn under 12 px on the app's account.
         // v107: a tap on the terminal's content opens no keyboard on a phone.
         // v108: the terminal's input line opens it; xterm never takes focus.
-        ['js/terminal-manager.js', 108],
+        // v109: a click or a tap on a link opens Open / Copy.
+        ['js/terminal-manager.js', 109],
         // v18: the Files browser hooks (expand, delegated render and menu).
         // v20: the quick-connect captions mark the required fields.
         // v21: opening and closing the Files panel is chrome, not a resize.

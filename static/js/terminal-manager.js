@@ -1696,6 +1696,7 @@ const TerminalManager = {
         this.setupTouchGestures(key, container);
 
         this.setupComposerInputOwnership(terminal);
+        this.setupTerminalLinks(container, terminal);
 
         // Safari + a Vietnamese IME: deliver the composed text ourselves when
         // the engine's own composition path delivers nothing. See
@@ -1825,6 +1826,316 @@ const TerminalManager = {
         }).catch(() => {
             notify('clipboard.copyFailed', 'Không copy được', 'error');
         });
+    },
+
+    /*
+     * LINKS IN THE TERMINAL (OWNER RULING 2026-10-18): a click or a tap on a
+     * link opens a small menu with the whole link, Open (a new tab) and Copy --
+     * at the pointer on a desktop, as a sheet on a touch shell.
+     *
+     * Two kinds of link reach it:
+     *  - a URL printed as text (linkSpans): http and https, joined across the
+     *    rows xterm wrapped -- tmux sends a long line in one run and lets the
+     *    terminal wrap it (measured on 3.7c), so the rows carry isWrapped --
+     *    and without the punctuation or unpaired closing bracket that ends the
+     *    sentence around it;
+     *  - an OSC 8 hyperlink, through xterm's linkHandler, whose default is a
+     *    native confirm(). tmux drops OSC 8 unless the server's
+     *    terminal-features has `hyperlinks`, and SSHDeck sets no server
+     *    option, only per-session ones, so these come from sessions without
+     *    tmux and from SSHDeck's own tmux. The menu shows the real URI, which
+     *    the text of an OSC 8 link need not be.
+     *
+     * The press on a link belongs to the menu: it is stopped before xterm sees
+     * it, so it reaches tmux as no mouse report and starts no selection. Shift
+     * and Alt keep what xterm does with them. Only http and https open; any
+     * link can be copied.
+     */
+    LINK_PATTERN: /https?:\/\/[^\s<>"'`]+/g,
+    LINK_WRAP_ROWS: 32,
+
+    setupTerminalLinks(container, terminal) {
+        if (!container || !terminal || terminal.__sshdeckLinks) {
+            return;
+        }
+        terminal.__sshdeckLinks = true;
+        terminal.__sshdeckHoveredLink = null;
+        const hover = (uri) => {
+            terminal.__sshdeckHoveredLink = uri;
+        };
+        const leave = (uri) => {
+            if (terminal.__sshdeckHoveredLink === uri) {
+                terminal.__sshdeckHoveredLink = null;
+            }
+        };
+        // xterm's own activation, on the release of a press the handler below
+        // did not take: with Shift or Alt it stays theirs.
+        const activate = (event, uri) => {
+            if (!event.shiftKey && !event.altKey) {
+                this.openLinkMenu(uri, event.clientX, event.clientY);
+            }
+        };
+        terminal.options.linkHandler = {
+            allowNonHttpProtocols: true,
+            activate,
+            hover: (event, uri) => hover(uri),
+            leave: (event, uri) => leave(uri),
+        };
+        terminal.registerLinkProvider({
+            provideLinks: (line, callback) => {
+                const y = line - 1;
+                const links = this.linkSpans(terminal, y)
+                    .filter(span => span.start.y <= y && span.end.y >= y)
+                    .map(span => ({
+                        text: span.url,
+                        range: {
+                            start: { x: span.start.x + 1, y: span.start.y + 1 },
+                            end: { x: span.end.x + 1, y: span.end.y + 1 },
+                        },
+                        decorations: { pointerCursor: true, underline: true },
+                        activate: event => activate(event, span.url),
+                        hover: () => hover(span.url),
+                        leave: () => leave(span.url),
+                    }));
+                callback(links.length ? links : undefined);
+            },
+        });
+        container.addEventListener('mousedown', (event) => {
+            if (event.button !== 0 || event.shiftKey || event.altKey) {
+                return;
+            }
+            const uri = this.linkAtPoint(terminal, event.clientX, event.clientY)
+                || terminal.__sshdeckHoveredLink;
+            if (!uri) {
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            this.openLinkMenu(uri, event.clientX, event.clientY);
+        }, true);
+    },
+
+    // Every URL printed on the logical line around buffer row `y`, as
+    // { url, start, end } in 0-based cells; `end` is the last cell it covers.
+    linkSpans(terminal, y) {
+        const buffer = terminal.buffer.active;
+        let first = y;
+        while (first > 0 && y - first < this.LINK_WRAP_ROWS && buffer.getLine(first)?.isWrapped) {
+            first -= 1;
+        }
+        let last = y;
+        while (last - y < this.LINK_WRAP_ROWS && buffer.getLine(last + 1)?.isWrapped) {
+            last += 1;
+        }
+        let text = '';
+        const cells = [];
+        for (let row = first; row <= last; row += 1) {
+            const line = buffer.getLine(row);
+            for (let x = 0; line && x < line.length; x += 1) {
+                const cell = line.getCell(x);
+                const width = cell ? cell.getWidth() : 1;
+                if (!width) {
+                    continue;   // the second half of a wide character
+                }
+                const chars = (cell && cell.getChars()) || ' ';
+                text += chars;
+                for (let i = 0; i < chars.length; i += 1) {
+                    cells.push({ x, last: x + width - 1, y: row });
+                }
+            }
+        }
+        const spans = [];
+        for (const match of text.matchAll(this.LINK_PATTERN)) {
+            const url = this.trimLinkEnd(match[0]);
+            if (!this.linkHref(url)) {
+                continue;
+            }
+            const start = cells[match.index];
+            const end = cells[match.index + url.length - 1];
+            spans.push({ url, start: { x: start.x, y: start.y }, end: { x: end.last, y: end.y } });
+        }
+        return spans;
+    },
+
+    // Leave out what ends the sentence around a URL: trailing punctuation,
+    // and a closing bracket the URL did not open itself.
+    trimLinkEnd(url) {
+        const pairs = { ')': '(', ']': '[', '}': '{' };
+        let end = url.length;
+        while (end > 0) {
+            const ch = url[end - 1];
+            const body = url.slice(0, end);
+            const open = pairs[ch];
+            if ('.,;:!?'.includes(ch)
+                    || (open && body.split(ch).length > body.split(open).length)) {
+                end -= 1;
+            } else {
+                break;
+            }
+        }
+        return url.slice(0, end);
+    },
+
+    // The address a link may open: http and https, nothing else.
+    linkHref(uri) {
+        try {
+            const url = new URL(uri);
+            return (url.protocol === 'http:' || url.protocol === 'https:') && url.host
+                ? url.href : null;
+        } catch (e) {
+            return null;
+        }
+    },
+
+    // The text URL under a viewport point, or null.
+    linkAtPoint(terminal, clientX, clientY) {
+        const screen = terminal?.element?.querySelector('.xterm-screen');
+        const rect = screen ? screen.getBoundingClientRect() : null;
+        if (!rect || clientX < rect.left || clientX >= rect.right
+                || clientY < rect.top || clientY >= rect.bottom) {
+            return null;
+        }
+        const cell = this.clientToCell(terminal, clientX, clientY);
+        if (!cell) {
+            return null;
+        }
+        const at = point => point.y * terminal.cols + point.x;
+        const here = cell.row * terminal.cols + cell.col;
+        const span = this.linkSpans(terminal, cell.row)
+            .find(link => at(link.start) <= here && here <= at(link.end));
+        return span ? span.url : null;
+    },
+
+    spriteIcon(name) {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('class', 'icon');
+        svg.setAttribute('aria-hidden', 'true');
+        const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+        const sprite = document.querySelector('meta[name="icon-sprite"]')?.content || '';
+        use.setAttribute('href', `${sprite}#icon-${name}`);
+        svg.append(use);
+        return svg;
+    },
+
+    buildLinkMenu() {
+        const backdrop = document.createElement('div');
+        backdrop.className = 'terminal-link-backdrop';
+        backdrop.hidden = true;
+        const node = document.createElement('div');
+        node.id = 'terminalLinkMenu';
+        node.className = 'terminal-link-menu';
+        node.setAttribute('role', 'menu');
+        node.hidden = true;
+        const url = document.createElement('div');
+        url.className = 'terminal-link-url';
+        url.dir = 'ltr';
+        const item = (icon, action) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'session-action-item terminal-link-item';
+            button.dataset.linkAction = action;
+            button.setAttribute('role', 'menuitem');
+            button.append(this.spriteIcon(icon), document.createElement('span'));
+            return button;
+        };
+        const open = item('external-link', 'open');
+        const copy = item('copy', 'copy');
+        node.append(url, open, copy);
+        document.body.append(backdrop, node);
+        this.linkMenu = { node, backdrop, url, open, copy, uri: null };
+
+        // Focus stays where it was: on a phone a focused composer keeps its
+        // keyboard. (mousedown, not pointerdown: a prevented pointerdown costs
+        // a tapped button its click in WebKit.)
+        for (const surface of [node, backdrop]) {
+            surface.addEventListener('mousedown', event => event.preventDefault());
+        }
+        backdrop.addEventListener('click', () => this.closeLinkMenu());
+        open.addEventListener('click', () => {
+            const href = this.linkHref(this.linkMenu.uri);
+            this.closeLinkMenu();
+            if (href) {
+                window.open(href, '_blank', 'noopener,noreferrer');
+            }
+        });
+        copy.addEventListener('click', () => {
+            const uri = this.linkMenu.uri;
+            this.closeLinkMenu();
+            this.reportCopyResult(uri);
+        });
+        document.addEventListener('pointerdown', (event) => {
+            if (!node.hidden && !node.contains(event.target) && !backdrop.contains(event.target)) {
+                this.closeLinkMenu();
+            }
+        }, true);
+        document.addEventListener('keydown', (event) => {
+            if (!node.hidden && event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                this.closeLinkMenu();
+            }
+        }, true);
+        window.visualViewport?.addEventListener('resize', () => {
+            if (node.hidden) {
+                return;
+            }
+            if (node.classList.contains('is-sheet')) {
+                this.placeLinkMenu(0, 0);
+            } else {
+                this.closeLinkMenu();
+            }
+        });
+        return this.linkMenu;
+    },
+
+    openLinkMenu(uri, clientX, clientY) {
+        const menu = this.linkMenu || this.buildLinkMenu();
+        const t = (key, fallback) => (window.i18n ? window.i18n.t(key) : fallback);
+        const sheet = this.isTouchShell();
+        menu.uri = uri;
+        menu.node.setAttribute('aria-label', t('terminal.link', 'Link'));
+        menu.url.textContent = uri;
+        menu.open.querySelector('span').textContent = t('terminal.linkOpen', 'Open');
+        menu.copy.querySelector('span').textContent = t('terminal.linkCopy', 'Copy');
+        menu.open.hidden = !this.linkHref(uri);
+        menu.node.classList.toggle('is-sheet', sheet);
+        menu.backdrop.hidden = !sheet;
+        menu.node.hidden = false;
+        this.placeLinkMenu(clientX, clientY);
+    },
+
+    // At the pointer, inside the visible viewport. A sheet goes along the
+    // bottom of the VISIBLE viewport, which is above the keyboard when one is
+    // up: iOS keeps the layout viewport, and with it `bottom: 0`, behind it.
+    placeLinkMenu(clientX, clientY) {
+        const node = this.linkMenu.node;
+        const vv = window.visualViewport;
+        const top = vv ? vv.offsetTop : 0;
+        const left = vv ? vv.offsetLeft : 0;
+        const width = vv ? vv.width : window.innerWidth;
+        const height = vv ? vv.height : window.innerHeight;
+        const box = node.getBoundingClientRect();
+        if (node.classList.contains('is-sheet')) {
+            node.style.left = '';
+            node.style.top = `${Math.round(top + height - box.height)}px`;
+            return;
+        }
+        const margin = 8;
+        const below = clientY + 4 + box.height <= top + height - margin;
+        const y = below ? clientY + 4 : clientY - 4 - box.height;
+        node.style.top = `${Math.round(Math.max(top + margin, y))}px`;
+        node.style.left = `${Math.round(Math.max(left + margin,
+            Math.min(clientX, left + width - margin - box.width)))}px`;
+    },
+
+    closeLinkMenu() {
+        const menu = this.linkMenu;
+        if (!menu || menu.node.hidden) {
+            return;
+        }
+        menu.node.hidden = true;
+        menu.backdrop.hidden = true;
+        menu.uri = null;
     },
 
     // Unified touch handling. Two gestures share one set of listeners:
@@ -2521,6 +2832,19 @@ const TerminalManager = {
             // alone turned two quick taps in different places (e.g. two
             // different spots of the output) into a double tap.
             if (!tapMoved) {
+                // A tap on a link opens its menu and nothing else: no keyboard,
+                // and no synthetic click to reach tmux (OWNER RULING 2026-10-18).
+                const link = this.linkAtPoint(terminal, tapX, tapY);
+                if (link) {
+                    if (event.cancelable) {
+                        event.preventDefault();
+                    }
+                    clearTapCandidate();
+                    resetGesture();
+                    this.routeFocusAfterTouch(wrapper);
+                    this.openLinkMenu(link, tapX, tapY);
+                    return;
+                }
                 const now = performance.now();
                 const near = lastTapX !== null
                     && Math.abs(tapX - lastTapX) <= DOUBLE_TAP_PX
