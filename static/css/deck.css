@@ -1479,6 +1479,58 @@
     display: none;
 }
 
+/* Terminal links (OWNER RULING 2026-10-18): the menu a click or a tap on a link
+   opens -- the shared dropdown surface at the pointer, a sheet on a touch
+   shell. Its rows are .session-action-item. terminal-manager.js
+   placeLinkMenu sets top/left; a sheet's top is the bottom of the visible
+   viewport, which a fixed `bottom: 0` is not while the iOS keyboard is up. */
+.terminal-link-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 2100;
+    background: color-mix(in srgb, var(--tw-shell) 55%, transparent);
+}
+
+.terminal-link-menu {
+    position: fixed;
+    z-index: 2110;
+    display: grid;
+    width: min(360px, calc(100vw - 16px));
+    padding: 5px;
+    border: 1px solid var(--tw-border);
+    border-radius: 10px;
+    background: var(--tw-surface);
+    box-shadow: 0 16px 36px color-mix(in srgb, var(--tw-shell) 70%, transparent);
+}
+
+.terminal-link-menu.is-sheet {
+    right: 0;
+    left: 0;
+    width: auto;
+    padding: 6px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+    border-width: 1px 0 0;
+    border-radius: 14px 14px 0 0;
+}
+
+/* After the rules above, which set display: an author display outranks the
+   UA rule that hides [hidden] (see .session-confirm[hidden]). */
+.terminal-link-backdrop[hidden],
+.terminal-link-menu[hidden],
+.terminal-link-item[hidden] {
+    display: none;
+}
+
+.terminal-link-url {
+    max-height: 7.5em;
+    margin-bottom: 4px;
+    padding: 7px 8px 9px;
+    overflow-y: auto;
+    border-bottom: 1px solid var(--tw-border);
+    color: var(--tw-muted);
+    font: 12px/1.5 var(--font-mono);
+    overflow-wrap: anywhere;
+}
+
 /* Spec line 307: .tw5-confirm-icon { display:grid; place-items:center;
      width:40px; height:40px; border-radius:50%; color:var(--tw-warning);
      background:color-mix(in srgb,var(--tw-warning) 14%,transparent); } */
