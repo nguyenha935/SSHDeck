@@ -415,7 +415,9 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # screen on every tap.
     # v108 -> v109: a click or a tap on a link opens Open / Copy. A browser on
     # v108 finds no link in the text.
-    assert "filename='js/terminal-manager.js') }}?v=109" in idx
+    # v109 -> v110: what a Vietnamese IME commits is sent once. A browser on
+    # v109 resends stretches of the line when keys arrive in a burst.
+    assert "filename='js/terminal-manager.js') }}?v=110" in idx
     assert "\"filename='css/style.css'\": '?v=77'," in tp
     assert "\"filename='js/sftp-file-manager.js'\": '?v=21'," in tp
     assert "\"filename='js/app.js'\": '?v=109'," in tp
@@ -434,7 +436,7 @@ def test_cache_pins_coupled_to_profile_launcher_test():
     # Desurgery v59 -> v60: the pty_source_changed handler now re-fits (a moved
     # source changes what a wider pane renders under the S36 minimum).
     assert "\"filename='js/session-manager.js'\": '?v=72'," in tp
-    assert "\"filename='js/terminal-manager.js'\": '?v=109'," in tp
+    assert "\"filename='js/terminal-manager.js'\": '?v=110'," in tp
     assert "style.css') }}?v=77\" in template" in tp
 
 

@@ -19,7 +19,9 @@
  *      working engine never double-types;
  *   §3 the engine delivers a PREFIX: only the missing tail is sent;
  *   §4 an empty composition (the user cancelled) sends nothing;
- *   §5 the rescue is WebKit-only, so Chromium keeps the engine's own path.
+ *   §5 the rescue is WebKit-only. Since terminal-manager.js v110 every engine
+ *      sends what the IME commits (setupCompositionCommit), so Chromium sends
+ *      the commit too, once, and the rescue stays out of compositions.
  *
  * Run: node tests/browser/safari_ime_inject.mjs   (from source/)
  */
@@ -154,18 +156,27 @@ const clear = page => page.evaluate(() => { window.__emits = []; });
     check('§2 a delivered composition is not sent twice',
         (await wire(page)).join(''), 'việt');
 
-    // §3 only a prefix arrived.
+    /*
+     * §3 only a prefix arrived. The one way the engine sends text in the middle
+     * of a composition is its early finalize -- what xterm's keydown calls for
+     * a key the IME does not take. Restated for v110: the harness used to plant
+     * the prefix in the rescue's record, a path that no longer exists; the
+     * prefix is now sent by the real finalize.
+     */
     await clear(page);
     await page.evaluate(() => {
-        const key = (TerminalManager.sessionTerminals[
-            Object.keys(TerminalManager.sessionTerminals)[0]] || [])[0];
-        const cb = TerminalManager.inputCallbacks[key];
-        // Deliver 'ti' the way the engine would, mid-composition.
         const ta = document.querySelector('.xterm-helper-textarea');
         ta.focus();
         ta.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
-        TerminalManager.compositionRescue[key].delivered = 'ti';
-        window.__emits.push({ ev: 'ssh_input', p: { data: 'ti' } });
+        ta.value = 'ti';
+        ta.dispatchEvent(new CompositionEvent('compositionupdate', { bubbles: true, data: 'ti' }));
+    });
+    await page.waitForTimeout(30);
+    await page.evaluate(() => {
+        const key = (TerminalManager.sessionTerminals[
+            Object.keys(TerminalManager.sessionTerminals)[0]] || [])[0];
+        TerminalManager.terminals[key]._core._compositionHelper._finalizeComposition(false);
+        const ta = document.querySelector('.xterm-helper-textarea');
         ta.dispatchEvent(new CompositionEvent('compositionend',
             { bubbles: true, data: 'tiến' }));
     });
@@ -492,8 +503,8 @@ const clear = page => page.evaluate(() => { window.__emits = []; });
         await page.evaluate(() => TerminalManager.engineNeedsCompositionRescue()), false);
     await clear(page);
     await compose(page, 'tiến', '');
-    check('§5 so a composition Chromium did not deliver is left alone',
-        await wire(page), []);
+    check('§5 Chromium sends what the IME committed, once, without the rescue',
+        await wire(page), ['tiến']);
     check('§Z no page errors (chromium)', errors, []);
     await browser.close();
 }

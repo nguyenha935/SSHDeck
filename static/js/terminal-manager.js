@@ -1702,6 +1702,8 @@ const TerminalManager = {
         // the engine's own composition path delivers nothing. See
         // setupCompositionRescue.
         this.setupCompositionRescue(terminal, sessionId, key);
+        // Every engine: send what the IME commits. See setupCompositionCommit.
+        this.setupCompositionCommit(terminal);
 
         // Maintain the live-edge flag from xterm's own scroll events, so a
         // resize has a trustworthy answer to "was the user at the live edge"
@@ -5740,6 +5742,121 @@ const TerminalManager = {
     COMPOSITION_RESCUE_MS: 40,
 
     /*
+     * WHAT THE IME COMMITTED IS WHAT IS SENT (owner report 2026-10-19: Edge on
+     * macOS, the built-in Vietnamese input method; typing fast, whole stretches
+     * of the line went out twice).
+     *
+     * xterm 6.0.0's CompositionHelper does not send the text an input method
+     * commits. It slices the textarea between marks it moves in setTimeout(0),
+     * and for a keyCode-229 keydown outside a composition -- the first letter of
+     * every word under that input method -- it diffs the textarea a tick later
+     * with `after.replace(before, '')`, which is the WHOLE textarea once
+     * `before` is no longer in it. When the next keys reach the page before
+     * those timeouts run, the slice is cut at a stale mark and the diff resends
+     * text. A page whose main thread is busy gets its key events in bursts: the
+     * owner's was blocked 25-42 s a minute (perf probe). Measured with
+     * ime_composition_commit.mjs, the IME's events replayed as the owner's
+     * keyboard log recorded them: one task per key went out exactly; the same
+     * events in one task sent "Bây giờ vấn đề nhờ vả team, tưởng lượt." as
+     * "team, Bây giờ vấn đề nhờ vả team,tưởng lượt.tưởng lượt.".
+     *
+     * So the helper's three sending paths are replaced on the instance:
+     *  - compositionend sends the event's own `data`, at once;
+     *  - a key the IME does not take, pressed mid-composition, sends what the
+     *    composition shows, and the commit after it sends only what it adds;
+     *  - the 229 diff sends an edit at the END of the textarea only, and
+     *    nothing once a composition has begun since (that one sends its own).
+     * compositionstart/update and the on-screen composition view stay xterm's.
+     * The helper is private API: if an xterm upgrade moves it, this leaves
+     * xterm's behaviour in place and ime_composition_commit.mjs §6 goes red.
+     */
+    COMPOSITION_MAX_ERASE: 64,
+
+    setupCompositionCommit(terminal) {
+        const helper = terminal?._core?._compositionHelper;
+        const element = terminal?.element;
+        if (!helper || !element || helper.__sshdeckCommit) {
+            return;
+        }
+        const replaced = ['compositionstart', 'compositionend', '_finalizeComposition',
+            '_handleAnyTextareaChanges'];
+        if (!replaced.every(name => typeof helper[name] === 'function')
+                || !helper._textarea || !helper._compositionView || !helper._coreService) {
+            console.warn('[SSHDeck] xterm composition helper not recognised; commits stay xterm\'s');
+            return;
+        }
+        helper.__sshdeckCommit = true;
+        const textarea = helper._textarea;
+        const send = (text) => {
+            if (text) {
+                this.noteKeyboardDebug('composition.send', { data: text });
+                helper._coreService.triggerDataEvent(text, true);
+            }
+        };
+        // compositionend's data, read in the capture phase, before xterm's
+        // own listener on the textarea calls helper.compositionend().
+        let committed = null;
+        // What a key that ended a composition early has already sent.
+        let sentEarly = '';
+        let compositions = 0;
+        element.addEventListener('compositionend', (event) => {
+            committed = typeof event.data === 'string' ? event.data : null;
+        }, true);
+        const stop = () => {
+            helper._compositionView.classList.remove('active');
+            helper._isComposing = false;
+            helper._isSendingComposition = false;
+        };
+
+        const start = helper.compositionstart.bind(helper);
+        helper.compositionstart = () => {
+            compositions += 1;
+            sentEarly = '';
+            start();
+        };
+        helper.compositionend = () => {
+            const endedEarly = !helper._isComposing && sentEarly !== '';
+            stop();
+            const text = committed !== null ? committed : (helper._compositionView.textContent || '');
+            committed = null;
+            if (!endedEarly) {
+                send(text);
+            } else if (text.startsWith(sentEarly)) {
+                send(text.slice(sentEarly.length));
+            }
+            sentEarly = '';
+        };
+        // xterm's keydown calls this for a key the IME does not take.
+        helper._finalizeComposition = () => {
+            stop();
+            sentEarly = helper._compositionView.textContent || '';
+            send(sentEarly);
+        };
+        helper._handleAnyTextareaChanges = () => {
+            const before = textarea.value;
+            const seen = compositions;
+            setTimeout(() => {
+                if (helper._isComposing || compositions !== seen) {
+                    return;
+                }
+                const after = textarea.value;
+                let prefix = 0;
+                while (prefix < before.length && prefix < after.length
+                        && before[prefix] === after[prefix]) {
+                    prefix += 1;
+                }
+                const removed = before.length - prefix;
+                // A cleared textarea (Enter, blur) is not an erase, and a long
+                // one is not an edit at the end of the line.
+                if ((removed && !after) || removed > this.COMPOSITION_MAX_ERASE) {
+                    return;
+                }
+                send('\x7f'.repeat(removed) + after.slice(prefix));
+            }, 0);
+        };
+    },
+
+    /*
      * True on Safari (and any other WebKit that is not Chromium), where the
      * engine's own input delivery cannot be relied on.
      *
@@ -5843,7 +5960,10 @@ const TerminalManager = {
             // engines that leave it there and report nothing.
             const text = (event && event.data) || textarea.value || '';
             this.noteKeyboardDebug('compositionend', { data: text });
-            if (!text) {
+            // setupCompositionCommit has already sent this commit, at once;
+            // rescuing it 40 ms later as well sent it twice when keys came in
+            // a burst (ime_composition_commit.mjs, WebKit).
+            if (!text || terminal._core?._compositionHelper?.__sshdeckCommit) {
                 return;
             }
             setTimeout(() => {
