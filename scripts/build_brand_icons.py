@@ -29,7 +29,12 @@ THE CHOICES, so they are not re-guessed [INF-B4]:
     den xong con co ca vien cuc ky xau"). The glyph is drawn in the product
     accent, which is legible on a light strip and a dark one alike. Its 512px
     raster is committed as brand-glyph-512.png because Pillow cannot rasterise
-    SVG; regenerate it with scripts/rasterise_glyph.mjs when the mark changes.
+    SVG; regenerate it with scripts/rasterise_glyph.mjs when the mark changes;
+  * the installed-app icons that static/app.webmanifest names are the same
+    plate: app-192.png and app-512.png at the iOS inset, for launchers that
+    show the icon as it is, and app-maskable-512.png with the mark inside the
+    central 80% circle that Android may crop a maskable icon to (measured: at
+    an inset of 0.68 the mark reaches 0.394 of the square from its centre).
 """
 import pathlib
 import sys
@@ -44,25 +49,39 @@ SOURCE = ICONS / 'brand-512-white.png'
 GLYPH = ICONS / 'brand-glyph-512.png'
 CANVAS = (9, 9, 11, 255)          # glass --bg-primary, #09090b
 INSET = 0.78                      # room for the mask iOS applies itself
+MASKABLE_INSET = 0.68             # inside the maskable safe circle
+
+
+def plated(mark, inset):
+    size = mark.width
+    plate = Image.new('RGBA', (size, size), CANVAS)
+    inner = int(size * inset)
+    offset = (size - inner) // 2
+    plate.alpha_composite(mark.resize((inner, inner), Image.LANCZOS), (offset, offset))
+    return plate.convert('RGB')
 
 
 def build():
     mark = Image.open(SOURCE).convert('RGBA')
-    size = mark.width
-    plate = Image.new('RGBA', (size, size), CANVAS)
-    inner = int(size * INSET)
-    offset = (size - inner) // 2
-    plate.alpha_composite(mark.resize((inner, inner), Image.LANCZOS), (offset, offset))
-    flat = plate.convert('RGB')
+    flat = plated(mark, INSET)
 
     touch = ICONS / 'apple-touch-icon.png'
     flat.resize((180, 180), Image.LANCZOS).save(touch, optimize=True)
+
+    written = [touch]
+    for size in (192, 512):
+        path = ICONS / f'app-{size}.png'
+        flat.resize((size, size), Image.LANCZOS).save(path, optimize=True)
+        written.append(path)
+    maskable = ICONS / 'app-maskable-512.png'
+    plated(mark, MASKABLE_INSET).resize((512, 512), Image.LANCZOS).save(maskable, optimize=True)
+    written.append(maskable)
 
     ico = ICONS / 'favicon.ico'
     glyph = Image.open(GLYPH).convert('RGBA')
     glyph.save(ico, sizes=[(16, 16), (32, 32), (48, 48)])
 
-    for path in (touch, ico):
+    for path in (*written, ico):
         print(f'{path.relative_to(ICONS.parent.parent)}  {path.stat().st_size} bytes')
 
 
