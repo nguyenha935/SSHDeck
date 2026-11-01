@@ -7,7 +7,7 @@ apart from one another or from LICENSE.
 """
 
 PROJECT_NAME = 'SSHDeck'
-VERSION = '0.1.0'
+VERSION = '0.2.0'
 SOURCE_URL = 'https://github.com/nguyenha935/SSHDeck'
 
 LICENSE_ID = 'LicenseRef-PolyForm-Noncommercial-1.0.0'
