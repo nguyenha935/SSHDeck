@@ -4,7 +4,7 @@
 
 ## Docker
 
-Use the [local Docker quick start](../README.md#quick-start) from the source checkout. The loopback binding exposes the app only on the Docker host. No registry image is required.
+Use the [Docker quick start](../README.md#quick-start). It runs the published image `ghcr.io/nguyenha935/sshdeck`: `latest` follows the `main` branch, and each release is also tagged with its version. The loopback binding exposes the app only on the Docker host. To build the image yourself instead, run `docker build -t sshdeck:local .` in a checkout and use `sshdeck:local` in the same command.
 
 For access from another device, put SSHDeck behind an HTTPS reverse proxy, configure `CORS_ORIGINS` to the exact browser origin, set `SESSION_COOKIE_SECURE=true` and set `TRUSTED_PROXIES` to the number of trusted proxy hops. Keep the backend port reachable only by the proxy. See [proxy examples](configuration.md#reverse-proxy-setup).
 
@@ -47,6 +47,6 @@ Source installations default to a `data` directory beside `config.py`; Docker us
 2. Open **New Connection**, enter the host, port and SSH username.
 3. Choose a password or an imported SSH key. Use a jump host if the target requires a bastion.
 4. Optionally save a profile and select a post-connect action.
-5. Connect. Enable persistence only when you want a remote tmux session; install tmux on the target host for that mode.
+5. Connect. Persistence keeps the session in tmux on the remote host; if the host has no tmux, SSHDeck provides one when you connect (see [persistent sessions](workflows.md#persistent-sessions)).
 
 Tailscale SSH has separate authorization and deployment requirements: follow the [Tailscale guide](tailscale-ssh.md) before enabling it.

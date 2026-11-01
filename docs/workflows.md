@@ -6,7 +6,9 @@
 
 A normal SSH session is a live connection held by the SSHDeck process. Refreshing a page can reattach to that live session, but a database row alone cannot preserve its shell across a process restart.
 
-Persistent mode creates a tmux session on the remote host. Browser closure, SSH idle timeout and an SSHDeck restart leave that remote session running. Reconnect may require authentication again; password connections reopen the form, while usable key or Tailscale credentials can reconnect directly. If tmux is absent, connection setup falls back to a regular shell.
+Persistent mode creates a tmux session on the remote host. Browser closure, SSH idle timeout and an SSHDeck restart leave that remote session running, and the page reattaches each session to the pane it was in. Reconnect may require authentication again; password connections reopen the form, while usable key or Tailscale credentials can reconnect directly.
+
+When a new persistent connection finds no tmux, SSHDeck provides one. If the account is root or has passwordless `sudo`, it installs the distribution's package (apt, dnf, yum, apk, pacman or zypper) in the background and waits up to 60 seconds. Otherwise, or if that takes longer, it copies a static tmux to `~/.local/share/sshdeck/bin/tmux` on Linux x86_64 and aarch64; that copy runs its own server on the `sshdeck` socket, so it never touches tmux sessions that were already on the host (`~/.local/share/sshdeck/bin/tmux -L sshdeck ls` lists its sessions). Reconnecting never installs anything. If tmux still cannot be provided, the connection falls back to a regular shell and the page says so.
 
 Each visible tmux view has its own client channel. The remote window follows the smallest attached client. Hidden views detach; regular non-tmux views share a PTY with last-resize-wins geometry.
 
@@ -16,7 +18,7 @@ Explicitly disconnecting a live persistent session attempts to kill its remote t
 
 Browser mode supports local text selection and terminal history scrolling. Application mouse mode forwards mouse input to terminal applications such as vim and htop. Use the Copy/Paste controls for clipboard operations; clipboard permissions depend on the browser and secure context.
 
-On touch devices, ordinary typing streams in normal terminal mode. Paste, drop and IME composition are buffered in the shared composer for editing and explicit Send. The special-key keypad reduces the terminal's available height instead of covering it.
+On touch devices the composer at the bottom of the screen mirrors the terminal's input line: typing, pasting and input-method text appear on the remote line as you edit, and nothing runs until Send. Tapping the terminal's input line (the cursor's row, or one row either side) opens the keyboard; a tap elsewhere does not. The on-screen keyboard and the special-key keypad push the terminal content up rather than resizing the remote window, so full-screen programs do not redraw and other devices on the same session keep their size.
 
 Broadcast selects all connected sessions or a fixed subset. Review the visible targets before sending. All-target selection includes new eligible sessions; a manually chosen subset remains explicit.
 
