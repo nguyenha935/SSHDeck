@@ -2,27 +2,35 @@
   <img src="assets/banner.svg" alt="SSHDeck — Your servers. One workspace." width="640">
 </p>
 
-<p align="center"><strong>A self-hosted SSH workspace for your browser.</strong><br>
-Terminals, remote files and reusable commands — on desktop, tablet and phone.</p>
+<p align="center"><strong>The SSH workspace built for touch.</strong><br>
+Start on your PC, carry on from your phone, finish back at your desk — in the same live session, from any browser.</p>
 
 <p align="center">
   <a href="#quick-start">Get started</a> ·
-  <a href="#your-workspace">Explore</a> ·
-  <a href="#files-two-ways">Files</a> ·
-  <a href="#documentation">Documentation</a> ·
-  <a href="#contributing">Contributing</a>
+  <a href="#built-for-touch">Touch</a> ·
+  <a href="#one-session-every-device">Every device</a> ·
+  <a href="#on-the-desktop">Desktop</a> ·
+  <a href="#documentation">Documentation</a>
 </p>
 
-![SSHDeck desktop workspace with a mobile terminal alongside it](assets/hero.png)
+![A build started on a PC keeps running after the laptop closes, continues on a phone, and is still there back at the desk](assets/handoff.gif)
 
-SSHDeck brings your servers into one place: open SSH sessions, arrange terminals side by side, browse files without leaving a connection, and reuse the commands you run every day. Host it on your own infrastructure and sign in from a browser. Each account has its own profiles, keys, commands, notes and preferences.
+Many web terminals that "work on mobile" are a desktop page squeezed onto a small screen: the keyboard covers the prompt, a tap opens the keyboard when you only wanted to scroll, special keys are missing, and the layout jumps every time something changes size. SSHDeck was designed the other way round. Every touch, swipe, keyboard and screen-size behaviour was built and tested for coding from a phone, and the interface stays minimal on a small screen without dropping the things you do on a PC.
+
+SSHDeck is self-hosted: run it on your own server, sign in from a browser, and your sessions live on your machines.
+
+## Why SSHDeck
+
+- **Built for touch, not adapted to it.** A composer that mirrors the line you are typing, the keys a phone keyboard lacks, a keyboard that pushes the terminal up instead of resizing it, history you scroll with a swipe, links you open with a tap. [More below](#built-for-touch).
+- **One session, every device, at the same time.** Open the same session on your PC, tablet and phone at once. What you type on one appears on the others as it happens.
+- **Sessions that don't drop.** Close the browser, lose the network, restart SSHDeck itself: the session keeps running on your server and comes back where you left it, in the same pane.
+- **Nothing to install on the server either.** If a server has no tmux, SSHDeck provides it — from the system package manager when it can, or as a self-contained copy in your home directory when it cannot, which needs no root.
+- **Any browser, anywhere.** Your own laptop, a borrowed PC, a tablet: open the address and sign in. Install it on your home screen if you want it to feel like an app.
+- **Simple on the outside, complete on the inside.** Split panes, a file browser, server-to-server transfers, reusable commands, broadcast to many servers, notes, ten themes and six languages.
 
 ## Quick start
 
-From the SSHDeck source directory, build the image and start a local instance:
-
 ```bash
-docker build -t sshdeck:local .
 docker run -d --name sshdeck \
   -p 127.0.0.1:5000:5000 \
   -e CORS_ORIGINS=http://localhost:5000 \
@@ -30,100 +38,78 @@ docker run -d --name sshdeck \
   -e TMUX_ENABLED=true -e TMUX_DEFAULT=true \
   -v sshdeck_data:/app/data \
   --restart unless-stopped \
-  sshdeck:local
+  ghcr.io/nguyenha935/sshdeck:latest
 ```
 
-Open [localhost:5000](http://localhost:5000), create the first account, then choose **New Connection**. The first registered account becomes administrator. The image is built locally; these instructions do not require a published registry image.
+Open [localhost:5000](http://localhost:5000), create the first account — it becomes the administrator — and choose **New Connection**.
 
-Docker generates `SECRET_KEY` on first start and keeps it in the data volume with your account data. Preserve this volume across updates. For access from other devices, configure HTTPS and an explicit public origin using the [deployment guide](docs/getting-started.md). [Docker Compose](docker-compose.yml) and [source installation](docs/getting-started.md#run-from-source) are also supported.
+SSHDeck generates its `SECRET_KEY` on first start and keeps it in the data volume with your accounts; keep that volume across updates. To use SSHDeck from your phone or another computer, put it behind HTTPS with an explicit public origin: see the [deployment guide](docs/getting-started.md). [Docker Compose](docker-compose.yml) and [running from source](docs/getting-started.md#run-from-source) are supported too.
 
-## Your workspace
+## Built for touch
 
-### Keep several servers in view
+![Composer and terminal keys, a link sheet, the Files sheet and the full-screen file browser on a phone](assets/touch.png)
 
-Use session tabs for navigation and split panes for work that belongs together: application logs beside a shell, or several machines during maintenance. Layouts support up to **6 panes on desktop, 4 on tablet and 2 on phone**. Search terminal output, save a transcript, and switch between browser selection and application mouse input.
+### Typing
 
-![Two SSH sessions arranged in a desktop workspace](assets/multi.png)
+- **The composer mirrors your input line.** Type at the bottom of the screen and the same text appears on the remote prompt as you type; nothing runs until you press **Send**. Paste a long command, fix it, then send it.
+- **Input methods work.** Vietnamese and other input methods send exactly the text they commit — once, in order, even when the browser is busy.
+- **The keys a phone keyboard doesn't have**: Esc, Tab, Shift-Tab, arrows, Home, End, Page Up/Down, Delete, and one-shot Ctrl and Alt for the next key.
+- **The keyboard opens when you mean it.** Tap the terminal's own input line — the row with the cursor — and the keyboard comes up. Tap anywhere else to read or scroll without it popping open.
+- **The keyboard pushes the terminal up; it doesn't resize it.** Opening the keyboard or the keys panel moves the content so the cursor stays visible. The remote window keeps its size, so full-screen programs don't redraw and your other devices are not squeezed.
 
-**Broadcast** uses a shared command composer. Choose all connected sessions or a specific subset, review the targets, then send. Disconnected sessions are excluded.
+### Moving around
+
+- **Swipe to scroll history**, including tmux history, and get back to the live prompt with one tap.
+- **Tap a link** in the output to get Open and Copy, placed above the keyboard.
+- **Switch sessions** from the chips at the top; press and hold a chip to drag it into a new order.
+- **Two panes side by side in landscape.** Portrait shows the active pane full size; rotate the phone and both appear.
+- **Rotation, notches and on-screen keyboards** keep the header and the session strip where they belong.
+
+![Two SSH sessions side by side on a phone in landscape](assets/phone-landscape.png)
+
+### Files on a phone
+
+The **Files** sheet browses the active connection while the terminal stays visible above it. Expand it into a full-screen browser to upload, download, rename, create and delete — with a menu on every row instead of a right-click.
+
+### Install it like an app
+
+Add SSHDeck to your home screen (Safari: **Share → Add to Home Screen**; Chrome: **Install app**). It opens in its own full-screen window with its own icon. There is no app-store app to install and nothing to update on the phone: every device always runs the version on your server.
+
+## One session, every device
+
+- **Live on several devices at once.** Every browser gets its own view of the remote tmux session, so a phone, a tablet and a PC can all follow and type into it together. The terminal size follows the smallest device that is looking; a browser tab in the background lets go of its view.
+- **Survives everything short of the server going away.** Closing the browser, an idle SSH timeout, a network change or an SSHDeck restart leaves the remote session running. Your browser reconnects by itself and puts each session back in its pane. Sessions using a key or Tailscale reconnect without asking; password sessions ask for the password again.
+- **tmux appears where it's missing.** A server without tmux gets one when you connect: through apt, dnf, yum, apk, pacman or zypper if you are root or have passwordless sudo, otherwise, on Linux x86_64 and aarch64, as a static copy in `~/.local/share/sshdeck/bin` running on its own socket. tmux sessions already on the server are left alone.
+- **Using someone else's computer?** There is nothing to install — open the address and sign in. Sign out when you leave. SSHDeck does not yet offer two-factor sign-in, so prefer your own devices for accounts that reach important servers.
+
+Persistence uses tmux on the remote host and can be switched off per connection; without it a session is an ordinary shell that lasts as long as the connection. See [session behaviour](docs/workflows.md#persistent-sessions).
+
+## On the desktop
+
+![Two SSH sessions side by side with the Files panel on a desktop](assets/desktop.png)
+
+- **Split panes**: up to 6 on a desktop, 4 on a tablet and 2 on a phone in landscape.
+- **Files**: a panel beside the terminal, or a full browser with columns, sorting, filtering, multi-select, keyboard shortcuts and inline rename.
+- **File Transfer** between any two places — any of your servers, server to server, or a folder on your computer where the browser allows it — with progress and cancellation.
+- **Broadcast** a command to every connected session, or to a chosen few, after reviewing the targets.
+- **Command Library and Command Sets** keep the commands you run every day one click away, and can run them right after a connection opens.
+- **Notes** per account or per server, next to the terminal.
 
 <details>
-<summary>Watch the workspace tour</summary>
-
-![Illustrated tour of the SSHDeck workspace](assets/sshdeck-demo.gif)
-
-</details>
-
-### Pick up a remote session again
-
-Enable persistent sessions to run your shell inside **tmux on the remote host**. Closing the browser, an SSH idle timeout or an SSHDeck restart leaves that tmux session available to reattach. If tmux is unavailable, SSHDeck falls back to a regular shell.
-
-Multiple devices can view the same tmux session. Its terminal size follows the smallest attached view; hidden browser tabs detach their view. Regular shells share one PTY instead. Explicit **Disconnect** attempts to end the remote tmux session; logout and account revocation also clean up live connections. See [session behavior](docs/workflows.md#persistent-sessions) before relying on persistence.
-
-### A terminal that fits your phone
-
-The touch workspace includes a command composer and a special-key keypad. In normal touch input, typing streams to the terminal; pasted text and IME composition are held for editing before Send. Switch between sessions, scroll history, open notes or browse the active connection's files.
-
-<p align="center"><img src="assets/mobile.png" alt="Phone workspace with terminal and command composer" width="340"></p>
-
-## Files, two ways
-
-### Files beside the active connection
-
-Open **Files** to browse the active SSH connection in the workspace's auxiliary panel, alongside the area used by Notes and Commands. It appears as a side panel on desktop and a bottom sheet on phones. Browse directories, upload and download files, or open a text file for preview and editing through SFTP.
-
-![Files panel beside the active SSH terminal](assets/session-files-desktop.png)
-
-<details>
-<summary>See Files on a phone</summary>
-
-<p align="center"><img src="assets/session-files-mobile.png" alt="Active connection's Files panel as a phone bottom sheet" width="340"></p>
-
-</details>
-
-### File Transfer between locations
-
-Open **File Transfer** from the account menu for the separate two-pane workspace. Choose a source and destination from existing SSH sessions or new file-transfer connections. Transfer files or directories between remote hosts, with progress and cancellation. The SSHDeck server relays these transfers.
+<summary>Screenshots: File Transfer, command library, command sets</summary>
 
 ![File Transfer with source and destination selected](assets/filemanager.png)
-
-Local-folder access depends on the browser's File System Access API. Remote listing and server-to-server transfers use SSH exec and require `python3`; directory transfers also require `tar` on both ends. Preview and text editing still use SFTP. See [file capabilities and requirements](docs/workflows.md#files-and-transfers).
-
-<details>
-<summary>Preview and edit a text file</summary>
-
-![Illustrated file preview and editor workflow](assets/file-editing.gif)
-
-</details>
-
-## Connect once, reuse what works
-
-Save connection profiles with host, user, authentication choice, optional jump host and post-connect action. Manage profiles independently of an open connection, or launch one from an empty pane. Password-dependent connections ask for a password; profiles do not store SSH passwords.
-
-![Connection dialog with profile and authentication options](assets/connection-panel.png)
-
-Import **RSA, Ed25519 or ECDSA** private keys, stored encrypted at rest. Passphrase-encrypted imported keys and DSA keys are not supported. Optional [Tailscale SSH](docs/tailscale-ssh.md) uses the SSHDeck node's shared identity and is restricted to administrators and explicitly allowed users.
-
-<details>
-<summary>SSH keys and advanced connection options</summary>
-
-![SSH key management](assets/keys.png)
-
-![Connection options including post-connect commands](assets/connection-options.png)
-
-</details>
-
-### Commands for repeatable work
-
-The **Command Library** keeps reusable commands close to the terminal, with search and operating-system filters. **Command Sets** combine library entries and free-text steps into an ordered sequence. Assign a set, a single command or free text to run after a new connection, with an exact preview before connecting.
 
 ![Command Library in the workspace side panel](assets/commandlibrary.png)
 
 ![Illustrated command-set workflow](assets/command-sets.gif)
 
+![Illustrated file preview and editor workflow](assets/file-editing.gif)
+
+</details>
+
 <details>
 <summary>Command Sets: execution, sudo, references and legacy profiles</summary>
-
 
 The connection dialog offers four explicit choices under **Run after
 connecting**: nothing, one reusable **Command Set**, one saved **Command**, or
@@ -140,7 +126,6 @@ current parameters by default; disable **Use library parameters** to provide an
 override or intentionally leave the override empty. Free-text steps can stay in
 the set or be moved into the command library with **Save as library command**.
 Steps can be reordered by drag and drop or by the accessible up/down buttons.
-
 
 **Run commands with sudo** is opt-in for new command sets. When enabled, SSHDeck
 prefixes each non-empty resolved command line unless it already starts with
@@ -189,17 +174,31 @@ external service is required. Command sets are stored per user in the existing
 
 </details>
 
-### Keep context with your work
+## Connect
 
-**Notes** can be global to your account or associated with a server. Use them for maintenance reminders, paths and troubleshooting context while keeping the terminal visible.
+- **Password, SSH key or [Tailscale SSH](docs/tailscale-ssh.md)**, directly or through a **jump host**.
+- **Keys**: import RSA, Ed25519 or ECDSA private keys; they are stored encrypted at rest. Passphrase-protected imported keys and DSA keys are not supported.
+- **Profiles** save host, user, authentication choice, jump host and what to run after connecting. Profiles never store SSH passwords.
+- Tailscale SSH uses the SSHDeck node's shared identity and is limited to administrators and explicitly allowed users.
+
+<details>
+<summary>Screenshots: connection dialog and keys</summary>
+
+![Connection dialog with profile and authentication options](assets/connection-panel.png)
+
+![SSH key management](assets/keys.png)
+
+![Connection options including post-connect commands](assets/connection-options.png)
+
+</details>
 
 ## Make it yours
 
-Choose from **10 themes** and **6 interface languages**: English, Vietnamese, German, Spanish, French and Chinese. Themes cover the workspace and supporting screens; Paper Ops provides the light option.
+Choose from **10 themes** and **6 interface languages**: English, Vietnamese, German, Spanish, French and Chinese. Paper Ops is the light theme.
 
 ![Ten SSHDeck themes shown side by side](assets/themes.png)
 
-Administrators can manage accounts, lock access, review audit events, disable registration and change runtime limits. Default capacity guards are **100 SSH sessions globally, 50 per user and 8 views per session**; they are configurable rather than pane-layout limits.
+Several people can share one SSHDeck, each with their own profiles, keys, commands, notes and settings. Administrators manage accounts, lock access, review audit events, close running sessions, turn registration off and change runtime limits, all from **Settings**.
 
 ## Hosting and trust
 
@@ -230,7 +229,7 @@ For deployment under `/sshdeck`, see [Subfolder Deployment](docs/configuration.m
 | [Commercial licensing](COMMERCIAL.md) | When a commercial licence is needed, and how to get one |
 | [Changelog](CHANGELOG.md) | Release history |
 
-Screenshots show the current interface with demonstration accounts and data. Animated tours are illustrated sequences of those UI states, not recordings of live server operations. See [media notes](docs/media.md).
+The images at the top of this page are captured from a real SSHDeck talking to a real SSH server, both built for the capture and thrown away afterwards; the rest show the interface with demonstration data. See [media notes](docs/media.md).
 
 ## Contributing
 
@@ -251,9 +250,9 @@ form, or let the bot remind you.
 **3. Make both suites green.** A red run is not reviewed:
 
 ```bash
-pytest tests/ --ignore=tests/integration --ignore=tests/browser -q   # 1180 tests
+pytest tests/ --ignore=tests/integration --ignore=tests/browser -q
 npm ci && npx playwright install chromium webkit
-node scripts/run_gates.mjs                                           # 99 gates
+node scripts/run_gates.mjs
 ```
 
 If a gate goes red, `run_gates.mjs` re-runs it on its own before reporting, and
