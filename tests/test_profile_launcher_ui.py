@@ -618,7 +618,7 @@ def test_merged_profile_frontend_assets_have_distinct_cache_versions():
         # v108: the terminal's input line opens it; xterm never takes focus.
         # v109: a click or a tap on a link opens Open / Copy.
         # v110: what a Vietnamese IME commits is sent once.
-        "filename='js/terminal-manager.js'": '?v=111',
+        "filename='js/terminal-manager.js'": '?v=112',
         # touch-action-row.js owns the six-action global row. It did not exist
         # when this table was written; an unpinned copy of it is the single most
         # damaging stale asset on touch, because the row it builds is the only

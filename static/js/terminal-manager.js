@@ -6389,15 +6389,24 @@ const TerminalManager = {
      * much is being repainted, not by which program is painting:
      *   - a repaint of a screen or so (tmux, a TUI, a prompt) lifts the cover
      *     after FREEZE_QUIET_MS without a row-sized write;
-     *   - more than STORM_SCREENS screens of it (characters per cell of the
-     *     grid) is a replay. Measured in those units: a repaint, colours and
-     *     all, is 1-6; the small session's answers 6-17; the large one's ~1300.
-     *     The cover then waits for STORM_QUIET_MS without a write -- longer
-     *     than any pause measured inside a replay (up to 602 ms under load) --
-     *     and the session is remembered as one that replays (replaysOnResize),
-     *     so its next change starts with the long window: the large session's
-     *     answer to a change of columns is 19-23 KB with 573 ms between its two
-     *     halves, too little to look like a replay on its own;
+     *   - STORM_SCREENS screens of it or more (characters per cell of the grid)
+ *     is a replay. Volume is the only signal there is: tmux consumes the
+ *     clears a replay opens with, so its client is sent no 2J, 3J or J to
+ *     tell one by (measured on tmux 3.7c: 194-207 KB a change, none of them).
+ *     Measured in screens: a repaint, colours and all, is 1-6; the piece of a
+ *     replay that arrives before its first pause is 8.9 or more, in a small
+ *     session too (13 for one of 1500 lines at 167x48). The line is drawn
+ *     between the two. It stood at 32, above the whole of a small session's
+ *     answer, and such a session was then called a replay only when the
+ *     changes of a drag ran together: when they did not, the cover lifted in
+ *     the 450 ms pause and the transcript was seen scrolling past.
+ *     The cover then waits for STORM_QUIET_MS without a write -- longer
+ *     than any pause measured inside a replay (up to 602 ms under load) --
+ *     and the session is remembered as one that replays (replaysOnResize),
+ *     so its next change starts with the long window: the large session's
+ *     answer to a change of columns is 19-23 KB with 573 ms between its two
+ *     halves, too little to look like a replay on its own. A repaint taken
+ *     for a replay costs a frame held 500 ms longer, never a wrong one;
      *   - output that was already flowing before the change is not repaint:
      *     writes at up to twice the rate of the second before the cover do not
      *     hold it, so a log or a model streaming its answer is not frozen;
@@ -6418,7 +6427,7 @@ const TerminalManager = {
      */
     FREEZE_MAX_MS: 1200,
     FREEZE_QUIET_MS: 250,
-    STORM_SCREENS: 32,
+    STORM_SCREENS: 8,
     STORM_QUIET_MS: 750,
     STORM_MAX_MS: 4000,
     REPAINT_RATE_MS: 1000,
