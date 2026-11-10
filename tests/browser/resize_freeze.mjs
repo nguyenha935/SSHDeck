@@ -39,7 +39,8 @@
  * and at ~120 ms -- and this cover started on a change of columns only. §8-§13
  * pin the cover that replaced it, each red on the tree before it: a change of
  * rows is covered and the snapshot keeps the prompt (§8, §13); a replay with a
- * pause in it is never seen (§9); a session that replayed keeps its next,
+ * pause in it is never seen (§9), a small session's included, which a six-screen
+ * repaint is not taken for (§9b); a session that replayed keeps its next,
  * smaller change covered to the end (§10); output already flowing does not
  * hold the cover to the belt (§11); a replay longer than FREEZE_MAX_MS is
  * covered to its end (§12). §14 pins what was already true and still must
@@ -463,12 +464,12 @@ await page.waitForFunction(() => !document.querySelector('.sshdeck-frozen-pane')
 // longer than FREEZE_QUIET_MS in the middle of it, as omp makes when the
 // terminal is behind.
 const STORM = split(await page.evaluate(() => window.__replay(100, 2400, 'omp final prompt')), 8190);
-const stormPlan = (geometry, start) => {
+const stormPlan = (geometry, start, pieces = STORM) => {
     const steps = [{ at: 0, geometry },
         { at: 5, data: '' }, { at: 120, data: '' }];
     let at = start;
-    STORM.forEach((piece, i) => {
-        if (i === Math.floor(STORM.length / 2)) at += 450;
+    pieces.forEach((piece, i) => {
+        if (i === Math.floor(pieces.length / 2)) at += 450;
         steps.push({ at, data: piece });
         at += 25;
     });
@@ -512,6 +513,49 @@ check('§10 the interim frame of a replaying session is never seen',
 check('§10 and the pane settles uncovered on omp\'s own frame',
     [narrower.coveredAtEnd, narrower.settled.startsWith('settled13-')], [false, true]);
 await drop(R);
+
+/* ----- §9b a SMALL session's replay is one too; a repaint still is not one */
+// What tmux hands its client carries no clear to tell a replay by, so volume
+// is all there is. A small session answers with some twenty screens, ten of
+// them before its pause: under the old line of 32, the cover lifted in the
+// pause. A repaint, colours and all, is at most six, and must stay a repaint.
+const SMALL = 'freeze-small';
+await makePane(SMALL, [100, 18], 'old');
+const SMALL_STORM = split(await page.evaluate(() => window.__replay(100, 300, 'small final prompt')), 2040);
+const small = stormPlan([100, 14], 300, SMALL_STORM);
+small.steps[1].data = await page.evaluate(() => window.__screen(100, 14, 'tmux'));
+small.steps[2].data = await page.evaluate(() => window.__screen(100, 14, 'altview'));
+const smallReplay = await watch(SMALL, { steps: small.steps, until: small.end + 1400 });
+const lastUncover = (id) => page.evaluate(({ id }) => ({
+    replays: !!(TerminalManager.replaysOnResize || {})[id],
+    uncover: TerminalManager.timeline.filter(e => e.e === 'uncover').slice(-1)
+        .map(e => ({ storm: e.storm, why: e.why, bytes: e.bytes, held: e.held }))[0],
+}), { id });
+const smallSeen = await lastUncover(SMALL);
+const screens = (bytes) => Math.round(bytes / 140) / 10;
+console.log(`      [§9b] replay ${screens(smallSeen.uncover.bytes)} screens of 100x14; covered ${smallReplay.coveredFrom}..${smallReplay.coveredTo} ms`);
+check('§9b the replay is smaller than the old line of 32 screens (else this proves nothing)',
+    smallSeen.uncover.bytes < 32 * 1400, true);
+check('§9b no frame of a small replay is seen through its pause',
+    [smallReplay.rendering, smallReplay.strangers], [true, 0]);
+check('§9b the pane settles uncovered, on the prompt',
+    [smallReplay.coveredAtEnd, smallReplay.settled], [false, 'small final prompt']);
+check('§9b the small session is remembered as one that replays',
+    [smallSeen.replays, smallSeen.uncover.storm, smallSeen.uncover.why], [true, true, 'quiet']);
+await drop(SMALL);
+const PAINT = 'freeze-repaint';
+await makePane(PAINT, [100, 18], 'old');
+const SCREEN = await page.evaluate(() => window.__screen(100, 14, 'paint'));
+const repaint = await watch(PAINT, { steps: [{ at: 0, geometry: [100, 14] },
+    ...[5, 30, 55, 80, 105, 130].map(at => ({ at, data: SCREEN }))], until: 1100 });
+const paintSeen = await lastUncover(PAINT);
+console.log(`      [§9b] repaint ${screens(paintSeen.uncover.bytes)} screens; held ${Math.round(paintSeen.uncover.held)} ms`);
+check('§9b the repaint is as large as any measured (6 screens) and under the line',
+    [paintSeen.uncover.bytes >= 5.5 * 1400, paintSeen.uncover.bytes < 8 * 1400], [true, true]);
+check('§9b a repaint is not taken for a replay: short window, nothing remembered',
+    [repaint.coveredAtEnd, paintSeen.replays, paintSeen.uncover.storm, paintSeen.uncover.held < 700],
+    [false, false, false, true]);
+await drop(PAINT);
 
 /* ---------- §11 output already flowing does not hold the cover to the belt */
 const F = 'freeze-flow';
