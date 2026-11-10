@@ -510,6 +510,16 @@ def test_tailscale_tmux_uses_the_shared_utf8_session_env(monkeypatch):
         'tmux -u attach-session -t =existing_session')
 
 
+@pytest.mark.parametrize('version,flag', [
+    (None, ''), ((2, 9), ''), ((3, 1), ''),
+    ((3, 2), '-T hyperlinks '), ((3, 8), '-T hyperlinks '), ((4, 0), '-T hyperlinks ')])
+def test_the_attach_declares_hyperlinks_only_from_tmux_3_2(version, flag):
+    """`-T` is a usage error before tmux 3.2, and an unknown version is not
+    evidence the flag is accepted."""
+    assert ssh_manager.build_tmux_attach_command('existing_session', version) == (
+        f'tmux -u {flag}attach-session -t =existing_session')
+
+
 def test_password_tmux_gets_the_same_command_as_tailscale(monkeypatch):
     """Auth type must not decide how a pane handles multi-byte input.
 

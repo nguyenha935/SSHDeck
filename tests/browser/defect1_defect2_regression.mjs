@@ -861,10 +861,10 @@ for (const closer of ['closeConnectionModal', 'cancelConnectionBtn']) {
     check('§9 -u is asserted on every invocation',
         (mgr.match(/tmux(\{control_flag\})? -u /g) || []).length >= 2, true);
     check('§9 the attach is attach-only with an exact-match target',
-        /'tmux -u attach-session -t ' \+ shlex\.quote\(f'=\{tmux_session_name\}'\)/
+        /f'tmux -u \{features\}attach-session -t ' \+ shlex\.quote\(f'=\{tmux_session_name\}'\)/
             .test(mgr.replace(/\s+/g, ' ')), true);
     check('§9 the attach has its own builder, run per view',
-        /def build_tmux_attach_command\(tmux_session_name\)/.test(mgr), true);
+        /def build_tmux_attach_command\(tmux_session_name, tmux_version=None\)/.test(mgr), true);
     // Asserted against the builder's CODE, not its docstring: the docstring
     // names `new-session -A` deliberately, to record what was removed and why.
     const tmuxCode = tmuxRegion.slice(
