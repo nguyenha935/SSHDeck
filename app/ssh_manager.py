@@ -565,6 +565,7 @@ TMUX_PROBE_MAX_BYTES = 65536
 # environment, which is strictly better than nothing and never worse than the
 # behaviour it replaces.
 TMUX_MIN_VERSION_FOR_SESSION_ENV = (3, 2)
+TMUX_MIN_VERSION_FOR_CLIENT_FEATURES = (3, 2)
 
 # The two ways a retained reattach can fail CLOSED. Both are returned
 # as ordinary (None, error) build failures, so every caller already handles
@@ -770,6 +771,10 @@ def _tmux_supports_session_env(version):
     return bool(version) and version >= TMUX_MIN_VERSION_FOR_SESSION_ENV
 
 
+def _tmux_accepts_client_features(version):
+    return bool(version) and version >= TMUX_MIN_VERSION_FOR_CLIENT_FEATURES
+
+
 def split_tmux_probe_output(raw):
     """(locale_listing, passwd_entry, tmux_banner) from the one probe round trip.
 
@@ -944,15 +949,23 @@ def build_tmux_command(tmux_session_name, tmux_version, utf8_locale=None,
                           f'-s {tmux_session_name}', tmux_bin)
 
 
-def build_tmux_attach_command(tmux_session_name):
+def build_tmux_attach_command(tmux_session_name, tmux_version=None):
     """The command ONE browser socket's view runs to become a tmux client.
 
     Exact-match target (`=name`) so a retained name can never act as a pattern
     and reach another session, and no create verb: attaching to a session that
     has gone exits non-zero and the view reports the failure rather than
     silently creating an empty replacement.
+
+    `-T hyperlinks` declares that THIS client draws OSC 8 hyperlinks, which is
+    true of the browser's terminal; without it tmux drops the link target and
+    forwards only the visible text. It is a client flag: nothing on the host
+    is configured and no other client of the session is affected. `-T` exists
+    from tmux 3.2 and an older tmux exits on it, so the flag is sent only when
+    the session's tmux version is known to accept it.
     """
-    return 'tmux -u attach-session -t ' + shlex.quote(f'={tmux_session_name}')
+    features = '-T hyperlinks ' if _tmux_accepts_client_features(tmux_version) else ''
+    return f'tmux -u {features}attach-session -t ' + shlex.quote(f'={tmux_session_name}')
 
 
 def build_shell_env(utf8_locale=None):
@@ -1771,6 +1784,7 @@ def _build_transport(host, port, username, password=None, key_path=None, key_con
             # the version SSHDeck just placed on the host, or why a session
             # that asked for tmux is a plain shell instead.
             'tmux_bin': tmux_bin if use_tmux else None,
+            'tmux_version': tmux_version if use_tmux else None,
             'tmux_provisioned': tmux_provisioned,
             'tmux_installed_with': tmux_installed_with,
             'tmux_unavailable': tmux_unavailable,
@@ -1942,6 +1956,7 @@ def create_ssh_connection(host, port, username, password=None, key_path=None, ke
                 # Which tmux this session's commands run (see _tmux), and the
                 # connect-time notice for the page (see _build_transport).
                 'tmux_bin': transport_result.get('tmux_bin'),
+                'tmux_version': transport_result.get('tmux_version'),
                 'tmux_provisioned': transport_result.get('tmux_provisioned'),
                 'tmux_installed_with': transport_result.get('tmux_installed_with'),
                 'tmux_unavailable': transport_result.get('tmux_unavailable'),
@@ -2100,6 +2115,7 @@ def swap_session_transport(session_id, transport_result, socketio_instance=None,
             # shape it used.
             session['login_shell'] = transport_result.get('login_shell')
             session['tmux_bin'] = transport_result.get('tmux_bin')
+            session['tmux_version'] = transport_result.get('tmux_version')
             session['last_activity'] = time.time()
             new_generation = retiring_generation + 1
             session['transport_generation'] = new_generation
@@ -3027,6 +3043,7 @@ def open_session_view(session_id, socket_sid, cols, rows,
         client = session.get('client')
         tmux_session_name = session.get('tmux_session_name')
         tmux_bin = session.get('tmux_bin')
+        tmux_version = session.get('tmux_version')
         generation = session.get('transport_generation', 0)
         target = _session_geometry_target(
             dict(views, **{socket_sid: {'cols': cols, 'rows': rows}}))
@@ -3108,7 +3125,7 @@ def open_session_view(session_id, socket_sid, cols, rows,
             channel = transport.open_session(timeout=10.0)
             channel.get_pty('xterm-256color', target[0], target[1])
             channel.exec_command(
-                _tmux(build_tmux_attach_command(tmux_session_name), tmux_bin))
+                _tmux(build_tmux_attach_command(tmux_session_name, tmux_version), tmux_bin))
             channel.settimeout(0.1)
         except Exception as exc:
             return False, str(exc)

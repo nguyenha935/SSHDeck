@@ -238,6 +238,7 @@ def test_a_host_with_tmux_on_path_is_left_exactly_as_it_was(monkeypatch):
     assert error is None
     session = _registered(session_id)
     assert (session['tmux_bin'], session['tmux_provisioned']) == (None, None)
+    assert session['tmux_version'] == (3, 4)
     assert not any(ssh_manager.TMUX_LOCATE_SENTINEL in c for c in host.commands)
     create = [c for c in host.commands if 'new-session' in c]
     assert create and create[0].startswith('tmux -u new-session')
@@ -327,6 +328,7 @@ def test_a_reattach_finds_the_tmux_sshdeck_placed_earlier(monkeypatch):
     exists = [c for c in host.commands if 'has-session' in c]
     assert exists[0].startswith(ssh_manager.SSHDECK_TMUX + ' has-session')
     assert _registered(session_id)['tmux_bin'] == ssh_manager.SSHDECK_TMUX
+    assert _registered(session_id)['tmux_version'] == (3, 8)
 
 
 def test_every_later_tmux_command_runs_the_same_tmux(monkeypatch):
@@ -361,6 +363,7 @@ def test_a_swapped_transport_brings_its_own_answer(monkeypatch):
     session_id, _error = connect(monkeypatch, Host())
     name = _registered(session_id)['tmux_session_name']
     assert _registered(session_id)['tmux_bin'] == ssh_manager.SSHDECK_TMUX
+    assert _registered(session_id)['tmux_version'] == (3, 8)
     replacement, error = ssh_manager._build_transport(
         'target.example', 22, 'alice', password='pw', use_tmux=True,
         reconnect_tmux_name=name)
@@ -374,6 +377,7 @@ def test_a_swapped_transport_brings_its_own_answer(monkeypatch):
     ok, error = ssh_manager.swap_session_transport(session_id, on_path)
     assert ok, error
     assert _registered(session_id)['tmux_bin'] is None
+    assert _registered(session_id)['tmux_version'] == (3, 4)
 
 
 # ---- what the page is told ---------------------------------------------------

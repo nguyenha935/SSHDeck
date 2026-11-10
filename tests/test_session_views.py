@@ -1288,3 +1288,13 @@ def test_attach_and_detach_redraw_at_once_while_a_drag_coalesces(
     assert attach and all(attach)
     assert drag == [False]
     assert detach == [True]
+
+
+@pytest.mark.parametrize('version,flag', [
+    ((3, 8), '-T hyperlinks '), ((3, 2), '-T hyperlinks '), ((3, 1), ''), (None, '')])
+def test_a_view_declares_hyperlinks_only_to_a_tmux_that_accepts_client_features(
+        quiet_threads, no_tmux_commands, version, flag):
+    transport = install_session()
+    ssh_manager.sessions['sess-views']['tmux_version'] = version
+    ssh_manager.open_session_view('sess-views', 'sid-A', 100, 30, FakeSocketIO(), object())
+    assert transport.channels[0].command == f'tmux -u {flag}attach-session -t =sshdeck_views'
