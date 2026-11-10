@@ -441,7 +441,8 @@ const base = `http://127.0.0.1:${server.address().port}`;
         // v108: the terminal's input line opens it; xterm never takes focus.
         // v109: a click or a tap on a link opens Open / Copy.
         // v110: what a Vietnamese IME commits is sent once.
-        ['js/terminal-manager.js', 110],
+        // v111: a URL a program cut over rows is one link.
+        ['js/terminal-manager.js', 111],
         // v18: the Files browser hooks (expand, delegated render and menu).
         // v20: the quick-connect captions mark the required fields.
         // v21: opening and closing the Files panel is chrome, not a resize.

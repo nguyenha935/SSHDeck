@@ -1839,8 +1839,9 @@ const TerminalManager = {
      *  - a URL printed as text (linkSpans): http and https, joined across the
      *    rows xterm wrapped -- tmux sends a long line in one run and lets the
      *    terminal wrap it (measured on 3.7c), so the rows carry isWrapped --
-     *    and without the punctuation or unpaired closing bracket that ends the
-     *    sentence around it;
+     *    and across the rows a program cut itself, and without the
+     *    punctuation or unpaired closing bracket that ends the sentence
+     *    around it;
      *  - an OSC 8 hyperlink, through xterm's linkHandler, whose default is a
      *    native confirm(). tmux drops OSC 8 unless the server's
      *    terminal-features has `hyperlinks`, and SSHDeck sets no server
@@ -1854,7 +1855,10 @@ const TerminalManager = {
      * link can be copied.
      */
     LINK_PATTERN: /https?:\/\/[^\s<>"'`]+/g,
+    LINK_CHAR: /^[^\s<>"'`]$/,
     LINK_WRAP_ROWS: 32,
+    LINK_EDGE_SLACK: 2,
+    LINK_INDENT_MAX: 8,
 
     setupTerminalLinks(container, terminal) {
         if (!container || !terminal || terminal.__sshdeckLinks) {
@@ -1917,35 +1921,77 @@ const TerminalManager = {
         }, true);
     },
 
-    // Every URL printed on the logical line around buffer row `y`, as
-    // { url, start, end } in 0-based cells; `end` is the last cell it covers.
+    /*
+     * Every URL printed on the logical line around buffer row `y`, as
+     * { url, start, end } in 0-based cells; `end` is the last cell it covers.
+     *
+     * The logical line is the rows xterm wrapped (isWrapped), and also the
+     * rows a PROGRAM cut: a full-screen TUI lays its text out itself and
+     * breaks a URL longer than its width with a real line break, so neither
+     * tmux nor xterm marks those rows as one line. Measured on 2026-11-10 in
+     * the owner's claude session (tmux 3.4, 222 columns): an OAuth URL on
+     * three rows of 222, 222 and 21 cells, and `capture-pane -J` left the
+     * first row 222 long -- not joined. Such a row is joined to the next when
+     * its last cell is a URL character within LINK_EDGE_SLACK of the right
+     * edge and the next row, after at most LINK_INDENT_MAX spaces of indent
+     * (not part of the URL), starts with one. A URL that ends exactly at the
+     * edge above a line of text takes that text's first word with it; the
+     * menu shows the whole URL before anything opens it.
+     */
     linkSpans(terminal, y) {
         const buffer = terminal.buffer.active;
-        let first = y;
-        while (first > 0 && y - first < this.LINK_WRAP_ROWS && buffer.getLine(first)?.isWrapped) {
-            first -= 1;
+        const group = (row) => {
+            let first = row;
+            while (first > 0 && row - first < this.LINK_WRAP_ROWS
+                    && buffer.getLine(first)?.isWrapped) {
+                first -= 1;
+            }
+            let last = row;
+            while (last - row < this.LINK_WRAP_ROWS && buffer.getLine(last + 1)?.isWrapped) {
+                last += 1;
+            }
+            return { first, last };
+        };
+        const cut = (above, below) => this.linkCutBetween(terminal,
+            this.linkRowCells(buffer.getLine(above), above),
+            this.linkRowCells(buffer.getLine(below), below));
+        let { first, last } = group(y);
+        while (first > 0 && y - first < this.LINK_WRAP_ROWS) {
+            const previous = group(first - 1);
+            if (cut(previous.last, first) === null) {
+                break;
+            }
+            first = previous.first;
         }
-        let last = y;
-        while (last - y < this.LINK_WRAP_ROWS && buffer.getLine(last + 1)?.isWrapped) {
-            last += 1;
+        while (last + 1 < buffer.length && last - y < this.LINK_WRAP_ROWS) {
+            if (cut(last, last + 1) === null) {
+                break;
+            }
+            last = group(last + 1).last;
+        }
+        // Every boundary in [first, last] is a wrap or a cut, by construction.
+        // At a cut the margin of the row above and the indent of the row below
+        // are not part of the text.
+        const rows = [];
+        for (let row = first; row <= last; row += 1) {
+            let cells = this.linkRowCells(buffer.getLine(row), row);
+            const previous = rows[rows.length - 1];
+            if (previous && !buffer.getLine(row)?.isWrapped) {
+                cells = cells.slice(this.linkCutBetween(terminal, previous, cells));
+                while (previous.length && previous[previous.length - 1].chars === ' ') {
+                    previous.pop();
+                }
+            }
+            rows.push(cells);
         }
         let text = '';
         const cells = [];
-        for (let row = first; row <= last; row += 1) {
-            const line = buffer.getLine(row);
-            for (let x = 0; line && x < line.length; x += 1) {
-                const cell = line.getCell(x);
-                const width = cell ? cell.getWidth() : 1;
-                if (!width) {
-                    continue;   // the second half of a wide character
-                }
-                const chars = (cell && cell.getChars()) || ' ';
-                text += chars;
-                for (let i = 0; i < chars.length; i += 1) {
-                    cells.push({ x, last: x + width - 1, y: row });
-                }
+        rows.flat().forEach(cell => {
+            text += cell.chars;
+            for (let k = 0; k < cell.chars.length; k += 1) {
+                cells.push(cell);
             }
-        }
+        });
         const spans = [];
         for (const match of text.matchAll(this.LINK_PATTERN)) {
             const url = this.trimLinkEnd(match[0]);
@@ -1957,6 +2003,42 @@ const TerminalManager = {
             spans.push({ url, start: { x: start.x, y: start.y }, end: { x: end.last, y: end.y } });
         }
         return spans;
+    },
+
+    // One buffer row as cells { chars, x, last, y }: a wide character is one
+    // cell over two columns, and an empty cell is a space.
+    linkRowCells(line, y) {
+        const out = [];
+        for (let x = 0; line && x < line.length; x += 1) {
+            const cell = line.getCell(x);
+            const width = cell ? cell.getWidth() : 1;
+            if (!width) {
+                continue;   // the second half of a wide character
+            }
+            out.push({ chars: (cell && cell.getChars()) || ' ', x, last: x + width - 1, y });
+        }
+        return out;
+    },
+
+    // Where the text of `below` continues `above` when a program cut a URL
+    // between them: the index of its first URL character, past the indent;
+    // null when `above` does not end in a URL character at the right edge or
+    // `below` does not start with one.
+    linkCutBetween(terminal, above, below) {
+        let end = above.length - 1;
+        while (end >= 0 && above[end].chars === ' ') {
+            end -= 1;
+        }
+        if (end < 0 || above[end].last < terminal.cols - 1 - this.LINK_EDGE_SLACK
+                || !this.LINK_CHAR.test(above[end].chars)) {
+            return null;
+        }
+        let start = 0;
+        while (start < below.length && start <= this.LINK_INDENT_MAX && below[start].chars === ' ') {
+            start += 1;
+        }
+        return start <= this.LINK_INDENT_MAX && start < below.length
+            && this.LINK_CHAR.test(below[start].chars) ? start : null;
     },
 
     // Leave out what ends the sentence around a URL: trailing punctuation,
@@ -1989,7 +2071,23 @@ const TerminalManager = {
         }
     },
 
-    // The text URL under a viewport point, or null.
+    // The OSC 8 target of one buffer cell, or null. The cell carries only the
+    // link's id; the URI is in xterm's link service, which is private API, so
+    // a miss at any step means "no OSC 8 link here" and the text match decides.
+    oscLinkAt(terminal, row, col) {
+        try {
+            const cell = terminal.buffer.active.getLine(row)?.getCell(col);
+            const urlId = cell?.hasExtendedAttrs() ? cell.extended?.urlId : 0;
+            const uri = urlId ? terminal._core?._oscLinkService?.getLinkData(urlId)?.uri : null;
+            return typeof uri === 'string' && uri ? uri : null;
+        } catch (error) {
+            return null;
+        }
+    },
+
+    // The link under a viewport point, or null: the cell's own OSC 8 target
+    // when it has one (the program said exactly where the link goes, however
+    // it cut the visible text), else the text URL.
     linkAtPoint(terminal, clientX, clientY) {
         const screen = terminal?.element?.querySelector('.xterm-screen');
         const rect = screen ? screen.getBoundingClientRect() : null;
@@ -2000,6 +2098,10 @@ const TerminalManager = {
         const cell = this.clientToCell(terminal, clientX, clientY);
         if (!cell) {
             return null;
+        }
+        const osc = this.oscLinkAt(terminal, cell.row, cell.col);
+        if (osc) {
+            return osc;
         }
         const at = point => point.y * terminal.cols + point.x;
         const here = cell.row * terminal.cols + cell.col;
