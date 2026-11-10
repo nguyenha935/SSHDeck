@@ -28,6 +28,8 @@
  *       still opens the keyboard
  *   §12 the backdrop closes the sheet; its rows are 44 px; a focused
  *       composer keeps its focus through it
+ *   §14 an OSC 8 link opens the target its cells carry, on every row the
+ *       program drew it on, by click and by tap
  *   §13 a URL a PROGRAM cut over rows with real line breaks -- a full-screen
  *       TUI lays its text out itself; measured 2026-11-10 in the owner's
  *       claude session (tmux 3.4): an OAuth URL on rows of 222, 222 and 21
@@ -406,6 +408,36 @@ for (const type of [chromium, webkit]) {
         check(`§13 [${name}] a URL at the edge above an indent wider than 8 is that row alone`,
             (await menu(page)).url, DEEP);
 
+        // §14: an OSC 8 link whose visible text is the URL, cut by the program
+        // short of the edge (so the text rule of §13 does not join the rows).
+        const osc = await page.evaluate(() => TerminalManager.terminals.s1.cols);
+        const OSCU = 'https://example.com/' + 'a'.repeat(Math.max(4, osc - 30)) + '/MIDDLE/' + 'b'.repeat(10) + '/END';
+        const oscOpen = `\x1b]8;id=p1;${OSCU}\x1b\\`;
+        const oscOff = '\x1b]8;;\x1b\\';
+        const oscCut = osc - 10;
+        await reset(page);
+        await write(page, '\x1b[2J\x1b[H'
+            + `\x1b[6;1H  ${oscOpen}${OSCU.slice(0, oscCut)}${oscOff}`
+            + `\x1b[7;1H  ${oscOpen}${OSCU.slice(oscCut)}${oscOff}`
+            + `\x1b[10;1H  ${oscOpen}open the pull request${oscOff}`
+            + '\x1b[12;1Hplain text');
+        check(`§14 [${name}] desktop: the cell of an OSC 8 link gives up its target (xterm hook present)`,
+            await page.evaluate(() => {
+                const t = TerminalManager.terminals.s1;
+                const base = t.buffer.active.viewportY;
+                return [[5, 12], [6, 12], [9, 4], [11, 2], [5, 0]]
+                    .map(([row, col]) => TerminalManager.oscLinkAt(t, base + row, col));
+            }), [OSCU, OSCU, OSCU, null, null]);
+        for (const row of [5, 6]) {
+            await reset(page);
+            await click(12, row);
+            check(`§14 [${name}] a click on row ${row + 1} of a cut OSC 8 link opens its whole target`,
+                (await menu(page)).url, OSCU);
+        }
+        await action(page, 'copy').click();
+        await page.waitForTimeout(150);
+        check(`§14 [${name}] and Copy copies the whole target`,
+            await page.evaluate(() => window.__copied.slice(-1)[0]), OSCU);
         errors.push(...pageErrors.map(e => `${name} desktop: ${e}`));
         await ctx.close();
     }
@@ -471,6 +503,31 @@ for (const type of [chromium, webkit]) {
             [await page.evaluate(() => document.activeElement?.id), await page.evaluate(() => window.__copied)],
             ['mobileInput', ['https://example.com/plain']]);
 
+        // §14: an OSC 8 link whose visible text is the URL, cut by the program
+        // short of the edge (so the text rule of §13 does not join the rows).
+        const osc = await page.evaluate(() => TerminalManager.terminals.s1.cols);
+        const OSCU = 'https://example.com/' + 'a'.repeat(Math.max(4, osc - 30)) + '/MIDDLE/' + 'b'.repeat(10) + '/END';
+        const oscOpen = `\x1b]8;id=p1;${OSCU}\x1b\\`;
+        const oscOff = '\x1b]8;;\x1b\\';
+        const oscCut = osc - 10;
+        await reset(page);
+        await write(page, '\x1b[2J\x1b[H'
+            + `\x1b[6;1H  ${oscOpen}${OSCU.slice(0, oscCut)}${oscOff}`
+            + `\x1b[7;1H  ${oscOpen}${OSCU.slice(oscCut)}${oscOff}`
+            + `\x1b[10;1H  ${oscOpen}open the pull request${oscOff}`
+            + '\x1b[12;1Hplain text');
+        check(`§14 [${name}] touch: the cell of an OSC 8 link gives up its target (xterm hook present)`,
+            await page.evaluate(() => {
+                const t = TerminalManager.terminals.s1;
+                const base = t.buffer.active.viewportY;
+                return [[5, 12], [6, 12], [9, 4], [11, 2], [5, 0]]
+                    .map(([row, col]) => TerminalManager.oscLinkAt(t, base + row, col));
+            }), [OSCU, OSCU, OSCU, null, null]);
+        for (const [row, what] of [[5, 'row 6 of a cut OSC 8 link'], [6, 'row 7 of a cut OSC 8 link'], [9, 'an OSC 8 label']]) {
+            await reset(page);
+            await tap(what === 'an OSC 8 label' ? 6 : 12, row);
+            check(`§14 [${name}] a tap on ${what} opens its whole target`, (await menu(page)).url, OSCU);
+        }
         errors.push(...pageErrors.map(e => `${name} touch: ${e}`));
         await ctx.close();
     }

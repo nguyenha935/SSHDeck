@@ -2071,7 +2071,23 @@ const TerminalManager = {
         }
     },
 
-    // The text URL under a viewport point, or null.
+    // The OSC 8 target of one buffer cell, or null. The cell carries only the
+    // link's id; the URI is in xterm's link service, which is private API, so
+    // a miss at any step means "no OSC 8 link here" and the text match decides.
+    oscLinkAt(terminal, row, col) {
+        try {
+            const cell = terminal.buffer.active.getLine(row)?.getCell(col);
+            const urlId = cell?.hasExtendedAttrs() ? cell.extended?.urlId : 0;
+            const uri = urlId ? terminal._core?._oscLinkService?.getLinkData(urlId)?.uri : null;
+            return typeof uri === 'string' && uri ? uri : null;
+        } catch (error) {
+            return null;
+        }
+    },
+
+    // The link under a viewport point, or null: the cell's own OSC 8 target
+    // when it has one (the program said exactly where the link goes, however
+    // it cut the visible text), else the text URL.
     linkAtPoint(terminal, clientX, clientY) {
         const screen = terminal?.element?.querySelector('.xterm-screen');
         const rect = screen ? screen.getBoundingClientRect() : null;
@@ -2082,6 +2098,10 @@ const TerminalManager = {
         const cell = this.clientToCell(terminal, clientX, clientY);
         if (!cell) {
             return null;
+        }
+        const osc = this.oscLinkAt(terminal, cell.row, cell.col);
+        if (osc) {
+            return osc;
         }
         const at = point => point.y * terminal.cols + point.x;
         const here = cell.row * terminal.cols + cell.col;
